@@ -1,0 +1,21 @@
+* les zombies ont leur visage derriere quand ils m'attaquent donc faut changer ca, aussi r'ajoute un visage aux vaches et aux cochons
+* ajoute une barriere de limite de terrain
+* ajoute des caves et des minerais dedans (comme le fer le charbon le diamant etc)
+* faire un zoom avec la touche C (comme une longue lue)
+* La barre de vie doit ressembler a des coeurs
+* Les fps doivent s’afficher en haut a gauche
+* Quand on tap sur T en Chat pour écrire doit s'afficher
+* ajoute un nouveau mob : le poulet (chicken)
+* élargis le terrain en 1000 blocs par 1000 blocs
+* Ajouter un soleil
+* Pouvoir courir en tapant 2 fois sur Z
+* mouvement plus lent dans l’eau, l’eau doit couler
+* Faut qu’on puisse s'accroupir en appuyant sur Maj
+
+- La hache doit être tenue DANS la main et le bloc aussi.
+- rajouter une animation de cassage de bloc
+- Faut quon puisse casser un bloc a 6 blocs de distance a la 1ere mais aussi a la 3eme personne
+- Le apparence des bloc est décalé par rapport a l’emplacement des blocs 
+- Les mobs doivent toucher le sol
+- Multijoueur
+- Marcher sur navigateur mobile
