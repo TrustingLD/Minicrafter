@@ -43,7 +43,10 @@ export function generateTerrain(world, waterCells) {
         world[keyOf(x, y, z)] = type;
       }
       if (h < SEA_LEVEL) waterCells.push({ x, z });
-      if (Math.random() < 0.012 && h > SEA_LEVEL + 1 && h < SNOW_LEVEL - 4) {
+      // pas d'arbre près de (0,0) : c'est le point de spawn (cf. main.js) — un tronc/feuillage
+      // pouvait sinon apparaître pile dessus et coincer le joueur dedans dès le chargement
+      const nearSpawn = Math.abs(x) <= 3 && Math.abs(z) <= 3;
+      if (!nearSpawn && Math.random() < 0.012 && h > SEA_LEVEL + 1 && h < SNOW_LEVEL - 4) {
         const treeH = 4 + Math.floor(Math.random() * 2);
         for (let ty = 1; ty <= treeH; ty++) world[keyOf(x, h + ty, z)] = 'wood';
         for (let lx = -2; lx <= 2; lx++) {

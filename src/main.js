@@ -11,8 +11,6 @@ import { ITEM_NAMES, RECIPES, HOTBAR, NON_PLACEABLE } from './data/items.js';
 import {
   CHUNK_SIZE,
   SEA_LEVEL,
-  WORLD_BORDER,
-  WORLD_HEIGHT,
   getHeight,
   generateTerrain,
   getGroundHeight,
@@ -73,7 +71,9 @@ function updateSun(dt) {
   sunAngle += dt * 0.01; // cycle complet ~10 min : lent, on veut le voir bouger, pas un jour/nuit complet
   const dirX = Math.cos(sunAngle),
     dirZ = Math.sin(sunAngle),
-    dirY = 0.55 + Math.sin(sunAngle * 0.5) * 0.15; // reste toujours haut dans le ciel
+    // élévation ~52-62° tout le temps (comme la position fixe d'origine) : le soleil
+    // tourne à l'horizontale mais reste toujours haut, jamais rasant/terne façon crépuscule
+    dirY = 1.6 + Math.sin(sunAngle * 0.5) * 0.3;
   sun.position.set(dirX * SUN_LIGHT_DIST, dirY * SUN_LIGHT_DIST, dirZ * SUN_LIGHT_DIST);
   sunMesh.position.set(dirX * SUN_MESH_DIST, dirY * SUN_MESH_DIST, dirZ * SUN_MESH_DIST);
 }
@@ -99,28 +99,8 @@ worldApi.buildInitialMeshes();
 const waterKeySet = new Set(waterCells.map((c) => `${c.x},${c.z}`)); // pour savoir si le joueur est immergé
 const water = worldApi.buildWaterMesh(SEA_LEVEL);
 
-// Bordure du monde : mur invisible (collision, cf. world.js) + plans rouges/brume
-// pour qu'on la *voie* venir plutôt que de heurter un mur invisible sans prévenir
-const borderMat = new THREE.MeshBasicMaterial({
-  color: 0xcc2222,
-  transparent: true,
-  opacity: 0.35,
-  side: THREE.DoubleSide,
-  depthWrite: false,
-});
-const borderGeoNS = new THREE.PlaneGeometry(WORLD_BORDER * 2, WORLD_HEIGHT);
-[-WORLD_BORDER, WORLD_BORDER].forEach((z) => {
-  const wall = new THREE.Mesh(borderGeoNS, borderMat);
-  wall.position.set(0, WORLD_HEIGHT / 2, z);
-  scene.add(wall);
-});
-const borderGeoEW = new THREE.PlaneGeometry(WORLD_BORDER * 2, WORLD_HEIGHT);
-[-WORLD_BORDER, WORLD_BORDER].forEach((x) => {
-  const wall = new THREE.Mesh(borderGeoEW, borderMat);
-  wall.rotation.y = Math.PI / 2;
-  wall.position.set(x, WORLD_HEIGHT / 2, 0);
-  scene.add(wall);
-});
+// Bordure du monde : mur purement invisible, seule la collision existe (cf.
+// collidesAtBox dans world.js). Pas de plan rouge/brume — juste un stop net.
 
 /* ---------- Inventaire ---------- */
 const inventory = {
@@ -627,40 +607,49 @@ function animate() {
     hintEl.style.display = 'none';
   }
 
-  // cassage progressif : avance seulement si le clic est maintenu sur EXACTEMENT
-  // le même bloc — bouger le viseur ailleurs remet la progression à zéro (comme Minecraft)
-  const breakingAllowed =
-    leftMouseDown &&
-    !craftOpen &&
-    !chatUI.isOpen &&
-    document.pointerLockElement === renderer.domElement &&
-    blockHit &&
-    !(mobHit && mobHit.dist < blockHit.dist);
-  const breakType =
-    breakingAllowed && worldApi.world[keyOf(blockHit.block.x, blockHit.block.y, blockHit.block.z)];
-  if (breakingAllowed && breakType) {
-    const { x, y, z } = blockHit.block;
-    const key = keyOf(x, y, z);
-    if (key !== breakKey) {
-      breakKey = key;
-      breakProgress = 0;
-    }
-    const total = breakTimeFor(breakType);
-    breakProgress += dt;
-    if (breakProgress >= total) {
-      breakBlockAt(x, y, z, breakType);
-      breakKey = null;
-      breakProgress = 0;
-      breakCrackEl.style.display = 'none';
-    } else {
-      const stage = Math.min(9, Math.floor((breakProgress / total) * 10));
-      breakCrackEl.style.display = 'block';
-      breakCrackEl.style.clipPath = `inset(0 ${((9 - stage) / 10) * 100}% 0 0)`;
-    }
-  } else {
+  // Cassage progressif : maintenir le clic sur un bloc l'use au fil du temps. Le clic
+  // relâché (ou craft/chat ouvert) arrête et remet à zéro pour de vrai. Mais un simple
+  // raté d'UNE frame (micro-tremblement de souris à la limite des 6 blocs de portée,
+  // le viseur qui rate le bloc pour une image) ne doit PAS effacer la progression —
+  // sinon casser un bloc en bout de portée devient quasi impossible dans les faits.
+  const mustStopBreaking =
+    !leftMouseDown ||
+    craftOpen ||
+    chatUI.isOpen ||
+    document.pointerLockElement !== renderer.domElement;
+  if (mustStopBreaking) {
     breakKey = null;
     breakProgress = 0;
     breakCrackEl.style.display = 'none';
+  } else {
+    const targetingBlock = blockHit && !(mobHit && mobHit.dist < blockHit.dist);
+    if (targetingBlock) {
+      const { x, y, z } = blockHit.block;
+      const key = keyOf(x, y, z);
+      const type = worldApi.world[key];
+      if (type) {
+        if (key !== breakKey) {
+          breakKey = key;
+          breakProgress = 0;
+        }
+        const total = breakTimeFor(type);
+        breakProgress += dt;
+        if (breakProgress >= total) {
+          breakBlockAt(x, y, z, type);
+          breakKey = null;
+          breakProgress = 0;
+          breakCrackEl.style.display = 'none';
+        } else {
+          const stage = Math.min(9, Math.floor((breakProgress / total) * 10));
+          breakCrackEl.style.display = 'block';
+          breakCrackEl.style.clipPath = `inset(0 ${((9 - stage) / 10) * 100}% 0 0)`;
+        }
+      }
+    } else {
+      // rien visé cette frame (ou mob prioritaire) : on met en pause sans effacer,
+      // la progression reprendra si le viseur revient sur le même bloc
+      breakCrackEl.style.display = 'none';
+    }
   }
 
   renderer.render(scene, camera);
