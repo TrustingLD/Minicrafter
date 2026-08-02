@@ -73,6 +73,9 @@ export function createSfx() {
       case 'footstep':
         playNoiseBurst(0.06, 450, 0.1, 'lowpass');
         break;
+      case 'footstepWater':
+        playNoiseBurst(0.1, 250, 0.14, 'lowpass');
+        break;
       case 'craft':
         playTone(700, 0.08, 'square', 0.15, 1000);
         break;

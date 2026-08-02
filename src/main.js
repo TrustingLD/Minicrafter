@@ -4,12 +4,15 @@
    ============================================================ */
 import * as THREE from 'three';
 
+import { createEventBus } from './core/events.js';
 import { createBlockAssets } from './render/block-assets.js';
 import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
 import { ITEM_NAMES, RECIPES, HOTBAR, NON_PLACEABLE } from './data/items.js';
 import {
   CHUNK_SIZE,
   SEA_LEVEL,
+  WORLD_BORDER,
+  WORLD_HEIGHT,
   getHeight,
   generateTerrain,
   getGroundHeight,
@@ -23,6 +26,12 @@ import { createPlayer } from './entities/player.js';
 import { createHotbarUI } from './ui/hotbar.js';
 import { createHealthUI } from './ui/health.js';
 import { createCraftUI } from './ui/craft.js';
+import { createChatUI } from './ui/chat.js';
+
+/* ---------- Bus d'événements ---------- */
+// L'UI s'abonne ici une fois pour toutes ; la logique de jeu n'a plus besoin
+// d'appeler hotbarUI.render/healthUI.render à chaque endroit qui change l'état.
+const bus = createEventBus();
 
 /* ---------- Scène / caméra / renderer ---------- */
 const scene = new THREE.Scene();
@@ -47,6 +56,27 @@ sun.shadow.camera.top = 60;
 sun.shadow.camera.bottom = -60;
 sun.shadow.mapSize.set(512, 512); // réduit : moins coûteux à calculer
 scene.add(sun);
+scene.add(sun.target);
+
+// billboard du soleil (juste visuel — fog:false pour qu'il reste visible loin dans le ciel)
+// + la lumière directionnelle suit sa position : base pour le cycle jour/nuit (Phase 9,
+// qui n'aura qu'à ajouter des rampes de couleur, le mouvement existe déjà)
+const sunMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(8, 12, 12),
+  new THREE.MeshBasicMaterial({ color: 0xfff2a8, fog: false }),
+);
+scene.add(sunMesh);
+let sunAngle = Math.PI / 3;
+const SUN_LIGHT_DIST = 100,
+  SUN_MESH_DIST = 300;
+function updateSun(dt) {
+  sunAngle += dt * 0.01; // cycle complet ~10 min : lent, on veut le voir bouger, pas un jour/nuit complet
+  const dirX = Math.cos(sunAngle),
+    dirZ = Math.sin(sunAngle),
+    dirY = 0.55 + Math.sin(sunAngle * 0.5) * 0.15; // reste toujours haut dans le ciel
+  sun.position.set(dirX * SUN_LIGHT_DIST, dirY * SUN_LIGHT_DIST, dirZ * SUN_LIGHT_DIST);
+  sunMesh.position.set(dirX * SUN_MESH_DIST, dirY * SUN_MESH_DIST, dirZ * SUN_MESH_DIST);
+}
 
 /* ---------- Audio ---------- */
 const sfx = createSfx();
@@ -66,7 +96,31 @@ const worldApi = createWorld({
 });
 generateTerrain(worldApi.world, waterCells);
 worldApi.buildInitialMeshes();
-worldApi.buildWaterMesh(SEA_LEVEL);
+const waterKeySet = new Set(waterCells.map((c) => `${c.x},${c.z}`)); // pour savoir si le joueur est immergé
+const water = worldApi.buildWaterMesh(SEA_LEVEL);
+
+// Bordure du monde : mur invisible (collision, cf. world.js) + plans rouges/brume
+// pour qu'on la *voie* venir plutôt que de heurter un mur invisible sans prévenir
+const borderMat = new THREE.MeshBasicMaterial({
+  color: 0xcc2222,
+  transparent: true,
+  opacity: 0.35,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+const borderGeoNS = new THREE.PlaneGeometry(WORLD_BORDER * 2, WORLD_HEIGHT);
+[-WORLD_BORDER, WORLD_BORDER].forEach((z) => {
+  const wall = new THREE.Mesh(borderGeoNS, borderMat);
+  wall.position.set(0, WORLD_HEIGHT / 2, z);
+  scene.add(wall);
+});
+const borderGeoEW = new THREE.PlaneGeometry(WORLD_BORDER * 2, WORLD_HEIGHT);
+[-WORLD_BORDER, WORLD_BORDER].forEach((x) => {
+  const wall = new THREE.Mesh(borderGeoEW, borderMat);
+  wall.rotation.y = Math.PI / 2;
+  wall.position.set(x, WORLD_HEIGHT / 2, 0);
+  scene.add(wall);
+});
 
 /* ---------- Inventaire ---------- */
 const inventory = {
@@ -100,8 +154,10 @@ const hotbarUI = createHotbarUI({
 });
 hotbarUI.setSelectedIndex(selectedIndex);
 hotbarUI.render(inventory);
+bus.on('inventory:changed', () => hotbarUI.render(inventory));
 
 const healthUI = createHealthUI(document.getElementById('healthbar'));
+bus.on('player:health', () => healthUI.render(player));
 
 const craftUI = createCraftUI({
   elements: {
@@ -114,7 +170,7 @@ const craftUI = createCraftUI({
   itemNames: ITEM_NAMES,
   iconCanvas: blockAssets.iconCanvas,
   playSound: sfx.playSound,
-  onCrafted: () => hotbarUI.render(inventory),
+  onCrafted: () => bus.emit('inventory:changed'),
 });
 let craftOpen = false;
 function openCraft() {
@@ -175,13 +231,24 @@ const mobSystem = createMobSystem({
   playSound: sfx.playSound,
   onPlayerHurt: (dmg) => {
     player.health = Math.max(0, player.health - dmg);
-    healthUI.render(player);
+    bus.emit('player:health');
   },
   chunkSize: CHUNK_SIZE,
   seaLevel: SEA_LEVEL,
-  onMobDeath: () => hotbarUI.render(inventory),
+  onMobDeath: () => bus.emit('inventory:changed'),
 });
 mobSystem.spawnMobs();
+
+/* ---------- Chat (T) ---------- */
+const chatUI = createChatUI({
+  logEl: document.getElementById('chatLog'),
+  inputBoxEl: document.getElementById('chatInputBox'),
+  inputEl: document.getElementById('chatInput'),
+  onSend: (text) => bus.emit('chat:message', text),
+  onClose: () => {
+    if (document.pointerLockElement !== renderer.domElement) blocker.style.display = 'flex';
+  },
+});
 
 /* ---------- Entrées clavier / souris ---------- */
 document.addEventListener('keydown', (e) => {
@@ -203,6 +270,13 @@ const MOVE_CODES = new Set([
   'ArrowRight',
   'Space',
 ]);
+// zoom (C, façon longue-vue) : bascule + interpolé dans la boucle animate()
+let zoomed = false;
+// sprint (double-tap W/Z) : deux appuis rapprochés déclenchent la course
+let sprinting = false;
+let lastForwardTapTime = -Infinity;
+const SPRINT_TAP_WINDOW = 300; // ms
+
 document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') {
     craftOpen ? closeCraft() : openCraft();
@@ -213,7 +287,24 @@ document.addEventListener('keydown', (e) => {
     music.toggleBgmMute();
     return;
   }
-  if (craftOpen) return;
+  if (e.code === 'KeyT') {
+    if (!craftOpen && !chatUI.isOpen) {
+      chatUI.open();
+      document.exitPointerLock();
+    }
+    e.preventDefault();
+    return;
+  }
+  if (craftOpen || chatUI.isOpen) return;
+  if (e.code === 'KeyC') {
+    zoomed = !zoomed;
+    return;
+  }
+  if (e.code === 'KeyW' && !e.repeat) {
+    const now = performance.now();
+    if (now - lastForwardTapTime < SPRINT_TAP_WINDOW) sprinting = true;
+    lastForwardTapTime = now;
+  }
   if (MOVE_CODES.has(e.code)) e.preventDefault(); // évite le scroll de page avec Espace/flèches
   keys[e.code] = true;
   // e.code = position physique de la touche : fonctionne en QWERTY comme en AZERTY
@@ -225,7 +316,10 @@ document.addEventListener('keydown', (e) => {
     if (idx < HOTBAR.length) selectSlot(idx);
   }
 });
-document.addEventListener('keyup', (e) => (keys[e.code] = false));
+document.addEventListener('keyup', (e) => {
+  keys[e.code] = false;
+  if (e.code === 'KeyW' || e.code === 'KeyS') sprinting = false; // lâcher/reculer arrête la course
+});
 // si la fenêtre perd le focus (alt-tab, clic ailleurs), on relâche toutes les touches
 // pour éviter que le joueur continue d'avancer tout seul
 window.addEventListener('blur', () => {
@@ -272,10 +366,21 @@ document.addEventListener('mousemove', (e) => {
 /* ---------- Interaction (raycast blocs + mobs) ---------- */
 const raycaster = new THREE.Raycaster();
 raycaster.far = 6;
-const center = new THREE.Vector2(0, 0);
+const rayDir = new THREE.Vector3();
+const rayEye = new THREE.Vector3();
+
+// Portée à 6 blocs mesurée depuis le JOUEUR, pas la caméra : en 3e personne (F5) la
+// caméra est jusqu'à 4.5 unités derrière/au-dessus — un rayon parti de la caméra aurait
+// une portée effective bien plus courte depuis le joueur. On garde la direction visée
+// (celle de la caméra, donc le viseur reste juste à l'écran) mais l'origine est l'oeil du joueur.
+function aimRaycast() {
+  camera.getWorldDirection(rayDir);
+  rayEye.set(player.pos.x, player.pos.y + player.height, player.pos.z);
+  raycaster.set(rayEye, rayDir);
+}
 
 function getTargetedBlock() {
-  raycaster.setFromCamera(center, camera);
+  aimRaycast();
   const intersects = raycaster.intersectObjects(worldApi.instancedMeshList);
   if (intersects.length === 0) return null;
   const hit = intersects[0];
@@ -291,11 +396,37 @@ function getTargetedBlock() {
   };
 }
 function getTargetedMob() {
-  raycaster.setFromCamera(center, camera);
+  aimRaycast();
   const intersects = raycaster.intersectObjects(mobSystem.mobHitboxes);
   if (intersects.length === 0) return null;
   return { mob: intersects[0].object.userData.mob, dist: intersects[0].distance };
 }
+
+// Cassage progressif (TODO 16) : maintenir le clic use le temps réel plutôt que de
+// casser au premier clic. breakTimeFor() lit hardness/tool depuis data/blocks.js —
+// la donnée ajoutée en Phase 2 sert enfin à quelque chose de visible.
+function breakTimeFor(type) {
+  const rightTool = TOOL_FOR_BLOCK[type];
+  const hasRightTool = rightTool && selectedBlock === rightTool && (inventory[rightTool] || 0) > 0;
+  const hardness = BLOCK_TYPES[type]?.hardness ?? 1;
+  return hasRightTool ? hardness / 2 : hardness;
+}
+function breakBlockAt(x, y, z, type) {
+  const rightTool = TOOL_FOR_BLOCK[type];
+  const hasRightTool = rightTool && selectedBlock === rightTool && (inventory[rightTool] || 0) > 0;
+  inventory[type] = (inventory[type] || 0) + (hasRightTool ? 2 : 1);
+  delete worldApi.world[keyOf(x, y, z)];
+  worldApi.removeBlockMesh(x, y, z);
+  worldApi.refreshAround(x, y, z);
+  bus.emit('inventory:changed');
+  bus.emit('block:broken', { x, y, z, type });
+  sfx.playSound('break');
+}
+
+let leftMouseDown = false;
+let breakKey = null;
+let breakProgress = 0;
+const breakCrackEl = document.getElementById('breakCrack');
 
 renderer.domElement.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== renderer.domElement || craftOpen) return;
@@ -304,26 +435,15 @@ renderer.domElement.addEventListener('mousedown', (e) => {
 
   if (e.button === 0) {
     triggerHandSwing();
+    leftMouseDown = true;
     // priorité au mob si plus proche que le bloc
     if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
       const hasSword = selectedBlock === 'wood_sword' && (inventory.wood_sword || 0) > 0;
       mobHit.mob.hit(hasSword ? 5 : 1);
       return;
     }
-    if (blockHit) {
-      const { x, y, z } = blockHit.block;
-      const type = worldApi.world[keyOf(x, y, z)];
-      // bonus de récolte si le bon outil est équipé (pioche pour la pierre, hache pour le bois)
-      const rightTool = TOOL_FOR_BLOCK[type];
-      const hasRightTool =
-        rightTool && selectedBlock === rightTool && (inventory[rightTool] || 0) > 0;
-      inventory[type] = (inventory[type] || 0) + (hasRightTool ? 2 : 1);
-      delete worldApi.world[keyOf(x, y, z)];
-      worldApi.removeBlockMesh(x, y, z);
-      worldApi.refreshAround(x, y, z);
-      hotbarUI.render(inventory);
-      sfx.playSound('break');
-    }
+    // le cassage lui-même est géré dans animate() : il faut maintenir le clic
+    // pointé sur le même bloc pendant breakTimeFor(type) secondes
   } else if (e.button === 2) {
     if (blockHit) {
       const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
@@ -348,13 +468,23 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         worldApi.world[keyOf(x, y, z)] = selectedBlock;
         inventory[selectedBlock]--;
         worldApi.refreshAround(x, y, z);
-        hotbarUI.render(inventory);
+        bus.emit('inventory:changed');
         sfx.playSound('place');
       }
     }
   }
 });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+function stopBreaking() {
+  leftMouseDown = false;
+  breakKey = null;
+  breakProgress = 0;
+  breakCrackEl.style.display = 'none';
+}
+renderer.domElement.addEventListener('mouseup', (e) => {
+  if (e.button === 0) stopBreaking();
+});
+window.addEventListener('blur', stopBreaking);
 
 /* ============================================================
    BOUCLE PRINCIPALE
@@ -364,17 +494,48 @@ let footstepTimer = 0;
 const posEl = document.getElementById('pos');
 const targetEl = document.getElementById('target');
 const hintEl = document.getElementById('hint');
+const fpsEl = document.getElementById('fps');
+let fpsSmoothed = 60;
+
+const STAND_HEIGHT = player.height,
+  CROUCH_HEIGHT = player.height * 0.8;
+
+function isUnderwater() {
+  return (
+    player.pos.y < SEA_LEVEL + 0.6 &&
+    waterKeySet.has(`${Math.round(player.pos.x)},${Math.round(player.pos.z)}`)
+  );
+}
 
 function respawnPlayer() {
   respawn(new THREE.Vector3(0, getHeight(0, 0) + 3, 0));
-  healthUI.render(player);
+  bus.emit('player:health');
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  if (!craftOpen) {
+  // FPS (moyenne glissante — la valeur instantanée saute trop pour être lisible).
+  // Le tout premier dt (juste après la création du Clock) peut être ~0 : on l'ignore
+  // pour ne pas injecter une division par zéro dans la moyenne.
+  if (dt > 0.001) {
+    fpsSmoothed += (1 / dt - fpsSmoothed) * 0.1;
+    fpsEl.textContent = `${Math.round(fpsSmoothed)} FPS`;
+  }
+
+  // zoom (C) : interpolation douce du FOV, indépendante du reste (marche même en 3e personne)
+  const targetFov = zoomed ? 25 : 75;
+  if (Math.abs(camera.fov - targetFov) > 0.05) {
+    camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
+    camera.updateProjectionMatrix();
+  }
+
+  updateSun(dt);
+  water.texture.offset.x = (water.texture.offset.x + dt * 0.025) % 1;
+  water.texture.offset.y = (water.texture.offset.y + dt * 0.015) % 1;
+
+  if (!craftOpen && !chatUI.isOpen) {
     let dx = 0,
       dz = 0;
     if (keys['KeyW'] || keys['ArrowUp']) dz -= 1;
@@ -382,20 +543,37 @@ function animate() {
     if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
     if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
 
+    // accroupi (Maj) : abaisse les yeux/hitbox, ralentit, et interdit de marcher
+    // dans le vide (contrairement à la marche normale qui laisse tomber du bord)
+    const crouching = !!keys['ShiftLeft'] || !!keys['ShiftRight'];
+    player.height = crouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+    if (crouching) sprinting = false;
+    const underwater = isUnderwater();
+    const speed =
+      player.speed * (sprinting ? 1.6 : 1) * (crouching ? 0.6 : 1) * (underwater ? 0.5 : 1);
+
     const isMoving = dx !== 0 || dz !== 0;
     if (isMoving) {
       const len = Math.hypot(dx, dz);
       dx /= len;
       dz /= len;
       // vecteur "avant" caméra = (sin(yaw), cos(yaw)) ; vecteur "droite" = (cos(yaw), -sin(yaw))
-      const moveX = (dz * Math.sin(yaw) + dx * Math.cos(yaw)) * player.speed * dt;
-      const moveZ = (dz * Math.cos(yaw) - dx * Math.sin(yaw)) * player.speed * dt;
-      if (!collidesAt(player.pos.x + moveX, player.pos.y, player.pos.z)) player.pos.x += moveX;
-      if (!collidesAt(player.pos.x, player.pos.y, player.pos.z + moveZ)) player.pos.z += moveZ;
+      const moveX = (dz * Math.sin(yaw) + dx * Math.cos(yaw)) * speed * dt;
+      const moveZ = (dz * Math.cos(yaw) - dx * Math.sin(yaw)) * speed * dt;
+      const canStand = (x, z) =>
+        !crouching ||
+        !player.onGround ||
+        worldApi.collidesAtBox(x, player.pos.y - 0.1, z, player.radius, 0.15);
+      const nx = player.pos.x + moveX;
+      if (!collidesAt(nx, player.pos.y, player.pos.z) && canStand(nx, player.pos.z))
+        player.pos.x = nx;
+      const nz = player.pos.z + moveZ;
+      if (!collidesAt(player.pos.x, player.pos.y, nz) && canStand(player.pos.x, nz))
+        player.pos.z = nz;
       if (player.onGround) {
         footstepTimer -= dt;
         if (footstepTimer <= 0) {
-          sfx.playSound('footstep');
+          sfx.playSound(underwater ? 'footstepWater' : 'footstep');
           footstepTimer = 0.38;
         }
       }
@@ -438,7 +616,7 @@ function animate() {
   const mobHit = getTargetedMob();
   const blockHit = getTargetedBlock();
   if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
-    targetEl.textContent = `${mobHit.mob.type === 'zombie' ? 'Zombie' : 'Cochon'} (${mobHit.mob.health}/${mobHit.mob.maxHealth} PV)`;
+    targetEl.textContent = `${mobHit.mob.data.name} (${mobHit.mob.health}/${mobHit.mob.maxHealth} PV)`;
     hintEl.style.display = 'none';
   } else if (blockHit) {
     const t = worldApi.world[keyOf(blockHit.block.x, blockHit.block.y, blockHit.block.z)];
@@ -447,6 +625,42 @@ function animate() {
   } else {
     targetEl.textContent = '-';
     hintEl.style.display = 'none';
+  }
+
+  // cassage progressif : avance seulement si le clic est maintenu sur EXACTEMENT
+  // le même bloc — bouger le viseur ailleurs remet la progression à zéro (comme Minecraft)
+  const breakingAllowed =
+    leftMouseDown &&
+    !craftOpen &&
+    !chatUI.isOpen &&
+    document.pointerLockElement === renderer.domElement &&
+    blockHit &&
+    !(mobHit && mobHit.dist < blockHit.dist);
+  const breakType =
+    breakingAllowed && worldApi.world[keyOf(blockHit.block.x, blockHit.block.y, blockHit.block.z)];
+  if (breakingAllowed && breakType) {
+    const { x, y, z } = blockHit.block;
+    const key = keyOf(x, y, z);
+    if (key !== breakKey) {
+      breakKey = key;
+      breakProgress = 0;
+    }
+    const total = breakTimeFor(breakType);
+    breakProgress += dt;
+    if (breakProgress >= total) {
+      breakBlockAt(x, y, z, breakType);
+      breakKey = null;
+      breakProgress = 0;
+      breakCrackEl.style.display = 'none';
+    } else {
+      const stage = Math.min(9, Math.floor((breakProgress / total) * 10));
+      breakCrackEl.style.display = 'block';
+      breakCrackEl.style.clipPath = `inset(0 ${((9 - stage) / 10) * 100}% 0 0)`;
+    }
+  } else {
+    breakKey = null;
+    breakProgress = 0;
+    breakCrackEl.style.display = 'none';
   }
 
   renderer.render(scene, camera);

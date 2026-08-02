@@ -4,7 +4,8 @@
 // grand monde. (Le cap MAX_INSTANCES est la limite que Phase 4 des chunks lève.)
 
 import * as THREE from 'three';
-import { keyOf } from './generator.js';
+import { keyOf, WORLD_BORDER } from './generator.js';
+import { texWater } from '../render/textures.js';
 
 export const MAX_INSTANCES = 55000;
 
@@ -38,6 +39,10 @@ export function createWorld({ scene, geometry, materials, blockTypes, waterCells
   // collision boîte générique (utilisée par le joueur ET les mobs) : vérifie si une
   // boîte de rayon `radius` / hauteur `height` centrée en (x,z) et posée en y touche un bloc solide
   function collidesAtBox(x, y, z, radius, height) {
+    // mur invisible en bordure du monde : bloque avant de jamais toucher isSolid,
+    // pour ne pas avoir à générer/rendre de vrais blocs juste pour arrêter le joueur
+    if (x - radius < -WORLD_BORDER || x + radius > WORLD_BORDER) return true;
+    if (z - radius < -WORLD_BORDER || z + radius > WORLD_BORDER) return true;
     const minX = Math.floor(x - radius),
       maxX = Math.floor(x + radius);
     const minZ = Math.floor(z - radius),
@@ -65,7 +70,10 @@ export function createWorld({ scene, geometry, materials, blockTypes, waterCells
     const im = instancedMeshes[type];
     const idx = im.count;
     if (idx >= MAX_INSTANCES) return; // capacité atteinte (monde très dense) : on ignore silencieusement
-    dummyObj.position.set(x, y, z);
+    // +0.5 : BoxGeometry est centrée sur son origine, mais la grille de collision
+    // (Math.floor dans collidesAtBox/isSolid) traite le bloc (x,y,z) comme occupant
+    // [x, x+1) — sans ce décalage le rendu et la collision divergent de 0.5 sur les 3 axes.
+    dummyObj.position.set(x + 0.5, y + 0.5, z + 0.5);
     dummyObj.scale.set(1, 1, 1);
     dummyObj.updateMatrix();
     im.setMatrixAt(idx, dummyObj.matrix);
@@ -118,15 +126,16 @@ export function createWorld({ scene, geometry, materials, blockTypes, waterCells
   // Lacs : simple surface d'eau semi-transparente au niveau de la mer, rendue à
   // part (non solide, non interactive) pour rester légère.
   function buildWaterMesh(seaLevel) {
+    const waterTex = texWater();
     const waterMat = new THREE.MeshLambertMaterial({
-      color: 0x3d7dca,
+      map: waterTex,
       transparent: true,
       opacity: 0.65,
     });
     const waterMesh = new THREE.InstancedMesh(geometry, waterMat, Math.max(1, waterCells.length));
     waterMesh.frustumCulled = false;
     waterCells.forEach((cell, i) => {
-      dummyObj.position.set(cell.x, seaLevel + 0.35, cell.z);
+      dummyObj.position.set(cell.x + 0.5, seaLevel + 0.35, cell.z + 0.5);
       dummyObj.scale.set(1, 0.12, 1);
       dummyObj.updateMatrix();
       waterMesh.setMatrixAt(i, dummyObj.matrix);
@@ -135,7 +144,7 @@ export function createWorld({ scene, geometry, materials, blockTypes, waterCells
     waterMesh.count = waterCells.length;
     waterMesh.instanceMatrix.needsUpdate = true;
     scene.add(waterMesh);
-    return waterMesh;
+    return { mesh: waterMesh, texture: waterTex };
   }
 
   return {

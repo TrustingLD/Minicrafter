@@ -1,122 +1,35 @@
-// Mobs (cochons, vaches, zombies). Ne dépend d'aucun autre système de jeu par
-// import direct : tout ce qu'un Mob doit lire/déclencher (collisions, dégâts au
-// joueur, inventaire, son, mort) lui est passé via `ctx` au constructeur. Ça
-// garde le graphe de dépendances un DAG sans avoir encore besoin du bus
-// d'événements (Phase 3).
+// Mobs (cochons, vaches, poulets, zombies). Ne dépend d'aucun autre système de jeu
+// par import direct : tout ce qu'un Mob doit lire/déclencher (collisions, dégâts au
+// joueur, inventaire, son, mort) lui est passé via `ctx` au constructeur. Ça garde
+// le graphe de dépendances un DAG sans avoir encore besoin du bus d'événements
+// (Phase 3). Stats + apparence viennent de data/mobs.js : ajouter un mob ne touche
+// plus ce fichier.
 
 import * as THREE from 'three';
-import { makeLimb } from './limb.js';
+import { buildBoxModel } from './model.js';
 import * as tex from '../render/textures.js';
+import { MOBS } from '../data/mobs.js';
 
 export function createMobTextures() {
   return {
-    tPig: tex.texMobSkin('#e8a0a8', '#c97e88'),
-    tCow: tex.texCowSkin(),
-    tZombieSkin: tex.texMobSkin('#5f8a52', '#4d7343'),
-    tZombieFace: tex.texZombieFace(),
-    tZombieShirt: tex.texZombieShirt(),
+    pigSkin: tex.texMobSkin('#e8a0a8', '#c97e88'),
+    pigFace: tex.texPigFace(),
+    cowSkin: tex.texCowSkin(),
+    cowFace: tex.texCowFace(),
+    zombieSkin: tex.texMobSkin('#5f8a52', '#4d7343'),
+    zombieFace: tex.texZombieFace(),
+    zombieShirt: tex.texZombieShirt(),
+    chickenBody: tex.texChickenBody(),
+    chickenBeak: tex.texChickenBeak(),
   };
 }
 
 export function buildMobMesh(type, mobAssets) {
-  const group = new THREE.Group();
-  const parts = [];
-  const legs = []; // pivots des pattes/jambes, pour l'animation de marche
-  const arms = []; // pivots des bras (zombie), pour l'animation de marche
+  return buildBoxModel(MOBS[type].model, mobAssets);
+}
 
-  if (type === 'pig' || type === 'cow') {
-    const skin = type === 'pig' ? mobAssets.tPig : mobAssets.tCow;
-    const bodyMat = new THREE.MeshLambertMaterial({ map: skin });
-    const scale = type === 'cow' ? 1.25 : 1;
-    const bodyGeo = new THREE.BoxGeometry(0.9 * scale, 0.6 * scale, 1.3 * scale);
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.5 * scale;
-    body.castShadow = true;
-    group.add(body);
-    parts.push(body);
-
-    const headGeo = new THREE.BoxGeometry(0.5 * scale, 0.5 * scale, 0.5 * scale);
-    const head = new THREE.Mesh(headGeo, bodyMat);
-    head.position.set(0, 0.65 * scale, 0.75 * scale);
-    head.castShadow = true;
-    group.add(head);
-    parts.push(head);
-
-    // pattes = pivots articulés à la hanche (en haut de la patte) pour le balancier de marche
-    const legH = 0.35 * scale;
-    const jointY = 0.35 * scale;
-    const legOffsets = [
-      [-0.3, -0.5],
-      [0.3, -0.5],
-      [-0.3, 0.5],
-      [0.3, 0.5],
-    ];
-    legOffsets.forEach(([lx, lz]) => {
-      const { pivot, mesh } = makeLimb(
-        0.18 * scale,
-        legH,
-        0.18 * scale,
-        bodyMat,
-        lx * scale,
-        jointY,
-        lz * scale,
-      );
-      group.add(pivot);
-      parts.push(mesh);
-      legs.push(pivot);
-    });
-  } else {
-    // zombie : matériaux différents par partie (peau visible sur la tête, vêtements sur le corps)
-    const shirtMat = new THREE.MeshLambertMaterial({ map: mobAssets.tZombieShirt });
-    const skinMat = new THREE.MeshLambertMaterial({ map: mobAssets.tZombieSkin });
-    // ordre des faces BoxGeometry : [+x, -x, +y, -y, +z, -z] -> le visage regarde vers -z (avant local)
-    const headMats = [
-      skinMat,
-      skinMat,
-      skinMat,
-      skinMat,
-      skinMat,
-      new THREE.MeshLambertMaterial({ map: mobAssets.tZombieFace }),
-    ];
-
-    const bodyGeo = new THREE.BoxGeometry(0.6, 0.9, 0.35);
-    const body = new THREE.Mesh(bodyGeo, shirtMat);
-    body.position.y = 1.05;
-    body.castShadow = true;
-    group.add(body);
-    parts.push(body);
-
-    const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const head = new THREE.Mesh(headGeo, headMats);
-    head.position.set(0, 1.75, 0);
-    head.castShadow = true;
-    group.add(head);
-    parts.push(head);
-
-    // bras articulés à l'épaule
-    [
-      [-0.39, 1.4],
-      [0.39, 1.4],
-    ].forEach(([ax, ay]) => {
-      const { pivot, mesh } = makeLimb(0.18, 0.7, 0.18, skinMat, ax, ay, 0);
-      group.add(pivot);
-      parts.push(mesh);
-      arms.push(pivot);
-    });
-
-    // jambes articulées à la hanche
-    [
-      [-0.15, 0.6],
-      [0.15, 0.6],
-    ].forEach(([lx, ly]) => {
-      const { pivot, mesh } = makeLimb(0.2, 0.6, 0.2, shirtMat, lx, ly, 0);
-      group.add(pivot);
-      parts.push(mesh);
-      legs.push(pivot);
-    });
-  }
-
-  return { group, parts, legs, arms };
+function randInt(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
 }
 
 // hauteur max qu'un mob peut "monter" en un pas (comme le joueur ne peut pas
@@ -125,17 +38,19 @@ export function buildMobMesh(type, mobAssets) {
 const MOB_STEP_HEIGHT = 1;
 
 export class Mob {
-  // ctx: { scene, mobAssets, collidesAtBox, getGroundHeight, player, inventory,
+  // ctx: { scene, mobAssets, collidesAtBox, getGroundHeight, inventory,
   //        playSound, onPlayerHurt, onDeath }
   constructor(type, x, z, ctx) {
     this.ctx = ctx;
     this.type = type;
-    this.speed = type === 'zombie' ? 1.6 : type === 'cow' ? 0.9 : 1.1;
-    this.health = type === 'zombie' ? 6 : type === 'cow' ? 5 : 4;
-    this.maxHealth = this.health;
+    const data = MOBS[type];
+    this.data = data;
+    this.speed = data.speed;
+    this.health = data.health;
+    this.maxHealth = data.health;
     // gabarit de collision (comme player.radius / player.height)
-    this.radius = type === 'zombie' ? 0.32 : type === 'cow' ? 0.55 : 0.42;
-    this.height = type === 'zombie' ? 1.9 : type === 'cow' ? 1.15 : 0.9;
+    this.radius = data.hitbox.radius;
+    this.height = data.hitbox.height;
     const built = buildMobMesh(type, ctx.mobAssets);
     this.group = built.group;
     built.parts.forEach((p) => (p.userData.mob = this));
@@ -188,7 +103,7 @@ export class Mob {
       dz = playerPos.z - this.pos.z;
     const distToPlayer = Math.hypot(dx, dz);
 
-    if (this.type === 'zombie' && distToPlayer < 9) {
+    if (this.data.ai === 'hostile' && distToPlayer < 9) {
       moveAngle = Math.atan2(dx, dz);
       this.wanderAngle = moveAngle;
       if (distToPlayer < 1.1 && this.hitCooldown <= 0) {
@@ -252,11 +167,9 @@ export class Mob {
     if (this.health <= 0 && this.alive) {
       this.alive = false;
       scene.remove(this.group);
-      if (this.type === 'pig') inventory.meat = (inventory.meat || 0) + 1;
-      if (this.type === 'cow') {
-        inventory.meat = (inventory.meat || 0) + 1;
-        inventory.milk = (inventory.milk || 0) + 1;
-      }
+      this.data.drops.forEach(({ item, min, max }) => {
+        inventory[item] = (inventory[item] || 0) + randInt(min, max);
+      });
       playSound('mobDeath');
       onDeath(this);
     }
@@ -307,7 +220,7 @@ export function createMobSystem({
 
   function spawnMobs() {
     const half = chunkSize / 2 - 4;
-    const counts = { pig: 20, cow: 14, zombie: 14 };
+    const counts = { pig: 20, cow: 14, zombie: 14, chicken: 16 };
     Object.entries(counts).forEach(([type, n]) => {
       for (let i = 0; i < n; i++) {
         const x = Math.floor((Math.random() * 2 - 1) * half);

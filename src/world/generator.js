@@ -7,6 +7,9 @@ export const CHUNK_SIZE = 150; // taille du monde généré
 export const WORLD_HEIGHT = 60; // pour accueillir les montagnes
 export const SEA_LEVEL = 4;
 export const SNOW_LEVEL = 26;
+// mur invisible : au-delà, plus de sol généré. Un cran à l'intérieur de CHUNK_SIZE
+// pour laisser une bordure de blocs visible avant le mur (sinon on tombe dans le vide).
+export const WORLD_BORDER = CHUNK_SIZE / 2 - 2;
 
 export function keyOf(x, y, z) {
   return x + ',' + y + ',' + z;

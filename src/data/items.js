@@ -1,4 +1,7 @@
-// Objets (outils, nourriture, ressources) + recettes de craft. Pure donnée : aucun import.
+// Objets (outils, nourriture, ressources) + recettes de craft. Pure donnée :
+// seul import autorisé, un autre fichier de donnée (pour dériver NON_PLACEABLE).
+
+import { BLOCK_TYPES } from './blocks.js';
 
 export const ITEM_NAMES = {
   wood: 'Bois',
@@ -63,11 +66,7 @@ export const HOTBAR = [
   'wood_axe',
 ];
 
-export const NON_PLACEABLE = new Set([
-  'wood_sword',
-  'wood_pickaxe',
-  'wood_axe',
-  'stick',
-  'meat',
-  'milk',
-]);
+// dérivé : tout objet qui n'est pas un bloc n'est pas posable (outils, nourriture,
+// ressources brutes intermédiaires comme le bâton). Une seule source de vérité :
+// ajouter un objet à ITEM_NAMES sans l'ajouter à BLOCK_TYPES suffit à le rendre non posable.
+export const NON_PLACEABLE = new Set(Object.keys(ITEM_NAMES).filter((id) => !BLOCK_TYPES[id]));

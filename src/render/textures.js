@@ -310,6 +310,29 @@ export function texMilk() {
   return canvasToTexture(c);
 }
 
+// texture d'eau : vaguelettes, faite pour tourner en boucle (RepeatWrapping) et
+// défiler via texture.offset — c'est ce qui donne l'impression d'eau qui coule
+export function texWater() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#3d7dca';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1;
+  for (let y = 4; y < TEX_SIZE; y += 8) {
+    ctx.beginPath();
+    for (let x = 0; x <= TEX_SIZE; x += 4) {
+      const wy = y + Math.sin((x / TEX_SIZE) * Math.PI * 2) * 1.5;
+      x === 0 ? ctx.moveTo(x, wy) : ctx.lineTo(x, wy);
+    }
+    ctx.stroke();
+  }
+  speckle(ctx, ['#5a9de0'], 20);
+  const t = canvasToTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
 export function texMobSkin(base, dark) {
   const c = newCanvas();
   const ctx = c.getContext('2d');
@@ -352,6 +375,105 @@ export function texZombieFace() {
   ctx.moveTo(TEX_SIZE * 0.55, TEX_SIZE * 0.15);
   ctx.lineTo(TEX_SIZE * 0.7, TEX_SIZE * 0.5);
   ctx.stroke();
+  return canvasToTexture(c);
+}
+// tête de cochon vue de face : yeux + groin
+export function texPigFace() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e8a0a8';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#c97e88'], 16);
+  ctx.fillStyle = '#2a1a1a';
+  ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.28, TEX_SIZE * 0.14, TEX_SIZE * 0.12);
+  ctx.fillRect(TEX_SIZE * 0.66, TEX_SIZE * 0.28, TEX_SIZE * 0.14, TEX_SIZE * 0.12);
+  // groin
+  ctx.fillStyle = '#d67e8a';
+  ctx.beginPath();
+  ctx.ellipse(TEX_SIZE * 0.5, TEX_SIZE * 0.68, TEX_SIZE * 0.22, TEX_SIZE * 0.15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#7a3a42';
+  ctx.beginPath();
+  ctx.ellipse(
+    TEX_SIZE * 0.42,
+    TEX_SIZE * 0.68,
+    TEX_SIZE * 0.035,
+    TEX_SIZE * 0.05,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(
+    TEX_SIZE * 0.58,
+    TEX_SIZE * 0.68,
+    TEX_SIZE * 0.035,
+    TEX_SIZE * 0.05,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  return canvasToTexture(c);
+}
+// tête de vache vue de face : taches + yeux + museau
+export function texCowFace() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f5f0e6';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#2b2620', '#3a332a'], 4, 2.5, 5);
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(TEX_SIZE * 0.18, TEX_SIZE * 0.3, TEX_SIZE * 0.16, TEX_SIZE * 0.14);
+  ctx.fillRect(TEX_SIZE * 0.66, TEX_SIZE * 0.3, TEX_SIZE * 0.16, TEX_SIZE * 0.14);
+  ctx.fillStyle = '#e8d9c4';
+  ctx.fillRect(TEX_SIZE * 0.28, TEX_SIZE * 0.62, TEX_SIZE * 0.44, TEX_SIZE * 0.3);
+  ctx.fillStyle = '#4a3a2e';
+  ctx.beginPath();
+  ctx.ellipse(
+    TEX_SIZE * 0.42,
+    TEX_SIZE * 0.78,
+    TEX_SIZE * 0.04,
+    TEX_SIZE * 0.05,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(
+    TEX_SIZE * 0.58,
+    TEX_SIZE * 0.78,
+    TEX_SIZE * 0.04,
+    TEX_SIZE * 0.05,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+  return canvasToTexture(c);
+}
+// plumage de poulet : blanc cassé tacheté + petits yeux (visibles sur toutes les faces
+// de la tête, pas seulement l'avant : un poulet n'a pas vraiment de "face" distincte)
+export function texChickenBody() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f2ece0';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#e2dac8', '#fbf7ee'], 16, 1.5, 3.5);
+  speckle(ctx, ['#d8cdb8', '#c9a35a'], 30);
+  ctx.fillStyle = '#241f1a';
+  ctx.fillRect(TEX_SIZE * 0.28, TEX_SIZE * 0.32, TEX_SIZE * 0.12, TEX_SIZE * 0.12);
+  ctx.fillRect(TEX_SIZE * 0.6, TEX_SIZE * 0.32, TEX_SIZE * 0.12, TEX_SIZE * 0.12);
+  return canvasToTexture(c);
+}
+export function texChickenBeak() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e8a828';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#c98a1a', '#f2ba48'], 20);
   return canvasToTexture(c);
 }
 // vêtements en lambeaux pour le torse du zombie

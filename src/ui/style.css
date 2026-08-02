@@ -42,6 +42,77 @@ canvas {
   height: 2px;
 }
 
+#fps {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #9f9;
+  font-size: 12px;
+  font-family: monospace;
+  text-shadow: 1px 1px 2px #000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#breakCrack {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9;
+  display: none;
+  background:
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.55) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.55) 0 2px, transparent 2px 6px);
+  clip-path: inset(0 0 0 0);
+}
+
+#chatLog {
+  position: fixed;
+  bottom: 200px;
+  left: 16px;
+  width: 360px;
+  max-height: 160px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 10;
+  pointer-events: none;
+  font-size: 13px;
+}
+#chatLog .msg {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-shadow: 1px 1px 2px #000;
+  width: fit-content;
+  transition: opacity 0.5s;
+}
+#chatInputBox {
+  position: fixed;
+  bottom: 160px;
+  left: 16px;
+  width: 360px;
+  z-index: 15;
+  display: none;
+}
+#chatInputBox input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 14px;
+  border-radius: 3px;
+  border: 1px solid #666;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
 #hotbar {
   position: fixed;
   bottom: 20px;

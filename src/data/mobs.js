@@ -1,0 +1,139 @@
+// Registre des mobs. Pure donnée : aucun import. Ajouter un mob = ajouter une
+// entrée ici (stats + modèle en boîtes) — plus besoin de toucher entities/mob.js.
+//
+// model.parts[i] : { size:[w,h,d], at:[x,y,z], tex, faceTex?, face? }
+//   - tex : texture uniforme sur les 6 faces
+//   - faceTex + face ('+x'|'-x'|'+y'|'-y'|'+z'|'-z', défaut '+z') : remplace UNE face
+//     (utilisé pour mettre un visage sur la tête sans le répéter partout)
+// model.limbs[i] : { group:'legs'|'arms', count, size:[w,h,d], jointY, positions:[[x,z],...], tex }
+//   - membres articulés (pivot à jointY), animés en alternance par entities/mob.js
+
+export const MOBS = {
+  pig: {
+    name: 'Cochon',
+    speed: 1.1,
+    health: 4,
+    hitbox: { radius: 0.42, height: 0.9 },
+    ai: 'wander',
+    drops: [{ item: 'meat', min: 1, max: 1 }],
+    model: {
+      parts: [
+        { size: [0.9, 0.6, 1.3], at: [0, 0.5, 0], tex: 'pigSkin' },
+        { size: [0.5, 0.5, 0.5], at: [0, 0.65, 0.75], tex: 'pigSkin', faceTex: 'pigFace' },
+      ],
+      limbs: [
+        {
+          group: 'legs',
+          size: [0.18, 0.35, 0.18],
+          jointY: 0.35,
+          positions: [
+            [-0.3, -0.5],
+            [0.3, -0.5],
+            [-0.3, 0.5],
+            [0.3, 0.5],
+          ],
+          tex: 'pigSkin',
+        },
+      ],
+    },
+  },
+  cow: {
+    name: 'Vache',
+    speed: 0.9,
+    health: 5,
+    hitbox: { radius: 0.55, height: 1.15 },
+    ai: 'wander',
+    drops: [
+      { item: 'meat', min: 1, max: 1 },
+      { item: 'milk', min: 1, max: 1 },
+    ],
+    model: {
+      parts: [
+        { size: [1.125, 0.75, 1.625], at: [0, 0.625, 0], tex: 'cowSkin' },
+        {
+          size: [0.625, 0.625, 0.625],
+          at: [0, 0.8125, 0.9375],
+          tex: 'cowSkin',
+          faceTex: 'cowFace',
+        },
+      ],
+      limbs: [
+        {
+          group: 'legs',
+          size: [0.225, 0.4375, 0.225],
+          jointY: 0.4375,
+          positions: [
+            [-0.375, -0.625],
+            [0.375, -0.625],
+            [-0.375, 0.625],
+            [0.375, 0.625],
+          ],
+          tex: 'cowSkin',
+        },
+      ],
+    },
+  },
+  zombie: {
+    name: 'Zombie',
+    speed: 1.6,
+    health: 6,
+    hitbox: { radius: 0.32, height: 1.9 },
+    ai: 'hostile',
+    drops: [],
+    model: {
+      parts: [
+        { size: [0.6, 0.9, 0.35], at: [0, 1.05, 0], tex: 'zombieShirt' },
+        { size: [0.5, 0.5, 0.5], at: [0, 1.75, 0], tex: 'zombieSkin', faceTex: 'zombieFace' },
+      ],
+      limbs: [
+        {
+          group: 'arms',
+          size: [0.18, 0.7, 0.18],
+          jointY: 1.4,
+          positions: [
+            [-0.39, 0],
+            [0.39, 0],
+          ],
+          tex: 'zombieSkin',
+        },
+        {
+          group: 'legs',
+          size: [0.2, 0.6, 0.2],
+          jointY: 0.6,
+          positions: [
+            [-0.15, 0],
+            [0.15, 0],
+          ],
+          tex: 'zombieShirt',
+        },
+      ],
+    },
+  },
+  chicken: {
+    name: 'Poulet',
+    speed: 1.3,
+    health: 3,
+    hitbox: { radius: 0.28, height: 0.6 },
+    ai: 'wander',
+    drops: [{ item: 'meat', min: 1, max: 2 }],
+    model: {
+      parts: [
+        { size: [0.4, 0.4, 0.5], at: [0, 0.42, 0], tex: 'chickenBody' },
+        { size: [0.3, 0.3, 0.3], at: [0, 0.75, 0.28], tex: 'chickenBody' },
+        { size: [0.1, 0.1, 0.15], at: [0, 0.72, 0.48], tex: 'chickenBeak' },
+      ],
+      limbs: [
+        {
+          group: 'legs',
+          size: [0.08, 0.3, 0.08],
+          jointY: 0.3,
+          positions: [
+            [-0.1, 0],
+            [0.1, 0],
+          ],
+          tex: 'chickenBeak',
+        },
+      ],
+    },
+  },
+};
