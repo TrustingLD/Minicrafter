@@ -1,0 +1,263 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  background: #87ceeb;
+  font-family: sans-serif;
+}
+canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+#crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+}
+#crosshair::before,
+#crosshair::after {
+  content: '';
+  position: absolute;
+  background: white;
+  box-shadow: 0 0 2px black;
+}
+#crosshair::before {
+  left: 9px;
+  top: 0;
+  width: 2px;
+  height: 20px;
+}
+#crosshair::after {
+  top: 9px;
+  left: 0;
+  width: 20px;
+  height: 2px;
+}
+
+#hotbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+}
+.slot {
+  width: 54px;
+  height: 54px;
+  border: 2px solid #444;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  position: relative;
+}
+.slot.selected {
+  border-color: #fff;
+  box-shadow: 0 0 8px #fff;
+}
+.slot.flash {
+  border-color: #e33 !important;
+  box-shadow: 0 0 10px #e33 !important;
+}
+.slot.empty {
+  opacity: 0.35;
+}
+.slot .swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  image-rendering: pixelated;
+  background-size: cover;
+}
+.slot .key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  color: #fff;
+  font-size: 10px;
+  text-shadow: 1px 1px 1px #000;
+}
+.slot .count {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  text-shadow: 1px 1px 1px #000;
+}
+
+#info {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  color: white;
+  font-size: 13px;
+  z-index: 10;
+  text-shadow: 1px 1px 2px #000;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 8px 12px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+#healthbar {
+  position: fixed;
+  bottom: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 3px;
+  z-index: 10;
+}
+.heart {
+  width: 18px;
+  height: 18px;
+  background: #d32f2f;
+  border: 1px solid #7a0000;
+  border-radius: 3px;
+}
+.heart.empty {
+  background: #333;
+  border-color: #111;
+}
+
+#blocker {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: white;
+  z-index: 20;
+  cursor: pointer;
+  text-align: center;
+}
+#blocker h1 {
+  margin-bottom: 10px;
+}
+#blocker p {
+  margin: 4px 0;
+  color: #ccc;
+}
+
+#hint {
+  position: fixed;
+  bottom: 145px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 13px;
+  text-shadow: 1px 1px 2px #000;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: none;
+}
+
+#craftPanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#craftBox {
+  background: #4b3a2a;
+  border: 4px solid #2b2018;
+  border-radius: 8px;
+  padding: 18px;
+  width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: #f0e6d2;
+  font-size: 14px;
+}
+#craftBox h2 {
+  margin-top: 0;
+}
+.invGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.invItem {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #6b5a45;
+  border-radius: 4px;
+  padding: 6px;
+  text-align: center;
+  font-size: 11px;
+}
+.invItem img,
+.invItem .ic {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+  display: block;
+  margin: 0 auto 4px;
+  border-radius: 2px;
+}
+.recipe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #6b5a45;
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+.recipe .rname {
+  font-weight: bold;
+}
+.recipe .rneed {
+  font-size: 11px;
+  color: #d8c9a8;
+}
+.recipe button {
+  background: #6b8e3d;
+  border: none;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.recipe button:disabled {
+  background: #555;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.recipe.locked {
+  opacity: 0.5;
+}
+#closeCraft {
+  margin-top: 8px;
+  background: #a33;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  width: 100%;
+}

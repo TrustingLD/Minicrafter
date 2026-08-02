@@ -1,0 +1,17 @@
+{
+  "name": "minicrafter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A little game for people who are too poor to buy a game...",
+  "type": "module",
+  "scripts": {
+    "dev": "serve -l 3000 ..",
+    "test": "node --test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "serve": "^14.2.6"
+  }
+}

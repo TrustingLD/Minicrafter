@@ -1,0 +1,335 @@
+// Mobs (cochons, vaches, zombies). Ne dépend d'aucun autre système de jeu par
+// import direct : tout ce qu'un Mob doit lire/déclencher (collisions, dégâts au
+// joueur, inventaire, son, mort) lui est passé via `ctx` au constructeur. Ça
+// garde le graphe de dépendances un DAG sans avoir encore besoin du bus
+// d'événements (Phase 3).
+
+import * as THREE from 'three';
+import { makeLimb } from './limb.js';
+import * as tex from '../render/textures.js';
+
+export function createMobTextures() {
+  return {
+    tPig: tex.texMobSkin('#e8a0a8', '#c97e88'),
+    tCow: tex.texCowSkin(),
+    tZombieSkin: tex.texMobSkin('#5f8a52', '#4d7343'),
+    tZombieFace: tex.texZombieFace(),
+    tZombieShirt: tex.texZombieShirt(),
+  };
+}
+
+export function buildMobMesh(type, mobAssets) {
+  const group = new THREE.Group();
+  const parts = [];
+  const legs = []; // pivots des pattes/jambes, pour l'animation de marche
+  const arms = []; // pivots des bras (zombie), pour l'animation de marche
+
+  if (type === 'pig' || type === 'cow') {
+    const skin = type === 'pig' ? mobAssets.tPig : mobAssets.tCow;
+    const bodyMat = new THREE.MeshLambertMaterial({ map: skin });
+    const scale = type === 'cow' ? 1.25 : 1;
+    const bodyGeo = new THREE.BoxGeometry(0.9 * scale, 0.6 * scale, 1.3 * scale);
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.5 * scale;
+    body.castShadow = true;
+    group.add(body);
+    parts.push(body);
+
+    const headGeo = new THREE.BoxGeometry(0.5 * scale, 0.5 * scale, 0.5 * scale);
+    const head = new THREE.Mesh(headGeo, bodyMat);
+    head.position.set(0, 0.65 * scale, 0.75 * scale);
+    head.castShadow = true;
+    group.add(head);
+    parts.push(head);
+
+    // pattes = pivots articulés à la hanche (en haut de la patte) pour le balancier de marche
+    const legH = 0.35 * scale;
+    const jointY = 0.35 * scale;
+    const legOffsets = [
+      [-0.3, -0.5],
+      [0.3, -0.5],
+      [-0.3, 0.5],
+      [0.3, 0.5],
+    ];
+    legOffsets.forEach(([lx, lz]) => {
+      const { pivot, mesh } = makeLimb(
+        0.18 * scale,
+        legH,
+        0.18 * scale,
+        bodyMat,
+        lx * scale,
+        jointY,
+        lz * scale,
+      );
+      group.add(pivot);
+      parts.push(mesh);
+      legs.push(pivot);
+    });
+  } else {
+    // zombie : matériaux différents par partie (peau visible sur la tête, vêtements sur le corps)
+    const shirtMat = new THREE.MeshLambertMaterial({ map: mobAssets.tZombieShirt });
+    const skinMat = new THREE.MeshLambertMaterial({ map: mobAssets.tZombieSkin });
+    // ordre des faces BoxGeometry : [+x, -x, +y, -y, +z, -z] -> le visage regarde vers -z (avant local)
+    const headMats = [
+      skinMat,
+      skinMat,
+      skinMat,
+      skinMat,
+      skinMat,
+      new THREE.MeshLambertMaterial({ map: mobAssets.tZombieFace }),
+    ];
+
+    const bodyGeo = new THREE.BoxGeometry(0.6, 0.9, 0.35);
+    const body = new THREE.Mesh(bodyGeo, shirtMat);
+    body.position.y = 1.05;
+    body.castShadow = true;
+    group.add(body);
+    parts.push(body);
+
+    const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const head = new THREE.Mesh(headGeo, headMats);
+    head.position.set(0, 1.75, 0);
+    head.castShadow = true;
+    group.add(head);
+    parts.push(head);
+
+    // bras articulés à l'épaule
+    [
+      [-0.39, 1.4],
+      [0.39, 1.4],
+    ].forEach(([ax, ay]) => {
+      const { pivot, mesh } = makeLimb(0.18, 0.7, 0.18, skinMat, ax, ay, 0);
+      group.add(pivot);
+      parts.push(mesh);
+      arms.push(pivot);
+    });
+
+    // jambes articulées à la hanche
+    [
+      [-0.15, 0.6],
+      [0.15, 0.6],
+    ].forEach(([lx, ly]) => {
+      const { pivot, mesh } = makeLimb(0.2, 0.6, 0.2, shirtMat, lx, ly, 0);
+      group.add(pivot);
+      parts.push(mesh);
+      legs.push(pivot);
+    });
+  }
+
+  return { group, parts, legs, arms };
+}
+
+// hauteur max qu'un mob peut "monter" en un pas (comme le joueur ne peut pas
+// escalader plus d'un bloc d'un coup) — c'est ce qui empêche les mobs de se
+// retrouver téléportés en haut d'un arbre ou d'une falaise
+const MOB_STEP_HEIGHT = 1;
+
+export class Mob {
+  // ctx: { scene, mobAssets, collidesAtBox, getGroundHeight, player, inventory,
+  //        playSound, onPlayerHurt, onDeath }
+  constructor(type, x, z, ctx) {
+    this.ctx = ctx;
+    this.type = type;
+    this.speed = type === 'zombie' ? 1.6 : type === 'cow' ? 0.9 : 1.1;
+    this.health = type === 'zombie' ? 6 : type === 'cow' ? 5 : 4;
+    this.maxHealth = this.health;
+    // gabarit de collision (comme player.radius / player.height)
+    this.radius = type === 'zombie' ? 0.32 : type === 'cow' ? 0.55 : 0.42;
+    this.height = type === 'zombie' ? 1.9 : type === 'cow' ? 1.15 : 0.9;
+    const built = buildMobMesh(type, ctx.mobAssets);
+    this.group = built.group;
+    built.parts.forEach((p) => (p.userData.mob = this));
+    this.hitParts = built.parts;
+    this.legs = built.legs;
+    this.arms = built.arms;
+    this.pos = new THREE.Vector3(x, ctx.getGroundHeight(x, z), z);
+    this.group.position.copy(this.pos);
+    ctx.scene.add(this.group);
+    this.wanderAngle = Math.random() * Math.PI * 2;
+    this.wanderTimer = 0;
+    this.alive = true;
+    this.hitCooldown = 0;
+    this.velY = 0;
+    this.onGround = true;
+    this.walkPhase = 0;
+  }
+  // essaie de déplacer le mob sur un axe ; si un bloc bloque le chemin, autorise
+  // à "monter la marche" seulement si l'obstacle ne fait pas plus de 1 bloc de haut
+  moveAxis(axis, delta) {
+    const { collidesAtBox } = this.ctx;
+    const nx = axis === 'x' ? this.pos.x + delta : this.pos.x;
+    const nz = axis === 'z' ? this.pos.z + delta : this.pos.z;
+    if (!collidesAtBox(nx, this.pos.y, nz, this.radius, this.height)) {
+      this.pos.x = nx;
+      this.pos.z = nz;
+      return true;
+    }
+    if (
+      this.onGround &&
+      !collidesAtBox(nx, this.pos.y + MOB_STEP_HEIGHT, nz, this.radius, this.height)
+    ) {
+      this.pos.x = nx;
+      this.pos.z = nz;
+      this.pos.y += MOB_STEP_HEIGHT;
+      this.velY = 0;
+      return true;
+    }
+    return false; // bloqué (obstacle trop haut)
+  }
+  update(dt, playerPos) {
+    if (!this.alive) return;
+    const { collidesAtBox, playSound, onPlayerHurt } = this.ctx;
+    this.wanderTimer -= dt;
+    this.hitCooldown -= dt;
+    let moveAngle = this.wanderAngle;
+    let moving = true;
+
+    const dx = playerPos.x - this.pos.x,
+      dz = playerPos.z - this.pos.z;
+    const distToPlayer = Math.hypot(dx, dz);
+
+    if (this.type === 'zombie' && distToPlayer < 9) {
+      moveAngle = Math.atan2(dx, dz);
+      this.wanderAngle = moveAngle;
+      if (distToPlayer < 1.1 && this.hitCooldown <= 0) {
+        onPlayerHurt(1);
+        this.hitCooldown = 1.0;
+        playSound('hurt');
+      }
+    } else {
+      if (this.wanderTimer <= 0) {
+        this.wanderAngle = Math.random() * Math.PI * 2;
+        this.wanderTimer = 2 + Math.random() * 3;
+        moving = Math.random() > 0.3;
+      }
+      moveAngle = this.wanderAngle;
+    }
+
+    let actuallyMoved = false;
+    if (moving) {
+      const stepX = Math.sin(moveAngle) * this.speed * dt;
+      const stepZ = Math.cos(moveAngle) * this.speed * dt;
+      const movedX = this.moveAxis('x', stepX);
+      const movedZ = this.moveAxis('z', stepZ);
+      actuallyMoved = movedX || movedZ;
+    }
+
+    // gravité + collision verticale, comme le joueur : ça fait vraiment "tomber"
+    // et "toucher le sol" le mob, au lieu de le clipper directement sur la surface
+    this.velY -= 20 * dt;
+    const newY = this.pos.y + this.velY * dt;
+    if (this.velY < 0) {
+      if (collidesAtBox(this.pos.x, newY, this.pos.z, this.radius, this.height)) {
+        this.velY = 0;
+        this.onGround = true;
+      } else {
+        this.pos.y = newY;
+        this.onGround = false;
+      }
+    } else if (!collidesAtBox(this.pos.x, newY, this.pos.z, this.radius, this.height)) {
+      this.pos.y = newY;
+    }
+
+    this.group.position.copy(this.pos);
+    this.group.rotation.y = moveAngle;
+
+    // animation de marche : balancier des pattes/bras en opposition de phase,
+    // uniquement quand le mob avance réellement et touche le sol
+    if (actuallyMoved && this.onGround) this.walkPhase += dt * this.speed * 6;
+    else this.walkPhase *= 1 - Math.min(1, dt * 6); // retour progressif au repos
+    const swing = Math.sin(this.walkPhase) * 0.6;
+    this.legs.forEach((pivot, i) => {
+      pivot.rotation.x = i % 2 === 0 ? swing : -swing;
+    });
+    this.arms.forEach((pivot, i) => {
+      pivot.rotation.x = (i % 2 === 0 ? -swing : swing) * 0.6;
+    });
+  }
+  hit(dmg) {
+    const { scene, inventory, playSound, onDeath } = this.ctx;
+    this.health -= dmg;
+    playSound('hit');
+    if (this.health <= 0 && this.alive) {
+      this.alive = false;
+      scene.remove(this.group);
+      if (this.type === 'pig') inventory.meat = (inventory.meat || 0) + 1;
+      if (this.type === 'cow') {
+        inventory.meat = (inventory.meat || 0) + 1;
+        inventory.milk = (inventory.milk || 0) + 1;
+      }
+      playSound('mobDeath');
+      onDeath(this);
+    }
+  }
+}
+
+// Gère la collection de mobs vivants + la liste plate de hitboxes utilisée par
+// le raycast d'attaque. `makeCtx` construit le ctx d'un Mob (voir plus haut) et
+// reçoit le mob à sa mort pour que l'appelant puisse le retirer de `mobs`.
+export function createMobSystem({
+  scene,
+  mobAssets,
+  collidesAtBox,
+  getGroundHeight,
+  getHeight,
+  inventory,
+  playSound,
+  onPlayerHurt,
+  chunkSize,
+  seaLevel,
+  onMobDeath,
+}) {
+  const mobs = [];
+  let mobHitboxes = [];
+
+  function refreshMobHitboxes() {
+    mobHitboxes = [];
+    mobs.forEach((m) => m.hitParts.forEach((p) => mobHitboxes.push(p)));
+  }
+
+  function makeCtx() {
+    return {
+      scene,
+      mobAssets,
+      collidesAtBox,
+      getGroundHeight,
+      inventory,
+      playSound,
+      onPlayerHurt,
+      onDeath(mob) {
+        const idx = mobs.indexOf(mob);
+        if (idx >= 0) mobs.splice(idx, 1);
+        refreshMobHitboxes();
+        onMobDeath();
+      },
+    };
+  }
+
+  function spawnMobs() {
+    const half = chunkSize / 2 - 4;
+    const counts = { pig: 20, cow: 14, zombie: 14 };
+    Object.entries(counts).forEach(([type, n]) => {
+      for (let i = 0; i < n; i++) {
+        const x = Math.floor((Math.random() * 2 - 1) * half);
+        const z = Math.floor((Math.random() * 2 - 1) * half);
+        if (getHeight(x, z) < seaLevel) continue; // pas de mobs dans les lacs
+        mobs.push(new Mob(type, x, z, makeCtx()));
+      }
+    });
+    refreshMobHitboxes();
+  }
+
+  function update(dt, playerPos) {
+    mobs.forEach((m) => m.update(dt, playerPos));
+  }
+
+  return {
+    mobs,
+    get mobHitboxes() {
+      return mobHitboxes;
+    },
+    spawnMobs,
+    refreshMobHitboxes,
+    update,
+  };
+}
