@@ -55,22 +55,6 @@ canvas {
   pointer-events: none;
 }
 
-#breakCrack {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 9;
-  display: none;
-  background:
-    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.55) 0 2px, transparent 2px 6px),
-    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.55) 0 2px, transparent 2px 6px);
-  clip-path: inset(0 0 0 0);
-}
-
 #chatLog {
   position: fixed;
   bottom: 200px;

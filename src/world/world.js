@@ -1,46 +1,180 @@
-// État du monde (voxels) + rendu via InstancedMesh : au lieu d'un Mesh (donc
-// plusieurs appels de rendu) PAR bloc, chaque type de bloc a un unique objet GPU
-// qui dessine toutes ses instances en un coup. C'est ce qui évite le lag sur un
-// grand monde. (Le cap MAX_INSTANCES est la limite que Phase 4 des chunks lève.)
+// État du monde, maintenant en CHUNKS (Phase 4a) : plus de plafond MAX_INSTANCES,
+// plus de `world = {}` géant tenu en mémoire — seuls les chunks proches du joueur
+// existent, générés à la demande et déchargés une fois trop loin (leurs modifications
+// survivent dans `diffs`, persistées dans localStorage). Le rendu utilise un atlas de
+// textures + un mesher (Phase 5) : UN SEUL BufferGeometry par chunk au lieu d'un
+// InstancedMesh par type de bloc — c'est ce qui fait chuter le nombre d'appels de rendu.
+//
+// Non fait (assumé, cf. PLAN.md §Phase 5.3) : le Web Worker. La génération + le
+// meshing d'un chunk sont assez bon marché pour rester sur le thread principal tant
+// qu'on les étale sur plusieurs frames (CHUNKS_PER_FRAME) — à mesurer si un jour ça
+// stutter en vrai, plutôt que le construire par principe.
 
 import * as THREE from 'three';
-import { keyOf, WORLD_BORDER } from './generator.js';
+import { CHUNK_X, CHUNK_Y, CHUNK_Z, idx, chunkKey, worldToChunk, worldToLocal } from './chunk.js';
+import {
+  generateChunk,
+  getGroundHeight as computeGroundHeight,
+  SEA_LEVEL,
+  WORLD_BORDER,
+} from './generator.js';
+import { BLOCK_ID, BLOCK_BY_ID } from '../data/blocks.js';
+import { buildBlockAtlas } from '../render/atlas.js';
+import { meshChunk } from '../render/mesher.js';
 import { texWater } from '../render/textures.js';
 
-export const MAX_INSTANCES = 55000;
+export { WORLD_BORDER };
 
-export function createWorld({ scene, geometry, materials, blockTypes, waterCells }) {
-  const world = {};
-  const instancedMeshes = {}; // type -> THREE.InstancedMesh
-  const instanceKeys = {}; // type -> [key à l'index i, ...] (pour le swap-remove)
-  const instancedMeshList = []; // liste à plat pour le raycasting
-  const blockIndex = {}; // "x,y,z" -> { type, idx }
-  const dummyObj = new THREE.Object3D();
-  const tmpMatrix = new THREE.Matrix4();
+const RENDER_DISTANCE = 6; // en chunks (16 blocs) autour du joueur
+const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
+const CHUNKS_PER_FRAME = 3; // étale génération+meshing sur plusieurs frames après le boot
+const INITIAL_RADIUS = 3; // chargé de façon synchrone au démarrage (le reste suit via update())
+const DIFF_STORAGE_KEY = 'minicrafter_diffs_v1';
 
-  for (const type in blockTypes) {
-    const im = new THREE.InstancedMesh(geometry, materials[type], MAX_INSTANCES);
-    im.count = 0;
-    im.castShadow = false; // le terrain ne projette pas d'ombre sur lui-même (coûteux) ...
-    im.receiveShadow = true; // ... mais reçoit bien celle des mobs/arbres
-    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    im.userData.blockType = type;
-    // le bounding sphere par défaut ne couvre qu'un seul bloc : sans ça, des instances
-    // visibles pourraient être supprimées à tort par le frustum culling
-    im.frustumCulled = false;
-    scene.add(im);
-    instancedMeshes[type] = im;
-    instanceKeys[type] = [];
+function loadDiffs() {
+  try {
+    return JSON.parse(localStorage.getItem(DIFF_STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+export function createWorld({ scene }) {
+  const { texture: atlasTexture, uvByBlockId } = buildBlockAtlas();
+  const atlasMaterial = new THREE.MeshLambertMaterial({ map: atlasTexture });
+
+  // Lacs : une petite InstancedMesh par chunk, mais TOUTES partagent le même matériau
+  // (donc la même texture) -> animer waterTexture.offset dans main.js fait défiler
+  // l'eau de tous les chunks à la fois, sans avoir à les parcourir un par un.
+  const waterTexture = texWater();
+  const waterMaterial = new THREE.MeshLambertMaterial({
+    map: waterTexture,
+    transparent: true,
+    opacity: 0.65,
+  });
+  const waterGeometry = new THREE.BoxGeometry(1, 0.24, 1);
+  const waterDummy = new THREE.Object3D();
+
+  const diffs = loadDiffs(); // "cx,cz" -> { localIdx: blockId }
+  let diffsDirty = false;
+  function flushDiffs() {
+    if (!diffsDirty) return;
+    diffsDirty = false;
+    try {
+      localStorage.setItem(DIFF_STORAGE_KEY, JSON.stringify(diffs));
+    } catch {
+      /* quota pleine ou stockage indisponible : tant pis, on continue sans persister */
+    }
+  }
+  setInterval(flushDiffs, 2000);
+  window.addEventListener('beforeunload', flushDiffs);
+
+  const chunks = new Map(); // "cx,cz" -> record
+  const chunkMeshList = []; // à plat, pour le raycasting (viseur bloc + occlusion caméra 3e perso)
+
+  function applySavedDiffs(key, data) {
+    const d = diffs[key];
+    if (!d) return;
+    for (const localIdx in d) data[localIdx] = d[localIdx];
+  }
+
+  function buildGeometry(data) {
+    const { positions, normals, uvs, indices } = meshChunk(data, uvByBlockId);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setIndex(new THREE.BufferAttribute(indices, 1));
+    return geo;
+  }
+
+  function buildWaterMesh(record) {
+    if (record.waterCells.length === 0) return null;
+    const mesh = new THREE.InstancedMesh(waterGeometry, waterMaterial, record.waterCells.length);
+    record.waterCells.forEach((cell, i) => {
+      waterDummy.position.set(
+        record.cx * CHUNK_X + cell.lx + 0.5,
+        SEA_LEVEL - 0.5 + 0.35,
+        record.cz * CHUNK_Z + cell.lz + 0.5,
+      );
+      waterDummy.updateMatrix();
+      mesh.setMatrixAt(i, waterDummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    return mesh;
+  }
+
+  function ensureChunk(cx, cz) {
+    const key = chunkKey(cx, cz);
+    let record = chunks.get(key);
+    if (record) return record;
+
+    const { data, waterCells } = generateChunk(cx, cz);
+    applySavedDiffs(key, data);
+
+    record = { cx, cz, key, data, waterCells, mesh: null, waterMesh: null };
+    record.mesh = new THREE.Mesh(buildGeometry(data), atlasMaterial);
+    record.mesh.position.set(cx * CHUNK_X, 0, cz * CHUNK_Z);
+    record.mesh.receiveShadow = true;
+    scene.add(record.mesh);
+    chunkMeshList.push(record.mesh);
+
+    record.waterMesh = buildWaterMesh(record);
+    if (record.waterMesh) scene.add(record.waterMesh);
+
+    chunks.set(key, record);
+    return record;
+  }
+
+  function remesh(record) {
+    record.mesh.geometry.dispose();
+    record.mesh.geometry = buildGeometry(record.data);
+  }
+
+  function unloadChunk(record) {
+    scene.remove(record.mesh);
+    record.mesh.geometry.dispose();
+    const i = chunkMeshList.indexOf(record.mesh);
+    if (i >= 0) chunkMeshList.splice(i, 1);
+    // waterGeometry/waterMaterial sont partagés par tous les chunks : on ne les
+    // dispose jamais ici, seulement retirer CE mesh de la scène.
+    if (record.waterMesh) scene.remove(record.waterMesh);
+    chunks.delete(record.key);
+    // NB: `diffs` n'est PAS nettoyé ici — les modifications du joueur doivent survivre
+    // au déchargement, elles sont réappliquées par applySavedDiffs() au rechargement.
+  }
+
+  function getBlock(x, y, z) {
+    if (y < 0 || y >= CHUNK_Y) return null;
+    const [cx, cz] = worldToChunk(x, z);
+    const record = ensureChunk(cx, cz);
+    const [lx, lz] = worldToLocal(x, z);
+    const id = record.data[idx(lx, y, lz)];
+    return id ? BLOCK_BY_ID[id] : null;
+  }
+
+  function setBlock(x, y, z, type) {
+    if (y < 0 || y >= CHUNK_Y) return;
+    const [cx, cz] = worldToChunk(x, z);
+    const record = ensureChunk(cx, cz);
+    const [lx, lz] = worldToLocal(x, z);
+    const i = idx(lx, y, lz);
+    const id = type ? BLOCK_ID[type] : 0;
+    if (record.data[i] === id) return;
+    record.data[i] = id;
+    if (!diffs[record.key]) diffs[record.key] = {};
+    diffs[record.key][i] = id;
+    diffsDirty = true;
+    remesh(record);
   }
 
   function isSolid(x, y, z) {
-    return !!world[keyOf(x, y, z)];
+    return !!getBlock(x, y, z);
   }
-  // collision boîte générique (utilisée par le joueur ET les mobs) : vérifie si une
-  // boîte de rayon `radius` / hauteur `height` centrée en (x,z) et posée en y touche un bloc solide
+
+  // collision boîte générique (utilisée par le joueur ET les mobs) : identique à
+  // l'ancienne version, seule la source des blocs (getBlock au lieu de world{}) change.
   function collidesAtBox(x, y, z, radius, height) {
-    // mur invisible en bordure du monde : bloque avant de jamais toucher isSolid,
-    // pour ne pas avoir à générer/rendre de vrais blocs juste pour arrêter le joueur
     if (x - radius < -WORLD_BORDER || x + radius > WORLD_BORDER) return true;
     if (z - radius < -WORLD_BORDER || z + radius > WORLD_BORDER) return true;
     const minX = Math.floor(x - radius),
@@ -54,112 +188,58 @@ export function createWorld({ scene, geometry, materials, blockTypes, waterCells
         for (let by = minY; by <= maxY; by++) if (isSolid(bx, by, bz)) return true;
     return false;
   }
-  function shouldRender(x, y, z) {
-    return !(
-      isSolid(x + 1, y, z) &&
-      isSolid(x - 1, y, z) &&
-      isSolid(x, y + 1, z) &&
-      isSolid(x, y - 1, z) &&
-      isSolid(x, y, z + 1) &&
-      isSolid(x, y, z - 1)
-    );
-  }
-  function addBlockMesh(x, y, z, type) {
-    const key = keyOf(x, y, z);
-    if (blockIndex[key]) return;
-    const im = instancedMeshes[type];
-    const idx = im.count;
-    if (idx >= MAX_INSTANCES) return; // capacité atteinte (monde très dense) : on ignore silencieusement
-    // +0.5 : BoxGeometry est centrée sur son origine, mais la grille de collision
-    // (Math.floor dans collidesAtBox/isSolid) traite le bloc (x,y,z) comme occupant
-    // [x, x+1) — sans ce décalage le rendu et la collision divergent de 0.5 sur les 3 axes.
-    dummyObj.position.set(x + 0.5, y + 0.5, z + 0.5);
-    dummyObj.scale.set(1, 1, 1);
-    dummyObj.updateMatrix();
-    im.setMatrixAt(idx, dummyObj.matrix);
-    im.count = idx + 1;
-    im.instanceMatrix.needsUpdate = true;
-    instanceKeys[type][idx] = key;
-    blockIndex[key] = { type, idx };
-  }
-  function removeBlockMesh(x, y, z) {
-    const key = keyOf(x, y, z);
-    const info = blockIndex[key];
-    if (!info) return;
-    const { type, idx } = info;
-    const im = instancedMeshes[type];
-    const lastIdx = im.count - 1;
-    if (idx !== lastIdx) {
-      // on déplace la dernière instance à la place de celle qu'on supprime (swap-remove)
-      im.getMatrixAt(lastIdx, tmpMatrix);
-      im.setMatrixAt(idx, tmpMatrix);
-      const lastKey = instanceKeys[type][lastIdx];
-      instanceKeys[type][idx] = lastKey;
-      blockIndex[lastKey] = { type, idx };
-    }
-    im.count = lastIdx;
-    im.instanceMatrix.needsUpdate = true;
-    instanceKeys[type].length = lastIdx;
-    delete blockIndex[key];
-  }
-  function refreshAround(x, y, z, radius = 1) {
-    for (let dx = -radius; dx <= radius; dx++)
-      for (let dy = -radius; dy <= radius; dy++)
-        for (let dz = -radius; dz <= radius; dz++) {
-          const bx = x + dx,
-            by = y + dy,
-            bz = z + dz;
-          const type = world[keyOf(bx, by, bz)];
-          if (type && shouldRender(bx, by, bz)) addBlockMesh(bx, by, bz, type);
-          else removeBlockMesh(bx, by, bz);
-        }
+
+  function getGroundHeight(x, z) {
+    return computeGroundHeight(getBlock, x, z);
   }
 
-  function buildInitialMeshes() {
-    for (const key in world) {
-      const [x, y, z] = key.split(',').map(Number);
-      if (shouldRender(x, y, z)) addBlockMesh(x, y, z, world[key]);
-    }
-    Object.values(instancedMeshes).forEach((im) => instancedMeshList.push(im));
+  // charge un disque de chunks autour de (x,z) de façon SYNCHRONE (pas de budget par
+  // frame) — utilisé une seule fois au boot pour que le joueur n'apparaisse pas au
+  // milieu du vide. Le reste du monde suit via update(), étalé sur plusieurs frames.
+  function preload(x, z, radiusChunks) {
+    const [pcx, pcz] = worldToChunk(x, z);
+    for (let dx = -radiusChunks; dx <= radiusChunks; dx++)
+      for (let dz = -radiusChunks; dz <= radiusChunks; dz++)
+        if (dx * dx + dz * dz <= radiusChunks * radiusChunks) ensureChunk(pcx + dx, pcz + dz);
   }
+  preload(0, 0, INITIAL_RADIUS);
 
-  // Lacs : simple surface d'eau semi-transparente au niveau de la mer, rendue à
-  // part (non solide, non interactive) pour rester légère.
-  function buildWaterMesh(seaLevel) {
-    const waterTex = texWater();
-    const waterMat = new THREE.MeshLambertMaterial({
-      map: waterTex,
-      transparent: true,
-      opacity: 0.65,
-    });
-    const waterMesh = new THREE.InstancedMesh(geometry, waterMat, Math.max(1, waterCells.length));
-    waterMesh.frustumCulled = false;
-    waterCells.forEach((cell, i) => {
-      dummyObj.position.set(cell.x + 0.5, seaLevel + 0.35, cell.z + 0.5);
-      dummyObj.scale.set(1, 0.12, 1);
-      dummyObj.updateMatrix();
-      waterMesh.setMatrixAt(i, dummyObj.matrix);
-    });
-    dummyObj.scale.set(1, 1, 1); // remise à zéro : dummyObj est réutilisé par addBlockMesh
-    waterMesh.count = waterCells.length;
-    waterMesh.instanceMatrix.needsUpdate = true;
-    scene.add(waterMesh);
-    return { mesh: waterMesh, texture: waterTex };
+  // appelée chaque frame : charge les chunks proches du joueur (quelques-uns par
+  // frame seulement, pour ne jamais bloquer une frame entière) et décharge ceux
+  // devenus trop lointains.
+  function update(playerPos) {
+    const [pcx, pcz] = worldToChunk(playerPos.x, playerPos.z);
+    const candidates = [];
+    for (let dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
+      for (let dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
+        const d2 = dx * dx + dz * dz;
+        if (d2 > RENDER_DISTANCE * RENDER_DISTANCE) continue;
+        const cx = pcx + dx,
+          cz = pcz + dz;
+        if (Math.abs(cx * CHUNK_X) > WORLD_BORDER + CHUNK_X) continue;
+        if (Math.abs(cz * CHUNK_Z) > WORLD_BORDER + CHUNK_Z) continue;
+        if (!chunks.has(chunkKey(cx, cz))) candidates.push({ cx, cz, d2 });
+      }
+    }
+    candidates.sort((a, b) => a.d2 - b.d2);
+    for (let i = 0; i < Math.min(CHUNKS_PER_FRAME, candidates.length); i++)
+      ensureChunk(candidates[i].cx, candidates[i].cz);
+
+    for (const record of Array.from(chunks.values())) {
+      const dx = record.cx - pcx,
+        dz = record.cz - pcz;
+      if (dx * dx + dz * dz > UNLOAD_DISTANCE * UNLOAD_DISTANCE) unloadChunk(record);
+    }
   }
 
   return {
-    world,
-    instancedMeshes,
-    instanceKeys,
-    instancedMeshList,
-    blockIndex,
+    getBlock,
+    setBlock,
     isSolid,
     collidesAtBox,
-    shouldRender,
-    addBlockMesh,
-    removeBlockMesh,
-    refreshAround,
-    buildInitialMeshes,
-    buildWaterMesh,
+    getGroundHeight,
+    update,
+    chunkMeshList,
+    waterTexture,
   };
 }

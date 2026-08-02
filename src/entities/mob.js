@@ -188,7 +188,7 @@ export function createMobSystem({
   inventory,
   playSound,
   onPlayerHurt,
-  chunkSize,
+  spawnHalf,
   seaLevel,
   onMobDeath,
 }) {
@@ -219,7 +219,7 @@ export function createMobSystem({
   }
 
   function spawnMobs() {
-    const half = chunkSize / 2 - 4;
+    const half = spawnHalf;
     const counts = { pig: 20, cow: 14, zombie: 14, chicken: 16 };
     Object.entries(counts).forEach(([type, n]) => {
       for (let i = 0; i < n; i++) {

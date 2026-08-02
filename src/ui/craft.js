@@ -1,15 +1,13 @@
 // Table de craft : inventaire + recettes (panneau modal).
 
-import { keyOf } from '../world/generator.js';
-
-export function isNearCraftingTable(worldMap, playerPos) {
+export function isNearCraftingTable(getBlock, playerPos) {
   const px = Math.round(playerPos.x),
     pz = Math.round(playerPos.z),
     py = Math.round(playerPos.y);
   for (let dx = -3; dx <= 3; dx++)
     for (let dz = -3; dz <= 3; dz++)
       for (let dy = -2; dy <= 2; dy++)
-        if (worldMap[keyOf(px + dx, py + dy, pz + dz)] === 'crafting_table') return true;
+        if (getBlock(px + dx, py + dy, pz + dz) === 'crafting_table') return true;
   return false;
 }
 
@@ -21,16 +19,16 @@ export function canCraft(inventory, recipe) {
 export function createCraftUI({ elements, RECIPES, itemNames, iconCanvas, playSound, onCrafted }) {
   const { craftPanel, invGrid, recipeList, craftTitle } = elements;
 
-  function craft(inventory, recipe, worldMap, playerPos) {
+  function craft(inventory, recipe, getBlock, playerPos) {
     if (!canCraft(inventory, recipe)) return;
-    if (recipe.needsTable && !isNearCraftingTable(worldMap, playerPos)) return;
+    if (recipe.needsTable && !isNearCraftingTable(getBlock, playerPos)) return;
     for (const k in recipe.need) inventory[k] -= recipe.need[k];
     for (const k in recipe.give) inventory[k] = (inventory[k] || 0) + recipe.give[k];
     playSound('craft');
     onCrafted();
   }
 
-  function render(inventory, worldMap, playerPos) {
+  function render(inventory, getBlock, playerPos) {
     invGrid.innerHTML = '';
     Object.keys(inventory).forEach((key) => {
       if (!inventory[key]) return;
@@ -53,7 +51,7 @@ export function createCraftUI({ elements, RECIPES, itemNames, iconCanvas, playSo
       invGrid.appendChild(div);
     });
 
-    const nearTable = isNearCraftingTable(worldMap, playerPos);
+    const nearTable = isNearCraftingTable(getBlock, playerPos);
     craftTitle.textContent = nearTable ? 'Table de craft' : 'Inventaire (craft de base)';
 
     recipeList.innerHTML = '';
@@ -69,8 +67,8 @@ export function createCraftUI({ elements, RECIPES, itemNames, iconCanvas, playSo
       btn.textContent = 'Fabriquer';
       btn.disabled = !canCraft(inventory, r);
       btn.addEventListener('click', () => {
-        craft(inventory, r, worldMap, playerPos);
-        render(inventory, worldMap, playerPos);
+        craft(inventory, r, getBlock, playerPos);
+        render(inventory, getBlock, playerPos);
       });
       row.appendChild(btn);
       recipeList.appendChild(row);

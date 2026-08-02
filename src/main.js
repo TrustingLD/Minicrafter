@@ -6,16 +6,10 @@ import * as THREE from 'three';
 
 import { createEventBus } from './core/events.js';
 import { createBlockAssets } from './render/block-assets.js';
+import { texCrackStage } from './render/textures.js';
 import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
-import { ITEM_NAMES, RECIPES, HOTBAR, NON_PLACEABLE } from './data/items.js';
-import {
-  CHUNK_SIZE,
-  SEA_LEVEL,
-  getHeight,
-  generateTerrain,
-  getGroundHeight,
-  keyOf,
-} from './world/generator.js';
+import { ITEM_NAMES, RECIPES, HOTBAR, NON_PLACEABLE, TOOL_CATEGORY } from './data/items.js';
+import { SEA_LEVEL, getHeight } from './world/generator.js';
 import { createWorld } from './world/world.js';
 import { createSfx } from './audio/sfx.js';
 import { createMusic } from './audio/music.js';
@@ -85,22 +79,30 @@ const music = createMusic('./luft-mini.mp3', musicHintEl);
 document.getElementById('musicHint').addEventListener('click', music.toggleBgmMute);
 
 /* ---------- Monde ---------- */
+// Monde en chunks (Phase 4a) : createWorld précharge un petit disque de chunks
+// autour de (0,0) de façon synchrone (le joueur n'apparaît jamais dans le vide),
+// le reste se charge à la volée via worldApi.update(player.pos) dans animate().
 const blockAssets = createBlockAssets();
-const waterCells = []; // {x,z} des colonnes sous le niveau de la mer (rendues séparément)
-const worldApi = createWorld({
-  scene,
-  geometry: blockAssets.geometry,
-  materials: blockAssets.materials,
-  blockTypes: blockAssets.blockTypes,
-  waterCells,
-});
-generateTerrain(worldApi.world, waterCells);
-worldApi.buildInitialMeshes();
-const waterKeySet = new Set(waterCells.map((c) => `${c.x},${c.z}`)); // pour savoir si le joueur est immergé
-const water = worldApi.buildWaterMesh(SEA_LEVEL);
+const worldApi = createWorld({ scene });
 
 // Bordure du monde : mur purement invisible, seule la collision existe (cf.
 // collidesAtBox dans world.js). Pas de plan rouge/brume — juste un stop net.
+
+// Overlay de cassage (TODO 16) : une boîte légèrement plus grande que le bloc visé,
+// posée dessus, texturée avec des craquelures — PAS un effet d'écran/viseur. On la
+// déplace sur le bloc ciblé et on change sa texture (10 stades) au fil de breakProgress.
+const crackTextures = Array.from({ length: 10 }, (_, i) => texCrackStage(i));
+const crackMat = new THREE.MeshBasicMaterial({
+  map: crackTextures[0],
+  transparent: true,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -4,
+  polygonOffsetUnits: -4,
+});
+const crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.01, 1.01, 1.01), crackMat);
+crackMesh.visible = false;
+scene.add(crackMesh);
 
 /* ---------- Inventaire ---------- */
 const inventory = {
@@ -157,7 +159,7 @@ function openCraft() {
   craftOpen = true;
   craftUI.show();
   document.exitPointerLock();
-  craftUI.render(inventory, worldApi.world, player.pos);
+  craftUI.render(inventory, worldApi.getBlock, player.pos);
 }
 function closeCraft() {
   craftOpen = false;
@@ -184,7 +186,7 @@ const {
   blockTypes: blockAssets.blockTypes,
   toolTextures: blockAssets.toolTextures,
   collidesAtBox: worldApi.collidesAtBox,
-  instancedMeshList: worldApi.instancedMeshList,
+  instancedMeshList: worldApi.chunkMeshList,
   spawnPos: new THREE.Vector3(0, getHeight(0, 0) + 3, 0),
 });
 healthUI.render(player);
@@ -200,12 +202,17 @@ function selectSlot(i) {
 }
 
 /* ---------- Mobs ---------- */
+// rayon de spawn volontairement plus petit que WORLD_BORDER : au-delà, les chunks
+// ne sont pas encore préchargés au boot, donc getGroundHeight y forcerait une
+// génération synchrone de tous les chunks traversés — inutile, le monde entier
+// n'a pas besoin d'être peuplé de mobs dès la première frame.
+const MOB_SPAWN_HALF = 40;
 const mobAssets = createMobTextures();
 const mobSystem = createMobSystem({
   scene,
   mobAssets,
   collidesAtBox: worldApi.collidesAtBox,
-  getGroundHeight: (x, z) => getGroundHeight(worldApi.world, x, z),
+  getGroundHeight: worldApi.getGroundHeight,
   getHeight,
   inventory,
   playSound: sfx.playSound,
@@ -213,7 +220,7 @@ const mobSystem = createMobSystem({
     player.health = Math.max(0, player.health - dmg);
     bus.emit('player:health');
   },
-  chunkSize: CHUNK_SIZE,
+  spawnHalf: MOB_SPAWN_HALF,
   seaLevel: SEA_LEVEL,
   onMobDeath: () => bus.emit('inventory:changed'),
 });
@@ -361,17 +368,21 @@ function aimRaycast() {
 
 function getTargetedBlock() {
   aimRaycast();
-  const intersects = raycaster.intersectObjects(worldApi.instancedMeshList);
+  const intersects = raycaster.intersectObjects(worldApi.chunkMeshList);
   if (intersects.length === 0) return null;
   const hit = intersects[0];
-  const type = hit.object.userData.blockType;
-  const key = worldApi.instanceKeys[type][hit.instanceId];
-  if (!key) return null;
-  const [x, y, z] = key.split(',').map(Number);
-  const normal = hit.face.normal;
+  const n = hit.face.normal; // le mesh de chunk n'a qu'une translation (pas de rotation
+  // ni d'échelle), donc la normale locale de la face EST la normale monde
+  const p = hit.point; // déjà en coordonnées monde
+  // le point d'impact tombe pile sur la face du cube [x,x+1) : reculer d'un demi-bloc
+  // le long de -normale retombe toujours sur le coin (x,y,z) du bloc visé, quelle que
+  // soit la face touchée (cf. PLAN.md §3.1 sur le décalage +0.5 des blocs)
+  const x = Math.floor(p.x - n.x * 0.5);
+  const y = Math.floor(p.y - n.y * 0.5);
+  const z = Math.floor(p.z - n.z * 0.5);
   return {
     block: { x, y, z },
-    place: { x: x + normal.x, y: y + normal.y, z: z + normal.z },
+    place: { x: x + n.x, y: y + n.y, z: z + n.z },
     dist: hit.distance,
   };
 }
@@ -385,19 +396,21 @@ function getTargetedMob() {
 // Cassage progressif (TODO 16) : maintenir le clic use le temps réel plutôt que de
 // casser au premier clic. breakTimeFor() lit hardness/tool depuis data/blocks.js —
 // la donnée ajoutée en Phase 2 sert enfin à quelque chose de visible.
+// hasRightTool compare des CATÉGORIES d'outil ('pickaxe'/'axe'), pas un item précis :
+// n'importe quel tier de pioche (bois/pierre/fer) donne le bonus sur la pierre.
+function hasRightToolFor(type) {
+  const category = TOOL_FOR_BLOCK[type];
+  return (
+    !!category && TOOL_CATEGORY[selectedBlock] === category && (inventory[selectedBlock] || 0) > 0
+  );
+}
 function breakTimeFor(type) {
-  const rightTool = TOOL_FOR_BLOCK[type];
-  const hasRightTool = rightTool && selectedBlock === rightTool && (inventory[rightTool] || 0) > 0;
   const hardness = BLOCK_TYPES[type]?.hardness ?? 1;
-  return hasRightTool ? hardness / 2 : hardness;
+  return hasRightToolFor(type) ? hardness / 2 : hardness;
 }
 function breakBlockAt(x, y, z, type) {
-  const rightTool = TOOL_FOR_BLOCK[type];
-  const hasRightTool = rightTool && selectedBlock === rightTool && (inventory[rightTool] || 0) > 0;
-  inventory[type] = (inventory[type] || 0) + (hasRightTool ? 2 : 1);
-  delete worldApi.world[keyOf(x, y, z)];
-  worldApi.removeBlockMesh(x, y, z);
-  worldApi.refreshAround(x, y, z);
+  inventory[type] = (inventory[type] || 0) + (hasRightToolFor(type) ? 2 : 1);
+  worldApi.setBlock(x, y, z, null);
   bus.emit('inventory:changed');
   bus.emit('block:broken', { x, y, z, type });
   sfx.playSound('break');
@@ -406,7 +419,6 @@ function breakBlockAt(x, y, z, type) {
 let leftMouseDown = false;
 let breakKey = null;
 let breakProgress = 0;
-const breakCrackEl = document.getElementById('breakCrack');
 
 renderer.domElement.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== renderer.domElement || craftOpen) return;
@@ -418,7 +430,8 @@ renderer.domElement.addEventListener('mousedown', (e) => {
     leftMouseDown = true;
     // priorité au mob si plus proche que le bloc
     if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
-      const hasSword = selectedBlock === 'wood_sword' && (inventory.wood_sword || 0) > 0;
+      const hasSword =
+        TOOL_CATEGORY[selectedBlock] === 'sword' && (inventory[selectedBlock] || 0) > 0;
       mobHit.mob.hit(hasSword ? 5 : 1);
       return;
     }
@@ -427,7 +440,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
   } else if (e.button === 2) {
     if (blockHit) {
       const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
-      if (worldApi.world[keyOf(tx, ty, tz)] === 'crafting_table') {
+      if (worldApi.getBlock(tx, ty, tz) === 'crafting_table') {
         openCraft();
         return;
       }
@@ -444,10 +457,9 @@ renderer.domElement.addEventListener('mousedown', (e) => {
         py0 = Math.floor(player.pos.y),
         py1 = Math.floor(player.pos.y + player.height),
         pz = Math.floor(player.pos.z);
-      if (!(x === px && z === pz && (y === py0 || y === py1)) && !worldApi.world[keyOf(x, y, z)]) {
-        worldApi.world[keyOf(x, y, z)] = selectedBlock;
+      if (!(x === px && z === pz && (y === py0 || y === py1)) && !worldApi.getBlock(x, y, z)) {
+        worldApi.setBlock(x, y, z, selectedBlock);
         inventory[selectedBlock]--;
-        worldApi.refreshAround(x, y, z);
         bus.emit('inventory:changed');
         sfx.playSound('place');
       }
@@ -459,7 +471,7 @@ function stopBreaking() {
   leftMouseDown = false;
   breakKey = null;
   breakProgress = 0;
-  breakCrackEl.style.display = 'none';
+  crackMesh.visible = false;
 }
 renderer.domElement.addEventListener('mouseup', (e) => {
   if (e.button === 0) stopBreaking();
@@ -481,9 +493,12 @@ const STAND_HEIGHT = player.height,
   CROUCH_HEIGHT = player.height * 0.8;
 
 function isUnderwater() {
+  // une colonne est un lac si sa hauteur de terrain (bruit, pas les chunks chargés)
+  // est sous le niveau de la mer — identique au critère utilisé pour poser les lacs
+  // dans world/generator.js, mais lisible sans avoir à charger le chunk.
   return (
     player.pos.y < SEA_LEVEL + 0.6 &&
-    waterKeySet.has(`${Math.round(player.pos.x)},${Math.round(player.pos.z)}`)
+    getHeight(Math.round(player.pos.x), Math.round(player.pos.z)) < SEA_LEVEL
   );
 }
 
@@ -512,8 +527,9 @@ function animate() {
   }
 
   updateSun(dt);
-  water.texture.offset.x = (water.texture.offset.x + dt * 0.025) % 1;
-  water.texture.offset.y = (water.texture.offset.y + dt * 0.015) % 1;
+  worldApi.waterTexture.offset.x = (worldApi.waterTexture.offset.x + dt * 0.025) % 1;
+  worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;
+  worldApi.update(player.pos); // charge/décharge les chunks proches (Phase 4a)
 
   if (!craftOpen && !chatUI.isOpen) {
     let dx = 0,
@@ -599,7 +615,7 @@ function animate() {
     targetEl.textContent = `${mobHit.mob.data.name} (${mobHit.mob.health}/${mobHit.mob.maxHealth} PV)`;
     hintEl.style.display = 'none';
   } else if (blockHit) {
-    const t = worldApi.world[keyOf(blockHit.block.x, blockHit.block.y, blockHit.block.z)];
+    const t = worldApi.getBlock(blockHit.block.x, blockHit.block.y, blockHit.block.z);
     targetEl.textContent = `${BLOCK_TYPES[t]?.name || '?'} (${blockHit.block.x}, ${blockHit.block.y}, ${blockHit.block.z})`;
     hintEl.style.display = t === 'crafting_table' ? 'block' : 'none';
   } else {
@@ -620,14 +636,14 @@ function animate() {
   if (mustStopBreaking) {
     breakKey = null;
     breakProgress = 0;
-    breakCrackEl.style.display = 'none';
+    crackMesh.visible = false;
   } else {
     const targetingBlock = blockHit && !(mobHit && mobHit.dist < blockHit.dist);
     if (targetingBlock) {
       const { x, y, z } = blockHit.block;
-      const key = keyOf(x, y, z);
-      const type = worldApi.world[key];
-      if (type) {
+      const key = `${x},${y},${z}`;
+      const type = worldApi.getBlock(x, y, z);
+      if (type && !BLOCK_TYPES[type]?.unbreakable) {
         if (key !== breakKey) {
           breakKey = key;
           breakProgress = 0;
@@ -638,17 +654,18 @@ function animate() {
           breakBlockAt(x, y, z, type);
           breakKey = null;
           breakProgress = 0;
-          breakCrackEl.style.display = 'none';
+          crackMesh.visible = false;
         } else {
           const stage = Math.min(9, Math.floor((breakProgress / total) * 10));
-          breakCrackEl.style.display = 'block';
-          breakCrackEl.style.clipPath = `inset(0 ${((9 - stage) / 10) * 100}% 0 0)`;
+          crackMesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+          crackMat.map = crackTextures[stage];
+          crackMesh.visible = true;
         }
       }
     } else {
       // rien visé cette frame (ou mob prioritaire) : on met en pause sans effacer,
       // la progression reprendra si le viseur revient sur le même bloc
-      breakCrackEl.style.display = 'none';
+      crackMesh.visible = false;
     }
   }
 

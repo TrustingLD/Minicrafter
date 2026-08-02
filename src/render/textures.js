@@ -2,6 +2,7 @@
 // Chaque fonction dessine sur un petit canvas et retourne une THREE.CanvasTexture.
 
 import * as THREE from 'three';
+import { mulberry32 } from '../core/math.js';
 
 export const TEX_SIZE = 32; // texture fine pour plus de détail
 
@@ -235,13 +236,15 @@ export function texCraftSide() {
   ctx.fillRect(TEX_SIZE / 2 - 4, TEX_SIZE - 9, 8, 2.5);
   return canvasToTexture(c);
 }
-export function texWoodSword() {
+// bladeColor/highlightColor paramétrables : les outils pierre/fer (Phase 4b) réutilisent
+// exactement la même forme, seule la couleur de la tête change.
+export function texWoodSword(bladeColor = '#c9c9c9', highlightColor = '#eeeeee') {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const s = TEX_SIZE / 16; // facteur d'échelle
-  ctx.fillStyle = '#c9c9c9';
+  ctx.fillStyle = bladeColor;
   ctx.fillRect(7 * s, 1 * s, 3 * s, 8 * s);
-  ctx.fillStyle = '#eeeeee';
+  ctx.fillStyle = highlightColor;
   ctx.fillRect(8 * s, 1 * s, 1 * s, 8 * s);
   ctx.fillStyle = '#5a371c';
   ctx.fillRect(5 * s, 9 * s, 7 * s, 1 * s);
@@ -249,11 +252,11 @@ export function texWoodSword() {
   ctx.fillRect(7 * s, 10 * s, 3 * s, 5 * s);
   return canvasToTexture(c);
 }
-export function texWoodPickaxe() {
+export function texWoodPickaxe(headColor = '#b8b8b8') {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const s = TEX_SIZE / 16;
-  ctx.strokeStyle = '#b8b8b8';
+  ctx.strokeStyle = headColor;
   ctx.lineWidth = 2 * s;
   ctx.lineCap = 'round';
   ctx.beginPath();
@@ -265,11 +268,11 @@ export function texWoodPickaxe() {
   ctx.fillRect(7 * s, 5 * s, 2 * s, 9 * s);
   return canvasToTexture(c);
 }
-export function texWoodAxe() {
+export function texWoodAxe(headColor = '#b8b8b8') {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const s = TEX_SIZE / 16;
-  ctx.fillStyle = '#b8b8b8';
+  ctx.fillStyle = headColor;
   ctx.beginPath();
   ctx.moveTo(9 * s, 1 * s);
   ctx.lineTo(14 * s, 3 * s);
@@ -281,6 +284,13 @@ export function texWoodAxe() {
   ctx.fillRect(7 * s, 2 * s, 2 * s, 12 * s);
   return canvasToTexture(c);
 }
+// tiers pierre/fer (Phase 4b) : mêmes formes que le bois, tête recolorée.
+export const texStonePickaxe = () => texWoodPickaxe('#8a8a8a');
+export const texStoneAxe = () => texWoodAxe('#8a8a8a');
+export const texStoneSword = () => texWoodSword('#9a9a9a', '#b8b8b8');
+export const texIronPickaxe = () => texWoodPickaxe('#e8e4d8');
+export const texIronAxe = () => texWoodAxe('#e8e4d8');
+export const texIronSword = () => texWoodSword('#e8e4d8', '#f5f2ea');
 export function texSnow() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
@@ -310,6 +320,40 @@ export function texMilk() {
   return canvasToTexture(c);
 }
 
+// minerais (Phase 4b) : base pierre + taches de la couleur du minerai, pour rester
+// lisibles au premier coup d'oeil sans redessiner toute la texture de pierre.
+function texOre(specks) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8a8a8a';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#7d7d7d', '#959595'], 10, 2, 4);
+  speckle(ctx, ['#707070', '#a3a3a3'], 30);
+  blotches(ctx, specks, 7, 1.8, 3.2);
+  return canvasToTexture(c);
+}
+export function texCoalOre() {
+  return texOre(['#1c1c1c', '#2e2e2e']);
+}
+export function texIronOre() {
+  return texOre(['#c98a5a', '#e0ab7a']);
+}
+export function texGoldOre() {
+  return texOre(['#e8c34a', '#f7d96a']);
+}
+export function texDiamondOre() {
+  return texOre(['#6fe0e0', '#a0f0f0']);
+}
+export function texBedrock() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#3a3a3e';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#2c2c30', '#4a4a50'], 18, 2, 5);
+  speckle(ctx, ['#232326', '#57575e'], 60);
+  return canvasToTexture(c);
+}
+
 // texture d'eau : vaguelettes, faite pour tourner en boucle (RepeatWrapping) et
 // défiler via texture.offset — c'est ce qui donne l'impression d'eau qui coule
 export function texWater() {
@@ -330,6 +374,37 @@ export function texWater() {
   speckle(ctx, ['#5a9de0'], 20);
   const t = canvasToTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// overlay de craquelures posé SUR le bloc visé pendant qu'on le casse (pas un effet
+// d'écran) : fond transparent, seed fixe -> chaque stage redessine depuis zéro mais
+// avec plus de segments, donc les fissures du stage précédent restent visibles + s'étendent
+export function texCrackStage(stage) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const rand = mulberry32(42);
+  const segments = 4 + stage * 4;
+  ctx.strokeStyle = 'rgba(15,15,15,0.85)';
+  ctx.lineWidth = 1;
+  let x = TEX_SIZE / 2,
+    y = TEX_SIZE / 2;
+  for (let i = 0; i < segments; i++) {
+    if (i % 5 === 0) {
+      x = rand() * TEX_SIZE;
+      y = rand() * TEX_SIZE;
+    }
+    const nx = x + (rand() * 12 - 6),
+      ny = y + (rand() * 12 - 6);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(nx, ny);
+    ctx.stroke();
+    x = nx;
+    y = ny;
+  }
+  const t = canvasToTexture(c);
+  t.premultiplyAlpha = false;
   return t;
 }
 

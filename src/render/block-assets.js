@@ -24,9 +24,19 @@ export function createBlockAssets() {
     tWoodSword = tex.texWoodSword(),
     tWoodPickaxe = tex.texWoodPickaxe(),
     tWoodAxe = tex.texWoodAxe(),
+    tStoneSword = tex.texStoneSword(),
+    tStonePickaxe = tex.texStonePickaxe(),
+    tStoneAxe = tex.texStoneAxe(),
+    tIronSword = tex.texIronSword(),
+    tIronPickaxe = tex.texIronPickaxe(),
+    tIronAxe = tex.texIronAxe(),
     tSnow = tex.texSnow(),
     tMeat = tex.texMeat(),
-    tMilk = tex.texMilk();
+    tMilk = tex.texMilk(),
+    tCoalOre = tex.texCoalOre(),
+    tIronOre = tex.texIronOre(),
+    tGoldOre = tex.texGoldOre(),
+    tDiamondOre = tex.texDiamondOre();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -61,7 +71,17 @@ export function createBlockAssets() {
     snow: [mat(tSnow), mat(tSnow), mat(tSnow), mat(tSnow), mat(tSnow), mat(tSnow)],
   };
 
-  const toolTextures = { wood_sword: tWoodSword, wood_pickaxe: tWoodPickaxe, wood_axe: tWoodAxe };
+  const toolTextures = {
+    wood_sword: tWoodSword,
+    wood_pickaxe: tWoodPickaxe,
+    wood_axe: tWoodAxe,
+    stone_sword: tStoneSword,
+    stone_pickaxe: tStonePickaxe,
+    stone_axe: tStoneAxe,
+    iron_sword: tIronSword,
+    iron_pickaxe: tIronPickaxe,
+    iron_axe: tIronAxe,
+  };
 
   function iconCanvas(type) {
     // used for hotbar / inventory previews
@@ -88,6 +108,26 @@ export function createBlockAssets() {
         return tWoodPickaxe.image;
       case 'wood_axe':
         return tWoodAxe.image;
+      case 'stone_sword':
+        return tStoneSword.image;
+      case 'stone_pickaxe':
+        return tStonePickaxe.image;
+      case 'stone_axe':
+        return tStoneAxe.image;
+      case 'iron_sword':
+        return tIronSword.image;
+      case 'iron_pickaxe':
+        return tIronPickaxe.image;
+      case 'iron_axe':
+        return tIronAxe.image;
+      case 'coal_ore':
+        return tCoalOre.image;
+      case 'iron_ore':
+        return tIronOre.image;
+      case 'gold_ore':
+        return tGoldOre.image;
+      case 'diamond_ore':
+        return tDiamondOre.image;
       case 'meat':
         return tMeat.image;
       case 'milk':
