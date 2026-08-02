@@ -123,6 +123,9 @@ export const RECIPES = [
   },
 ];
 
+// barre fixe (10 emplacements, comme avant) : seulement les objets de base. Les
+// tiers pierre/fer et les minerais bruts se sélectionnent depuis l'inventaire (E),
+// pas depuis la hotbar — sinon elle grossit à chaque nouvel objet ajouté au jeu.
 export const HOTBAR = [
   'grass',
   'dirt',
@@ -134,12 +137,6 @@ export const HOTBAR = [
   'wood_sword',
   'wood_pickaxe',
   'wood_axe',
-  'stone_sword',
-  'stone_pickaxe',
-  'stone_axe',
-  'iron_sword',
-  'iron_pickaxe',
-  'iron_axe',
 ];
 
 // dérivé : tout objet qui n'est pas un bloc n'est pas posable (outils, nourriture,

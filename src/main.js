@@ -153,13 +153,14 @@ const craftUI = createCraftUI({
   iconCanvas: blockAssets.iconCanvas,
   playSound: sfx.playSound,
   onCrafted: () => bus.emit('inventory:changed'),
+  onSelectItem: selectItem,
 });
 let craftOpen = false;
 function openCraft() {
   craftOpen = true;
   craftUI.show();
   document.exitPointerLock();
-  craftUI.render(inventory, worldApi.getBlock, player.pos);
+  craftUI.render(inventory, worldApi.getBlock, player.pos, selectedBlock);
 }
 function closeCraft() {
   craftOpen = false;
@@ -197,6 +198,18 @@ function selectSlot(i) {
   selectedIndex = i;
   selectedBlock = HOTBAR[i];
   hotbarUI.setSelectedIndex(i);
+  hotbarUI.render(inventory);
+  refreshHeldItem(selectedBlock);
+}
+
+// équiper un objet qui n'a pas d'emplacement dans la hotbar fixe (minerais bruts,
+// tiers pierre/fer) : cliqué depuis l'inventaire (E), pas depuis la hotbar.
+function selectItem(key) {
+  if (key !== selectedBlock) sfx.playSound('equip');
+  selectedBlock = key;
+  const hotbarIdx = HOTBAR.indexOf(key);
+  selectedIndex = hotbarIdx; // -1 si hors hotbar : aucun slot ne s'affiche sélectionné
+  hotbarUI.setSelectedIndex(hotbarIdx);
   hotbarUI.render(inventory);
   refreshHeldItem(selectedBlock);
 }

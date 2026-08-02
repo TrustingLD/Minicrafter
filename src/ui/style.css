@@ -261,6 +261,14 @@ canvas {
   padding: 6px;
   text-align: center;
   font-size: 11px;
+  cursor: pointer;
+}
+.invItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.invItem.selected {
+  border-color: #fff;
+  box-shadow: 0 0 8px #fff;
 }
 .invItem img,
 .invItem .ic {

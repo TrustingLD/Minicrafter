@@ -58,6 +58,12 @@ export function buildBlockAtlas() {
   // pas de mipmaps : avec un atlas + NearestFilter, le mipmapping mélangerait les
   // tuiles voisines sur les bords (bleeding) — inutile de toute façon en voxel.
   texture.generateMipmaps = false;
+  // CRITIQUE : CanvasTexture a flipY=true par défaut (convention image, origine en
+  // haut). Nos rects UV sont calculés directement sur les coordonnées du canvas
+  // (ligne 0 = haut). Sans ce flag, le GPU échantillonne la ligne MIROIR verticale —
+  // chaque bloc affiche la texture de la ligne symétrique de l'atlas (ex: les feuilles
+  // affichaient la neige, l'herbe affichait le minerai de fer).
+  texture.flipY = false;
 
   // blockId -> { top, bottom, side } chacun [u0,v0,u1,v1]
   const uvByBlockId = {};

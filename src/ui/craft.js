@@ -16,7 +16,15 @@ export function canCraft(inventory, recipe) {
   return true;
 }
 
-export function createCraftUI({ elements, RECIPES, itemNames, iconCanvas, playSound, onCrafted }) {
+export function createCraftUI({
+  elements,
+  RECIPES,
+  itemNames,
+  iconCanvas,
+  playSound,
+  onCrafted,
+  onSelectItem,
+}) {
   const { craftPanel, invGrid, recipeList, craftTitle } = elements;
 
   function craft(inventory, recipe, getBlock, playerPos) {
@@ -28,12 +36,14 @@ export function createCraftUI({ elements, RECIPES, itemNames, iconCanvas, playSo
     onCrafted();
   }
 
-  function render(inventory, getBlock, playerPos) {
+  // items sans emplacement dans la hotbar fixe (minerais bruts, tiers pierre/fer) se
+  // sélectionnent en cliquant leur case ici — c'est ce que "E : inventaire" veut dire.
+  function render(inventory, getBlock, playerPos, selectedItem) {
     invGrid.innerHTML = '';
     Object.keys(inventory).forEach((key) => {
       if (!inventory[key]) return;
       const div = document.createElement('div');
-      div.className = 'invItem';
+      div.className = 'invItem' + (key === selectedItem ? ' selected' : '');
       const img = iconCanvas(key);
       if (img) {
         const image = document.createElement('img');
@@ -48,6 +58,10 @@ export function createCraftUI({ elements, RECIPES, itemNames, iconCanvas, playSo
       const label = document.createElement('div');
       label.textContent = `${itemNames[key] || key} x${inventory[key]}`;
       div.appendChild(label);
+      div.addEventListener('click', () => {
+        onSelectItem(key);
+        render(inventory, getBlock, playerPos, key);
+      });
       invGrid.appendChild(div);
     });
 
@@ -68,7 +82,7 @@ export function createCraftUI({ elements, RECIPES, itemNames, iconCanvas, playSo
       btn.disabled = !canCraft(inventory, r);
       btn.addEventListener('click', () => {
         craft(inventory, r, getBlock, playerPos);
-        render(inventory, getBlock, playerPos);
+        render(inventory, getBlock, playerPos, selectedItem);
       });
       row.appendChild(btn);
       recipeList.appendChild(row);
