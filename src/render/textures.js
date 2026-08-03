@@ -553,6 +553,28 @@ export function texChickenBeak() {
   speckle(ctx, ['#d98b00', '#ffc550'], 20);
   return canvasToTexture(c);
 }
+// texture de lave : même principe que texWater (pavés façon pixel-art, RepeatWrapping
+// pour défiler via texture.offset) mais en orange/rouge.
+export function texLava() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const cell = TEX_SIZE / 8;
+  const cols = TEX_SIZE / cell;
+  ctx.fillStyle = '#b33500';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.fillStyle = '#ff8a1e';
+  const blotchCount = 15;
+  for (let i = 0; i < blotchCount; i++) {
+    const w = 1 + Math.floor(Math.random() * 3);
+    const h = 1 + Math.floor(Math.random() * 2);
+    const gx = Math.min(cols - w, Math.floor(Math.random() * cols));
+    const gy = Math.min(cols - h, Math.floor(Math.random() * cols));
+    ctx.fillRect(gx * cell, gy * cell, w * cell, h * cell);
+  }
+  const t = canvasToTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
 // vêtements en lambeaux pour le torse du zombie
 export function texZombieShirt() {
   const c = newCanvas();
