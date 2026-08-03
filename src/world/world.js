@@ -15,6 +15,7 @@ import { CHUNK_X, CHUNK_Y, CHUNK_Z, idx, chunkKey, worldToChunk, worldToLocal } 
 import {
   generateChunk,
   getGroundHeight as computeGroundHeight,
+  getHeight,
   SEA_LEVEL,
   WORLD_BORDER,
 } from './generator.js';
@@ -30,8 +31,8 @@ const DEFAULT_RENDER_DISTANCE = 6; // en chunks (16 blocs) autour du joueur
 // nombre fixe : un compte fixe (l'ancien CHUNKS_PER_FRAME=3) ne protège pas la frame
 // si un chunk particulier est plus coûteux (relief accidenté, beaucoup de veines/
 // grottes à sculpter) — un budget en temps absorbe cette variance automatiquement.
-const CHUNK_LOAD_BUDGET_MS = 6;
-const MAX_CHUNKS_PER_FRAME = 4; // garde-fou : jamais plus que ça même si le budget temps le permettrait
+const CHUNK_LOAD_BUDGET_MS = 8;
+const MAX_CHUNKS_PER_FRAME = 2; // garde-fou : jamais plus que ça même si le budget temps le permettrait
 const INITIAL_RADIUS = 3; // chargé de façon synchrone au démarrage (le reste suit via update())
 const DIFF_STORAGE_KEY = 'minicrafter_diffs_v1';
 
@@ -91,7 +92,6 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
   window.addEventListener('beforeunload', flushDiffs);
 
   const chunks = new Map(); // "cx,cz" -> record
-  const chunkMeshList = []; // à plat, pour le raycasting (viseur bloc + occlusion caméra 3e perso)
 
   function applySavedDiffs(key, data) {
     const d = diffs[key];
@@ -178,7 +178,6 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     record.mesh.position.set(cx * CHUNK_X, 0, cz * CHUNK_Z);
     record.mesh.receiveShadow = true;
     scene.add(record.mesh);
-    chunkMeshList.push(record.mesh);
 
     record.waterMesh = buildWaterMesh(record);
     if (record.waterMesh) scene.add(record.waterMesh);
@@ -198,21 +197,35 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
   function unloadChunk(record) {
     scene.remove(record.mesh);
     record.mesh.geometry.dispose();
-    const i = chunkMeshList.indexOf(record.mesh);
-    if (i >= 0) chunkMeshList.splice(i, 1);
     // waterGeometry/waterMaterial (et pareil pour la lave) sont partagés par tous les
     // chunks : on ne les dispose jamais ici, seulement retirer CE mesh de la scène.
-    if (record.waterMesh) scene.remove(record.waterMesh);
-    if (record.lavaMesh) scene.remove(record.lavaMesh);
+    // `.dispose()` sur l'InstancedMesh lui-même ne touche ni geometry ni material —
+    // il libère uniquement le buffer instanceMatrix, propre à ce mesh.
+    if (record.waterMesh) {
+      scene.remove(record.waterMesh);
+      record.waterMesh.dispose();
+      record.waterMesh = null;
+    }
+    if (record.lavaMesh) {
+      scene.remove(record.lavaMesh);
+      record.lavaMesh.dispose();
+      record.lavaMesh = null;
+    }
     chunks.delete(record.key);
     // NB: `diffs` n'est PAS nettoyé ici — les modifications du joueur doivent survivre
     // au déchargement, elles sont réappliquées par applySavedDiffs() au rechargement.
   }
 
+  // Lecture PURE : ne génère jamais de chunk (c'était la cause de la chute de FPS
+  // en exploration — cf. PERF_PLAN.md §0). Trois retours distincts :
+  //   - une string  : le nom du bloc
+  //   - null        : de l'air (ou hors du monde en Y), chunk connu
+  //   - undefined   : chunk NON CHARGÉ, contenu inconnu
   function getBlock(x, y, z) {
     if (y < 0 || y >= CHUNK_Y) return null;
     const [cx, cz] = worldToChunk(x, z);
-    const record = ensureChunk(cx, cz);
+    const record = chunks.get(chunkKey(cx, cz));
+    if (!record) return undefined; // inconnu != air
     const [lx, lz] = worldToLocal(x, z);
     const id = record.data[idx(lx, y, lz)];
     return id ? BLOCK_BY_ID[id] : null;
@@ -233,8 +246,14 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     remesh(record);
   }
 
+  // Un chunk non chargé est traité comme PLEIN, pas comme de l'air : sinon toute
+  // entité située hors de la zone chargée tomberait à travers le monde. Le joueur
+  // n'atteint jamais ces coordonnées (les chunks se chargent bien avant lui), et un
+  // mob gelé loin du joueur n'a pas besoin d'une collision exacte.
   function isSolid(x, y, z) {
-    return !!getBlock(x, y, z);
+    const t = getBlock(x, y, z);
+    if (t === undefined) return true;
+    return !!t;
   }
 
   // la lave n'est PAS stockée dans `data` (comme l'eau) : elle est traversable/non
@@ -266,7 +285,12 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     return false;
   }
 
+  // Si le chunk n'est pas chargé, getBlock renvoie `undefined` partout et le scan
+  // retournerait 1 (= le joueur/mob apparaîtrait sous terre). On retombe alors sur
+  // la hauteur de terrain analytique du bruit, qui ne demande aucun chunk.
   function getGroundHeight(x, z) {
+    const [cx, cz] = worldToChunk(x, z);
+    if (!chunks.has(chunkKey(cx, cz))) return getHeight(Math.round(x), Math.round(z)) + 1;
     return computeGroundHeight(getBlock, x, z);
   }
 
@@ -281,36 +305,63 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
   }
   preload(0, 0, INITIAL_RADIUS);
 
-  // appelée chaque frame : charge les chunks proches du joueur (quelques-uns par
-  // frame seulement, pour ne jamais bloquer une frame entière) et décharge ceux
-  // devenus trop lointains.
-  function update(playerPos) {
-    const [pcx, pcz] = worldToChunk(playerPos.x, playerPos.z);
-    const candidates = [];
+  // File de chargement persistante : la liste des chunks manquants et le scan de
+  // déchargement ne dépendent QUE du chunk où se trouve le joueur. Les recalculer à
+  // chaque frame (169 candidats + Array.from sur ~113 chunks) était du pur gaspillage
+  // à 60 Hz alors que le joueur ne change de chunk que toutes les ~3 secondes.
+  let lastPcx = null;
+  let lastPcz = null;
+  let loadQueue = [];
+
+  function rebuildLoadQueue(pcx, pcz) {
+    loadQueue.length = 0;
     for (let dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
       for (let dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
         const d2 = dx * dx + dz * dz;
         if (d2 > RENDER_DISTANCE * RENDER_DISTANCE) continue;
-        const cx = pcx + dx,
-          cz = pcz + dz;
+        const cx = pcx + dx;
+        const cz = pcz + dz;
         if (Math.abs(cx * CHUNK_X) > WORLD_BORDER + CHUNK_X) continue;
         if (Math.abs(cz * CHUNK_Z) > WORLD_BORDER + CHUNK_Z) continue;
-        if (!chunks.has(chunkKey(cx, cz))) candidates.push({ cx, cz, d2 });
+        if (!chunks.has(chunkKey(cx, cz))) loadQueue.push({ cx, cz, d2 });
       }
     }
-    candidates.sort((a, b) => a.d2 - b.d2);
+    loadQueue.sort((a, b) => a.d2 - b.d2);
+  }
+
+  function unloadFar(pcx, pcz) {
+    for (const record of chunks.values()) {
+      const dx = record.cx - pcx;
+      const dz = record.cz - pcz;
+      if (dx * dx + dz * dz > UNLOAD_DISTANCE * UNLOAD_DISTANCE) unloadChunk(record);
+    }
+  }
+
+  // appelée chaque frame : charge les chunks proches du joueur (quelques-uns par
+  // frame seulement, pour ne jamais bloquer une frame entière) et décharge ceux
+  // devenus trop lointains. La file/le scan ne sont reconstruits que si le joueur a
+  // changé de chunk depuis la frame précédente (cf. commentaire au-dessus).
+  function update(playerPos) {
+    const [pcx, pcz] = worldToChunk(playerPos.x, playerPos.z);
+    if (pcx !== lastPcx || pcz !== lastPcz) {
+      lastPcx = pcx;
+      lastPcz = pcz;
+      rebuildLoadQueue(pcx, pcz);
+      unloadFar(pcx, pcz);
+    }
+    if (loadQueue.length === 0) return;
+
     const start = performance.now();
     let loaded = 0;
-    while (loaded < candidates.length && loaded < MAX_CHUNKS_PER_FRAME) {
-      ensureChunk(candidates[loaded].cx, candidates[loaded].cz);
+    while (loadQueue.length > 0 && loaded < MAX_CHUNKS_PER_FRAME) {
+      // budget testé AVANT : l'ancienne version chargeait toujours au moins un chunk
+      // (~11-15 ms) avant de regarder l'heure, ce qui plafonnait la frame à ~55 FPS
+      // en déplacement continu. On garde le tout premier chunk inconditionnel pour
+      // ne jamais stagner (sinon on peut ne rien charger indéfiniment).
+      if (loaded > 0 && performance.now() - start > CHUNK_LOAD_BUDGET_MS) break;
+      const c = loadQueue.shift();
+      if (!chunks.has(chunkKey(c.cx, c.cz))) ensureChunk(c.cx, c.cz);
       loaded++;
-      if (performance.now() - start > CHUNK_LOAD_BUDGET_MS) break; // budget dépassé : le reste suivra la frame prochaine
-    }
-
-    for (const record of Array.from(chunks.values())) {
-      const dx = record.cx - pcx,
-        dz = record.cz - pcz;
-      if (dx * dx + dz * dz > UNLOAD_DISTANCE * UNLOAD_DISTANCE) unloadChunk(record);
     }
   }
 
@@ -322,7 +373,6 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     collidesAtBox,
     getGroundHeight,
     update,
-    chunkMeshList,
     waterTexture,
     lavaTexture,
   };

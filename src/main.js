@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 
 import { createEventBus } from './core/events.js';
+import { voxelRaycast } from './core/raycast.js';
 import { createBlockAssets } from './render/block-assets.js';
 import { texCrackStage } from './render/textures.js';
 import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
@@ -184,7 +185,7 @@ const {
   blockTypes: blockAssets.blockTypes,
   toolTextures: blockAssets.toolTextures,
   collidesAtBox: worldApi.collidesAtBox,
-  instancedMeshList: worldApi.chunkMeshList,
+  getBlock: worldApi.getBlock,
   spawnPos: new THREE.Vector3(0, getHeight(0, 0) + 3, 0),
 });
 healthUI.render(player);
@@ -382,65 +383,20 @@ function aimRaycast() {
 // triangle-par-triangle contre TOUS les meshes de chunks chargés (jusqu'à ~110 avec
 // RENDER_DISTANCE=6), appelé plusieurs fois par frame. Le coût grandit avec le nombre
 // de chunks chargés/explorés, indépendamment de la portée réelle (6 blocs). Un DDA
-// voxel (on avance bloc par bloc le long du rayon via getBlock) coûte O(portée),
-// donc ~6 itérations, quel que soit le nombre de chunks générés autour du joueur.
-function voxelRaycast(origin, dir, maxDist) {
-  let x = Math.floor(origin.x),
-    y = Math.floor(origin.y),
-    z = Math.floor(origin.z);
-  const stepX = Math.sign(dir.x),
-    stepY = Math.sign(dir.y),
-    stepZ = Math.sign(dir.z);
-  const tDelta = (d) => (d === 0 ? Infinity : Math.abs(1 / d));
-  let tMaxX =
-    stepX === 0 ? Infinity : ((stepX > 0 ? Math.floor(origin.x) + 1 - origin.x : origin.x - Math.floor(origin.x)) / Math.abs(dir.x));
-  let tMaxY =
-    stepY === 0 ? Infinity : ((stepY > 0 ? Math.floor(origin.y) + 1 - origin.y : origin.y - Math.floor(origin.y)) / Math.abs(dir.y));
-  let tMaxZ =
-    stepZ === 0 ? Infinity : ((stepZ > 0 ? Math.floor(origin.z) + 1 - origin.z : origin.z - Math.floor(origin.z)) / Math.abs(dir.z));
-  const dtX = tDelta(dir.x),
-    dtY = tDelta(dir.y),
-    dtZ = tDelta(dir.z);
-  let t = 0,
-    normal = { x: 0, y: 0, z: 0 };
-  while (t <= maxDist) {
-    const type = worldApi.getBlock(x, y, z);
-    if (type) {
-      return {
-        block: { x, y, z },
-        place: { x: x + normal.x, y: y + normal.y, z: z + normal.z },
-        dist: t,
-      };
-    }
-    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
-      x += stepX;
-      t = tMaxX;
-      tMaxX += dtX;
-      normal = { x: -stepX, y: 0, z: 0 };
-    } else if (tMaxY < tMaxZ) {
-      y += stepY;
-      t = tMaxY;
-      tMaxY += dtY;
-      normal = { x: 0, y: -stepY, z: 0 };
-    } else {
-      z += stepZ;
-      t = tMaxZ;
-      tMaxZ += dtZ;
-      normal = { x: 0, y: 0, z: -stepZ };
-    }
-  }
-  return null;
-}
-
+// voxel (`voxelRaycast` dans core/raycast.js) coûte O(portée), donc ~6 itérations,
+// quel que soit le nombre de chunks générés autour du joueur.
 function getTargetedBlock() {
   aimRaycast();
-  return voxelRaycast(rayEye, rayDir, raycaster.far);
+  return voxelRaycast(worldApi.getBlock, rayEye, rayDir, raycaster.far);
 }
 function getTargetedMob() {
   aimRaycast();
-  // liste courte (quelques mobs proches) : le raycast triangle Three.js reste tout à
-  // fait bon marché ici, pas besoin d'un DDA.
-  const intersects = raycaster.intersectObjects(mobSystem.mobHitboxes);
+  // seuls les mobs actifs (donc visibles, cf. MOB_ACTIVE_RADIUS dans mob.js) sont
+  // testés : inutile de faire tester des centaines de hitboxes à Three pour une
+  // portée de 6 blocs.
+  const targets = mobSystem.mobHitboxes.filter((p) => p.userData.mob?.group.visible);
+  if (targets.length === 0) return null;
+  const intersects = raycaster.intersectObjects(targets);
   if (intersects.length === 0) return null;
   return { mob: intersects[0].object.userData.mob, dist: intersects[0].distance };
 }

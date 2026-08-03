@@ -90,10 +90,30 @@ export function meshChunk(data, uvByBlockId) {
     return data[idx(x, y, z)];
   }
 
+  // hauteur du plus haut bloc non-vide du chunk : au-dessus, tout est de l'air, il est
+  // inutile de balayer les tranches. Un chunk de plaine n'utilise que ~15 des 64 niveaux.
+  let maxY = -1;
+  for (let i = data.length - 1; i >= 0; i--) {
+    if (data[i]) {
+      maxY = Math.floor(i / (CHUNK_X * CHUNK_Z));
+      break;
+    }
+  }
+  if (maxY < 0) {
+    // chunk entièrement vide (ne devrait pas arriver, mais évite d'allouer pour rien)
+    return {
+      positions: new Float32Array(0),
+      normals: new Float32Array(0),
+      uvs: new Float32Array(0),
+      indices: new Uint16Array(0),
+    };
+  }
+  const yLimit = Math.min(CHUNK_Y - 1, maxY + 1); // +1 : les faces du dessus du bloc le plus haut
+
   // passe 1 : compter
   let faceCount = 0;
   for (let x = 0; x < CHUNK_X; x++) {
-    for (let y = 0; y < CHUNK_Y; y++) {
+    for (let y = 0; y <= yLimit; y++) {
       for (let z = 0; z < CHUNK_Z; z++) {
         if (!get(x, y, z)) continue;
         for (const face of FACES) {
@@ -118,7 +138,7 @@ export function meshChunk(data, uvByBlockId) {
     uOff = 0,
     iOff = 0;
   for (let x = 0; x < CHUNK_X; x++) {
-    for (let y = 0; y < CHUNK_Y; y++) {
+    for (let y = 0; y <= yLimit; y++) {
       for (let z = 0; z < CHUNK_Z; z++) {
         const id = get(x, y, z);
         if (!id) continue;

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { makeLimb } from './limb.js';
 import { texMobSkin } from '../render/textures.js';
+import { voxelRaycast } from '../core/raycast.js';
 
 export function createPlayer({
   scene,
@@ -11,7 +12,7 @@ export function createPlayer({
   blockTypes,
   toolTextures,
   collidesAtBox,
-  instancedMeshList,
+  getBlock,
   spawnPos,
 }) {
   const player = {
@@ -116,7 +117,6 @@ export function createPlayer({
   const thirdPersonDistance = 4.5;
   const camForward = new THREE.Vector3();
   const camRayOrigin = new THREE.Vector3();
-  const cameraRaycaster = new THREE.Raycaster();
   function toggleThirdPerson() {
     thirdPerson = !thirdPerson;
     playerAvatar.group.visible = thirdPerson;
@@ -164,10 +164,11 @@ export function createPlayer({
       const eyePos = camRayOrigin.set(player.pos.x, player.pos.y + player.height, player.pos.z);
       camForward.set(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
       let dist = thirdPersonDistance;
-      cameraRaycaster.set(eyePos, camForward.clone().negate());
-      cameraRaycaster.far = thirdPersonDistance;
-      const hits = cameraRaycaster.intersectObjects(instancedMeshList);
-      if (hits.length > 0) dist = Math.max(0.6, hits[0].distance - 0.3);
+      // DDA voxel plutôt qu'un raycast triangle contre tous les meshes de chunks :
+      // même correctif que celui déjà appliqué au viseur bloc (cf. core/raycast.js).
+      const back = camForward.clone().negate();
+      const hit = voxelRaycast(getBlock, eyePos, back, thirdPersonDistance);
+      if (hit) dist = Math.max(0.6, hit.dist - 0.3);
       const camPos = eyePos.clone().addScaledVector(camForward, -dist);
       camera.position.copy(camPos);
     } else {

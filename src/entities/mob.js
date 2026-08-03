@@ -37,6 +37,13 @@ function randInt(min, max) {
 // retrouver téléportés en haut d'un arbre ou d'une falaise
 const MOB_STEP_HEIGHT = 1;
 
+// Rayon (en blocs) au-delà duquel un mob n'est plus simulé du tout. Doit rester
+// STRICTEMENT inférieur au rayon de chunks chargés (RENDER_DISTANCE * 16 = 96 blocs
+// sur desktop, 64 sur mobile) : un mob simulé hors zone chargée ne verrait que des
+// blocs "inconnus" et n'aurait de toute façon aucune collision utile.
+const MOB_ACTIVE_RADIUS = 56;
+const MOB_ACTIVE_RADIUS_SQ = MOB_ACTIVE_RADIUS * MOB_ACTIVE_RADIUS;
+
 export class Mob {
   // ctx: { scene, mobAssets, collidesAtBox, getGroundHeight, inventory,
   //        playSound, onPlayerHurt, onDeath }
@@ -233,7 +240,15 @@ export function createMobSystem({
   }
 
   function update(dt, playerPos) {
-    mobs.forEach((m) => m.update(dt, playerPos));
+    for (const m of mobs) {
+      const dx = m.pos.x - playerPos.x;
+      const dz = m.pos.z - playerPos.z;
+      const far = dx * dx + dz * dz > MOB_ACTIVE_RADIUS_SQ;
+      // masqué aussi côté rendu : un mob gelé à 150 blocs n'a rien à coûter au GPU
+      if (m.group.visible === far) m.group.visible = !far;
+      if (far) continue;
+      m.update(dt, playerPos);
+    }
   }
 
   return {

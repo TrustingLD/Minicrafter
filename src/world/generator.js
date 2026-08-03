@@ -101,6 +101,7 @@ function setLocal(data, lx, ly, lz, blockId) {
 // génère le contenu d'un chunk : terrain + cavernes + minerais + arbres.
 // Retourne { data: Uint8Array, waterCells: [{lx,lz}] }.
 export function generateChunk(cx, cz) {
+  const STONE = BLOCK_ID.stone;
   const data = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
   const waterCells = [];
   const lavaCells = [];
@@ -139,14 +140,19 @@ export function generateChunk(cx, cz) {
     const radius = Math.max(1, Math.min(2.2, Math.cbrt((ore.veinSize * 3) / (4 * Math.PI))));
     const r = Math.ceil(radius);
     const yMax = Math.min(ore.maxY, CHUNK_Y - 1);
+    const rarityPerBlock = ore.rarity / ore.veinSize;
     for (let lx = 0; lx < CHUNK_X; lx++) {
       for (let lz = 0; lz < CHUNK_Z; lz++) {
         const wx = originX + lx,
           wz = originZ + lz;
         for (let wy = ore.minY; wy <= yMax; wy++) {
+          // sortie précoce : un test de tableau typé coûte ~50x moins qu'un hash3, et
+          // la grande majorité des cellules de la bande de profondeur est de l'air
+          // (au-dessus du terrain) ou déjà creusée par une caverne.
+          if (data[idx(lx, wy, lz)] !== STONE) continue;
           // probabilité par bloc candidat -> ~`rarity` fraction de veines de taille
           // `veinSize` en moyenne sur la bande de profondeur
-          if (hash3(wx, wy, wz, ore.id) >= ore.rarity / ore.veinSize) continue;
+          if (hash3(wx, wy, wz, ore.id) >= rarityPerBlock) continue;
           for (let dx = -r; dx <= r; dx++)
             for (let dy = -r; dy <= r; dy++)
               for (let dz = -r; dz <= r; dz++) {
@@ -155,7 +161,7 @@ export function generateChunk(cx, cz) {
                   ty = wy + dy,
                   tlz = lz + dz;
                 if (!inBounds(tlx, ty, tlz)) continue;
-                if (data[idx(tlx, ty, tlz)] === BLOCK_ID.stone) data[idx(tlx, ty, tlz)] = ore.id;
+                if (data[idx(tlx, ty, tlz)] === STONE) data[idx(tlx, ty, tlz)] = ore.id;
               }
         }
       }
