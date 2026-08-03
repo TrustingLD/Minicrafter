@@ -354,24 +354,26 @@ export function texBedrock() {
   return canvasToTexture(c);
 }
 
-// texture d'eau : vaguelettes, faite pour tourner en boucle (RepeatWrapping) et
-// défiler via texture.offset — c'est ce qui donne l'impression d'eau qui coule
+// texture d'eau : façon pixel-art voxel classique (deux bleus, blocs rectangulaires
+// irréguliers) — pas de dégradé ni de lignes de vagues, juste des pavés plats. Faite
+// pour tourner en boucle (RepeatWrapping) et défiler via texture.offset ; les blocs
+// sont alignés sur une grille interne donc les bords se raccordent proprement.
 export function texWater() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#207cea';
+  const cell = TEX_SIZE / 8; // grille 8x8 de "pavés" façon pixel-art
+  const cols = TEX_SIZE / cell;
+  ctx.fillStyle = '#2157fc'; // bleu de fond
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-  ctx.lineWidth = 1;
-  for (let y = 4; y < TEX_SIZE; y += 8) {
-    ctx.beginPath();
-    for (let x = 0; x <= TEX_SIZE; x += 4) {
-      const wy = y + Math.sin((x / TEX_SIZE) * Math.PI * 2) * 1.5;
-      x === 0 ? ctx.moveTo(x, wy) : ctx.lineTo(x, wy);
-    }
-    ctx.stroke();
+  ctx.fillStyle = '#3b6cfd'; // bleu clair des pavés
+  const blotchCount = 15;
+  for (let i = 0; i < blotchCount; i++) {
+    const w = 1 + Math.floor(Math.random() * 3);
+    const h = 1 + Math.floor(Math.random() * 2);
+    const gx = Math.min(cols - w, Math.floor(Math.random() * cols));
+    const gy = Math.min(cols - h, Math.floor(Math.random() * cols));
+    ctx.fillRect(gx * cell, gy * cell, w * cell, h * cell);
   }
-  speckle(ctx, ['#50a7fe'], 20);
   const t = canvasToTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;

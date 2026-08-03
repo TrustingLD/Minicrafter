@@ -11,6 +11,7 @@ import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
 import { ITEM_NAMES, RECIPES, HOTBAR, NON_PLACEABLE, TOOL_CATEGORY } from './data/items.js';
 import { SEA_LEVEL, getHeight } from './world/generator.js';
 import { createWorld } from './world/world.js';
+import { createClouds } from './world/clouds.js';
 import { createSfx } from './audio/sfx.js';
 import { createMusic } from './audio/music.js';
 import { createMobTextures, createMobSystem } from './entities/mob.js';
@@ -93,6 +94,7 @@ document.getElementById('musicHint').addEventListener('click', music.toggleBgmMu
 // le reste se charge à la volée via worldApi.update(player.pos) dans animate().
 const blockAssets = createBlockAssets();
 const worldApi = createWorld({ scene, renderDistance: touchMode ? 4 : 6 });
+const cloudsApi = createClouds({ scene });
 
 // Bordure du monde : mur purement invisible, seule la collision existe (cf.
 // collidesAtBox dans world.js). Pas de plan rouge/brume — juste un stop net.
@@ -663,6 +665,7 @@ function animate() {
   worldApi.waterTexture.offset.x = (worldApi.waterTexture.offset.x + dt * 0.025) % 1;
   worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;
   worldApi.update(player.pos); // charge/décharge les chunks proches (Phase 4a)
+  cloudsApi.update(dt, player.pos);
 
   // joystick/visée tactiles coupés pendant craft/chat, comme le reste des contrôles
   if (touchUI) touchUI.setActive(!craftOpen && !chatUI.isOpen);
