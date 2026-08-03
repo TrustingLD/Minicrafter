@@ -52,7 +52,7 @@ export function createCraftUI({
       } else {
         const ic = document.createElement('div');
         ic.className = 'ic';
-        ic.style.background = '#c9b27a';
+        ic.style.background = '#dfc27b';
         div.appendChild(ic);
       }
       const label = document.createElement('div');

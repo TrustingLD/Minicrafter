@@ -46,12 +46,12 @@ export function canvasToTexture(c) {
 export function texGrassTop() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#5da53d';
+  ctx.fillStyle = '#50b424';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#529339', '#6bbf49'], 14, 2, 4.5);
-  speckle(ctx, ['#4e8f31', '#75c951', '#487f2c'], 90);
+  blotches(ctx, ['#439922', '#62da31'], 14, 2, 4.5);
+  speckle(ctx, ['#3e9119', '#70e53e', '#377915'], 90);
   // petits brins d'herbe individuels
-  ctx.strokeStyle = '#3f7a29';
+  ctx.strokeStyle = '#2c7112';
   for (let i = 0; i < 26; i++) {
     const x = Math.random() * TEX_SIZE,
       y = Math.random() * TEX_SIZE;
@@ -65,38 +65,38 @@ export function texGrassTop() {
 export function texGrassSide() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8b5a2b';
+  ctx.fillStyle = '#8a4d12';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#7a4d24', '#96633a'], 10, 1.5, 3.5);
-  speckle(ctx, ['#6e4620', '#a06f42'], 60);
+  blotches(ctx, ['#6f3c0d', '#9d5922'], 10, 1.5, 3.5);
+  speckle(ctx, ['#5c320a', '#ad692b'], 60);
   // bande d'herbe en haut, bord irrégulier avec brins qui retombent
   const grassH = TEX_SIZE * 0.28;
-  ctx.fillStyle = '#5da53d';
+  ctx.fillStyle = '#50b424';
   for (let x = 0; x < TEX_SIZE; x++) {
     const h = grassH + (Math.random() * 4 - 2);
     ctx.fillRect(x, 0, 1, Math.max(2, h));
   }
-  blotches(ctx, ['#4e8f31', '#6bbf49'], 8, 1.5, 3);
-  speckle(ctx, ['#548f36', '#75c951'], 25);
+  blotches(ctx, ['#3e9119', '#62da31'], 8, 1.5, 3);
+  speckle(ctx, ['#45921e', '#70e53e'], 25);
   return canvasToTexture(c);
 }
 export function texDirt() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8b5a2b';
+  ctx.fillStyle = '#8a4d12';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#7a4d24', '#96633a', '#6e4620'], 22, 1.5, 4);
-  speckle(ctx, ['#5f3c1a', '#a8794a'], 45);
-  speckle(ctx, ['#5a4030'], 10, 2); // petits cailloux
+  blotches(ctx, ['#6f3c0d', '#9d5922', '#5c320a'], 22, 1.5, 4);
+  speckle(ctx, ['#442506', '#ba7734'], 45);
+  speckle(ctx, ['#462b1b'], 10, 2); // petits cailloux
   return canvasToTexture(c);
 }
 export function texStone() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8a8a8a';
+  ctx.fillStyle = '#8e8e8e';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#7d7d7d', '#959595'], 16, 2, 4.5);
-  speckle(ctx, ['#707070', '#a3a3a3', '#666666'], 70);
+  blotches(ctx, ['#7c7c7c', '#9d9d9d'], 16, 2, 4.5);
+  speckle(ctx, ['#6b6b6b', '#afafaf', '#5d5d5d'], 70);
   // quelques fissures
   ctx.strokeStyle = 'rgba(90,90,90,0.6)';
   ctx.lineWidth = 1;
@@ -117,16 +117,16 @@ export function texStone() {
 export function texWoodSide() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#6b4423';
+  ctx.fillStyle = '#59300e';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  ctx.fillStyle = '#5a371c';
+  ctx.fillStyle = '#3e2008';
   for (let x = 0; x < TEX_SIZE; x += 6) {
     const w = 1 + Math.floor(Math.random() * 2);
     ctx.fillRect(x, 0, w, TEX_SIZE);
   }
-  speckle(ctx, ['#7a5228', '#4f3018'], 40);
+  speckle(ctx, ['#704211', '#2c1606'], 40);
   // un petit noeud dans le bois
-  ctx.fillStyle = '#4a2c14';
+  ctx.fillStyle = '#231103';
   ctx.beginPath();
   ctx.ellipse(TEX_SIZE * 0.7, TEX_SIZE * 0.4, 2.5, 4, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -135,19 +135,19 @@ export function texWoodSide() {
 export function texWoodTop() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#9c7440';
+  ctx.fillStyle = '#a77029';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#93693a', '#a67d49'], 30);
+  speckle(ctx, ['#996123', '#b77c33'], 30);
   const cx = TEX_SIZE / 2,
     cy = TEX_SIZE / 2;
-  ctx.strokeStyle = '#6b4423';
+  ctx.strokeStyle = '#59300e';
   for (let r = 2; r < TEX_SIZE / 2; r += 2.6) {
     ctx.lineWidth = 1 + (r % 5 === 0 ? 0.6 : 0);
     ctx.beginPath();
     ctx.arc(cx, cy, r + (Math.random() * 0.8 - 0.4), 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.fillStyle = '#5a371c';
+  ctx.fillStyle = '#3e2008';
   ctx.beginPath();
   ctx.arc(cx, cy, 2, 0, Math.PI * 2);
   ctx.fill();
@@ -156,10 +156,10 @@ export function texWoodTop() {
 export function texLeaves() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#2e7d32';
+  ctx.fillStyle = '#17761c';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#245e27', '#3d9b43', '#1f4f22'], 40, 1.5, 3.5);
-  speckle(ctx, ['#1a4a1d', '#4db052'], 90);
+  blotches(ctx, ['#0f4712', '#25a52d', '#0b300d'], 40, 1.5, 3.5);
+  speckle(ctx, ['#072709', '#37c63e'], 90);
   // petits trous/ombres pour donner du volume au feuillage
   blotches(ctx, ['rgba(0,0,0,0.15)'], 10, 1, 2.5);
   return canvasToTexture(c);
@@ -167,14 +167,14 @@ export function texLeaves() {
 export function texPlanks() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#c19a5b';
+  ctx.fillStyle = '#daa44c';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
   const plankH = TEX_SIZE / 4;
   for (let row = 0; row < 4; row++) {
     const y = row * plankH;
-    ctx.fillStyle = row % 2 === 0 ? '#c9a568' : '#bb9354';
+    ctx.fillStyle = row % 2 === 0 ? '#e2b261' : '#d39b41';
     ctx.fillRect(0, y, TEX_SIZE, plankH);
-    ctx.fillStyle = '#8f6a37';
+    ctx.fillStyle = '#926220';
     ctx.fillRect(0, y, TEX_SIZE, 1);
     // veinure horizontale légère
     ctx.strokeStyle = 'rgba(140,105,60,0.5)';
@@ -186,7 +186,7 @@ export function texPlanks() {
       ctx.stroke();
     }
     // clous aux extrémités
-    ctx.fillStyle = '#5a4326';
+    ctx.fillStyle = '#422d11';
     ctx.beginPath();
     ctx.arc(3, y + plankH / 2, 1, 0, Math.PI * 2);
     ctx.fill();
@@ -194,17 +194,17 @@ export function texPlanks() {
     ctx.arc(TEX_SIZE - 3, y + plankH / 2, 1, 0, Math.PI * 2);
     ctx.fill();
   }
-  speckle(ctx, ['#b78d50', '#ad8449'], 20);
+  speckle(ctx, ['#cf933b', '#c18632'], 20);
   return canvasToTexture(c);
 }
 export function texCraftTop() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#a97f45';
+  ctx.fillStyle = '#bb7f2d';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#9c7440', '#b58c52'], 30);
+  speckle(ctx, ['#a77029', '#cc913e'], 30);
   // grille de craft 2x2 gravée
-  ctx.strokeStyle = '#5a371c';
+  ctx.strokeStyle = '#3e2008';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(2, 2, TEX_SIZE - 4, TEX_SIZE - 4);
   ctx.beginPath();
@@ -214,7 +214,7 @@ export function texCraftTop() {
   ctx.lineTo(TEX_SIZE - 3, TEX_SIZE / 2);
   ctx.stroke();
   // petites icônes d'outils dans les coins
-  ctx.strokeStyle = '#6b4423';
+  ctx.strokeStyle = '#59300e';
   ctx.lineWidth = 1;
   ctx.strokeRect(6, 6, 5, 5);
   ctx.strokeRect(TEX_SIZE - 11, TEX_SIZE - 11, 5, 5);
@@ -223,22 +223,22 @@ export function texCraftTop() {
 export function texCraftSide() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8b5a2b';
+  ctx.fillStyle = '#8a4d12';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  ctx.fillStyle = '#6b4423';
+  ctx.fillStyle = '#59300e';
   for (let y = 0; y < TEX_SIZE; y += 8) ctx.fillRect(0, y, TEX_SIZE, 1.5);
-  speckle(ctx, ['#7a4d24', '#96633a'], 30);
-  ctx.strokeStyle = '#4a2f18';
+  speckle(ctx, ['#6f3c0d', '#9d5922'], 30);
+  ctx.strokeStyle = '#251406';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(3, 3, TEX_SIZE - 6, TEX_SIZE - 6);
   // poignée façon tiroir
-  ctx.fillStyle = '#3a2410';
+  ctx.fillStyle = '#0a0501';
   ctx.fillRect(TEX_SIZE / 2 - 4, TEX_SIZE - 9, 8, 2.5);
   return canvasToTexture(c);
 }
 // bladeColor/highlightColor paramétrables : les outils pierre/fer (Phase 4b) réutilisent
 // exactement la même forme, seule la couleur de la tête change.
-export function texWoodSword(bladeColor = '#c9c9c9', highlightColor = '#eeeeee') {
+export function texWoodSword(bladeColor = '#e3e3e3', highlightColor = '#ffffff') {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const s = TEX_SIZE / 16; // facteur d'échelle
@@ -246,13 +246,13 @@ export function texWoodSword(bladeColor = '#c9c9c9', highlightColor = '#eeeeee')
   ctx.fillRect(7 * s, 1 * s, 3 * s, 8 * s);
   ctx.fillStyle = highlightColor;
   ctx.fillRect(8 * s, 1 * s, 1 * s, 8 * s);
-  ctx.fillStyle = '#5a371c';
+  ctx.fillStyle = '#3e2008';
   ctx.fillRect(5 * s, 9 * s, 7 * s, 1 * s);
-  ctx.fillStyle = '#6b4423';
+  ctx.fillStyle = '#59300e';
   ctx.fillRect(7 * s, 10 * s, 3 * s, 5 * s);
   return canvasToTexture(c);
 }
-export function texWoodPickaxe(headColor = '#b8b8b8') {
+export function texWoodPickaxe(headColor = '#cccccc') {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const s = TEX_SIZE / 16;
@@ -264,11 +264,11 @@ export function texWoodPickaxe(headColor = '#b8b8b8') {
   ctx.lineTo(13 * s, 2 * s);
   ctx.lineTo(14 * s, 5 * s);
   ctx.stroke();
-  ctx.fillStyle = '#6b4423';
+  ctx.fillStyle = '#59300e';
   ctx.fillRect(7 * s, 5 * s, 2 * s, 9 * s);
   return canvasToTexture(c);
 }
-export function texWoodAxe(headColor = '#b8b8b8') {
+export function texWoodAxe(headColor = '#cccccc') {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const s = TEX_SIZE / 16;
@@ -280,42 +280,42 @@ export function texWoodAxe(headColor = '#b8b8b8') {
   ctx.lineTo(9 * s, 6 * s);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#6b4423';
+  ctx.fillStyle = '#59300e';
   ctx.fillRect(7 * s, 2 * s, 2 * s, 12 * s);
   return canvasToTexture(c);
 }
 // tiers pierre/fer (Phase 4b) : mêmes formes que le bois, tête recolorée.
-export const texStonePickaxe = () => texWoodPickaxe('#8a8a8a');
-export const texStoneAxe = () => texWoodAxe('#8a8a8a');
-export const texStoneSword = () => texWoodSword('#9a9a9a', '#b8b8b8');
-export const texIronPickaxe = () => texWoodPickaxe('#e8e4d8');
-export const texIronAxe = () => texWoodAxe('#e8e4d8');
-export const texIronSword = () => texWoodSword('#e8e4d8', '#f5f2ea');
+export const texStonePickaxe = () => texWoodPickaxe('#8e8e8e');
+export const texStoneAxe = () => texWoodAxe('#8e8e8e');
+export const texStoneSword = () => texWoodSword('#a3a3a3', '#cccccc');
+export const texIronPickaxe = () => texWoodPickaxe('#ffffff');
+export const texIronAxe = () => texWoodAxe('#ffffff');
+export const texIronSword = () => texWoodSword('#ffffff', '#ffffff');
 export function texSnow() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f2f6fa';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#e2eaf2', '#ffffff'], 60);
-  blotches(ctx, ['#dbe6f0'], 8, 1.5, 3);
+  speckle(ctx, ['#ffffff', '#ffffff'], 60);
+  blotches(ctx, ['#ffffff'], 8, 1.5, 3);
   return canvasToTexture(c);
 }
 export function texMeat() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#c94f4f';
+  ctx.fillStyle = '#e53b3b';
   ctx.fillRect(TEX_SIZE * 0.15, TEX_SIZE * 0.15, TEX_SIZE * 0.7, TEX_SIZE * 0.7);
-  speckle(ctx, ['#a83a3a', '#e06a6a'], 25);
-  ctx.fillStyle = '#f2e2c8';
+  speckle(ctx, ['#b82020', '#fb6969'], 25);
+  ctx.fillStyle = '#fffefd';
   ctx.fillRect(TEX_SIZE * 0.35, TEX_SIZE * 0.7, TEX_SIZE * 0.3, TEX_SIZE * 0.15);
   return canvasToTexture(c);
 }
 export function texMilk() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#c9c9c9';
+  ctx.fillStyle = '#e3e3e3';
   ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.1, TEX_SIZE * 0.6, TEX_SIZE * 0.8);
-  ctx.fillStyle = '#f5f5f5';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(TEX_SIZE * 0.25, TEX_SIZE * 0.35, TEX_SIZE * 0.5, TEX_SIZE * 0.5);
   return canvasToTexture(c);
 }
@@ -325,32 +325,32 @@ export function texMilk() {
 function texOre(specks) {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#8a8a8a';
+  ctx.fillStyle = '#8e8e8e';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#7d7d7d', '#959595'], 10, 2, 4);
-  speckle(ctx, ['#707070', '#a3a3a3'], 30);
+  blotches(ctx, ['#7c7c7c', '#9d9d9d'], 10, 2, 4);
+  speckle(ctx, ['#6b6b6b', '#afafaf'], 30);
   blotches(ctx, specks, 7, 1.8, 3.2);
   return canvasToTexture(c);
 }
 export function texCoalOre() {
-  return texOre(['#1c1c1c', '#2e2e2e']);
+  return texOre(['#000000', '#111111']);
 }
 export function texIronOre() {
-  return texOre(['#c98a5a', '#e0ab7a']);
+  return texOre(['#e48e4c', '#f9bb81']);
 }
 export function texGoldOre() {
-  return texOre(['#e8c34a', '#f7d96a']);
+  return texOre(['#ffd345', '#ffe584']);
 }
 export function texDiamondOre() {
-  return texOre(['#6fe0e0', '#a0f0f0']);
+  return texOre(['#71fafa', '#c4ffff']);
 }
 export function texBedrock() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#3a3a3e';
+  ctx.fillStyle = '#232326';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#2c2c30', '#4a4a50'], 18, 2, 5);
-  speckle(ctx, ['#232326', '#57575e'], 60);
+  blotches(ctx, ['#101013', '#38383f'], 18, 2, 5);
+  speckle(ctx, ['#040405', '#494952'], 60);
   return canvasToTexture(c);
 }
 
@@ -359,7 +359,7 @@ export function texBedrock() {
 export function texWater() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#3d7dca';
+  ctx.fillStyle = '#207cea';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
   ctx.strokeStyle = 'rgba(255,255,255,0.25)';
   ctx.lineWidth = 1;
@@ -371,7 +371,7 @@ export function texWater() {
     }
     ctx.stroke();
   }
-  speckle(ctx, ['#5a9de0'], 20);
+  speckle(ctx, ['#50a7fe'], 20);
   const t = canvasToTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
@@ -419,29 +419,29 @@ export function texMobSkin(base, dark) {
 export function texCowSkin() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f5f0e6';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#2b2620', '#3a332a'], 6, 3, 6);
-  speckle(ctx, ['#e6ddc9'], 20);
+  blotches(ctx, ['#070605', '#1c1812'], 6, 3, 6);
+  speckle(ctx, ['#fbf8f2'], 20);
   return canvasToTexture(c);
 }
 // tête de zombie : visage abîmé avec des yeux, vue de face
 export function texZombieFace() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#5f8a52';
+  ctx.fillStyle = '#538e42';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#4d7343', '#719c62'], 10, 1.5, 3);
-  speckle(ctx, ['#3f6337'], 30);
+  blotches(ctx, ['#3d6c30', '#6ba955'], 10, 1.5, 3);
+  speckle(ctx, ['#2c5423'], 30);
   // yeux
-  ctx.fillStyle = '#1a1a1a';
+  ctx.fillStyle = '#000000';
   ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.35, TEX_SIZE * 0.18, TEX_SIZE * 0.14);
   ctx.fillRect(TEX_SIZE * 0.62, TEX_SIZE * 0.35, TEX_SIZE * 0.18, TEX_SIZE * 0.14);
-  ctx.fillStyle = '#8b1a1a';
+  ctx.fillStyle = '#850000';
   ctx.fillRect(TEX_SIZE * 0.23, TEX_SIZE * 0.38, TEX_SIZE * 0.1, TEX_SIZE * 0.08);
   ctx.fillRect(TEX_SIZE * 0.65, TEX_SIZE * 0.38, TEX_SIZE * 0.1, TEX_SIZE * 0.08);
   // bouche
-  ctx.fillStyle = '#2a1a15';
+  ctx.fillStyle = '#000000';
   ctx.fillRect(TEX_SIZE * 0.3, TEX_SIZE * 0.68, TEX_SIZE * 0.4, TEX_SIZE * 0.1);
   // griffures
   ctx.strokeStyle = 'rgba(40,30,20,0.5)';
@@ -456,18 +456,18 @@ export function texZombieFace() {
 export function texPigFace() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#e8a0a8';
+  ctx.fillStyle = '#fbbdc4';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#c97e88'], 16);
-  ctx.fillStyle = '#2a1a1a';
+  speckle(ctx, ['#df818e'], 16);
+  ctx.fillStyle = '#020101';
   ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.28, TEX_SIZE * 0.14, TEX_SIZE * 0.12);
   ctx.fillRect(TEX_SIZE * 0.66, TEX_SIZE * 0.28, TEX_SIZE * 0.14, TEX_SIZE * 0.12);
   // groin
-  ctx.fillStyle = '#d67e8a';
+  ctx.fillStyle = '#ee8493';
   ctx.beginPath();
   ctx.ellipse(TEX_SIZE * 0.5, TEX_SIZE * 0.68, TEX_SIZE * 0.22, TEX_SIZE * 0.15, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#7a3a42';
+  ctx.fillStyle = '#75252f';
   ctx.beginPath();
   ctx.ellipse(
     TEX_SIZE * 0.42,
@@ -496,15 +496,15 @@ export function texPigFace() {
 export function texCowFace() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f5f0e6';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#2b2620', '#3a332a'], 4, 2.5, 5);
-  ctx.fillStyle = '#1a1a1a';
+  blotches(ctx, ['#070605', '#1c1812'], 4, 2.5, 5);
+  ctx.fillStyle = '#000000';
   ctx.fillRect(TEX_SIZE * 0.18, TEX_SIZE * 0.3, TEX_SIZE * 0.16, TEX_SIZE * 0.14);
   ctx.fillRect(TEX_SIZE * 0.66, TEX_SIZE * 0.3, TEX_SIZE * 0.16, TEX_SIZE * 0.14);
-  ctx.fillStyle = '#e8d9c4';
+  ctx.fillStyle = '#fbf5ed';
   ctx.fillRect(TEX_SIZE * 0.28, TEX_SIZE * 0.62, TEX_SIZE * 0.44, TEX_SIZE * 0.3);
-  ctx.fillStyle = '#4a3a2e';
+  ctx.fillStyle = '#312318';
   ctx.beginPath();
   ctx.ellipse(
     TEX_SIZE * 0.42,
@@ -534,11 +534,11 @@ export function texCowFace() {
 export function texChickenBody() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f2ece0';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#e2dac8', '#fbf7ee'], 16, 1.5, 3.5);
-  speckle(ctx, ['#d8cdb8', '#c9a35a'], 30);
-  ctx.fillStyle = '#241f1a';
+  blotches(ctx, ['#f8f5ee', '#ffffff'], 16, 1.5, 3.5);
+  speckle(ctx, ['#eee5d5', '#e4b04c'], 30);
+  ctx.fillStyle = '#000000';
   ctx.fillRect(TEX_SIZE * 0.28, TEX_SIZE * 0.32, TEX_SIZE * 0.12, TEX_SIZE * 0.12);
   ctx.fillRect(TEX_SIZE * 0.6, TEX_SIZE * 0.32, TEX_SIZE * 0.12, TEX_SIZE * 0.12);
   return canvasToTexture(c);
@@ -546,21 +546,21 @@ export function texChickenBody() {
 export function texChickenBeak() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#e8a828';
+  ctx.fillStyle = '#ffb217';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#c98a1a', '#f2ba48'], 20);
+  speckle(ctx, ['#d98b00', '#ffc550'], 20);
   return canvasToTexture(c);
 }
 // vêtements en lambeaux pour le torse du zombie
 export function texZombieShirt() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#3d5a4a';
+  ctx.fillStyle = '#294938';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  blotches(ctx, ['#324c3e', '#48705a'], 12, 1.5, 3.5);
-  speckle(ctx, ['#2a4234'], 30);
+  blotches(ctx, ['#1c3527', '#36694d'], 12, 1.5, 3.5);
+  speckle(ctx, ['#13251b'], 30);
   // déchirures
-  ctx.fillStyle = '#5f8a52';
+  ctx.fillStyle = '#538e42';
   for (let i = 0; i < 5; i++) {
     const x = Math.random() * TEX_SIZE,
       y = Math.random() * TEX_SIZE;

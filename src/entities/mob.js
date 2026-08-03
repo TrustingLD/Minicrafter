@@ -12,11 +12,11 @@ import { MOBS } from '../data/mobs.js';
 
 export function createMobTextures() {
   return {
-    pigSkin: tex.texMobSkin('#e8a0a8', '#c97e88'),
+    pigSkin: tex.texMobSkin('#fbbdc4', '#df818e'),
     pigFace: tex.texPigFace(),
     cowSkin: tex.texCowSkin(),
     cowFace: tex.texCowFace(),
-    zombieSkin: tex.texMobSkin('#5f8a52', '#4d7343'),
+    zombieSkin: tex.texMobSkin('#538e42', '#3d6c30'),
     zombieFace: tex.texZombieFace(),
     zombieShirt: tex.texZombieShirt(),
     chickenBody: tex.texChickenBody(),

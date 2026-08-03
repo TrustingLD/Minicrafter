@@ -26,9 +26,9 @@ export function createPlayer({
   };
   camera.position.copy(player.pos);
 
-  const tPlayerSkin = texMobSkin('#e0a978', '#c48a5f');
-  const tPlayerShirt = texMobSkin('#3a6ea5', '#2d5580');
-  const tPlayerPants = texMobSkin('#48484a', '#333336');
+  const tPlayerSkin = texMobSkin('#f9b87e', '#dd8e53');
+  const tPlayerShirt = texMobSkin('#2068b4', '#16467a');
+  const tPlayerPants = texMobSkin('#353537', '#19191b');
   const playerSkinMat = new THREE.MeshLambertMaterial({ map: tPlayerSkin });
   const playerShirtMat = new THREE.MeshLambertMaterial({ map: tPlayerShirt });
   const playerPantsMat = new THREE.MeshLambertMaterial({ map: tPlayerPants });
