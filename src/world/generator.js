@@ -26,13 +26,27 @@ export const CANOPY_BLOCKS = new Set(['leaves', 'wood', 'crafting_table']);
 
 const noise = makeNoise2D(1337);
 const noiseMountain = makeNoise2D(9001); // bruit séparé, basse fréquence, pour les massifs montagneux
-const noiseCave = makeNoise3D(4242); // bruit 3D pour les cavernes (Phase 4b)
+const noiseLake = makeNoise2D(2024); // bruit basse fréquence dédié aux cuvettes de lac
+const noiseCave = makeNoise3D(4242); // bruit 3D principal pour les cavernes (Phase 4b)
+const noiseCaveDetail = makeNoise3D(7777); // 2e octave, plus fine, pour des tunnels moins "en boule"
+
+// Lacs : avant ce fix, un point ne passait sous SEA_LEVEL que par accident (creux
+// isolé du bruit de base `noise`), donc quasi invisible en jeu. `lakeMask` est un
+// champ dédié, à très basse fréquence, indépendant du relief : quand il dépasse un
+// seuil il creuse une VRAIE cuvette large (échelle ~50 blocs) qui passe sous le
+// niveau de la mer, avec un fond qui remonte doucement vers les berges.
+function lakeCarve(x, z, mtMask) {
+  if (mtMask > 0.02) return 0; // jamais de lac en flanc de montagne (pas de lac perché)
+  const mask = Math.max(0, noiseLake(x * 0.02, z * 0.02) - 0.35);
+  return mask * 40; // jusqu'à ~26 blocs de creux au coeur du bassin
+}
 
 export function getHeight(x, z) {
   const base = 6 + noise(x * 0.05, z * 0.05) * 5 + noise(x * 0.12, z * 0.12) * 2;
   const mtMask = Math.max(0, noiseMountain(x * 0.012, z * 0.012) - 0.05); // 0 en plaine, >0 = montagne
   const mountain = mtMask * 70;
-  return Math.max(1, Math.min(58, Math.floor(base + mountain)));
+  const lake = lakeCarve(x, z, mtMask);
+  return Math.max(1, Math.min(58, Math.floor(base + mountain - lake)));
 }
 
 // seuil de sculpture d'une caverne en un point donné, `surfaceH` déjà connu par
@@ -40,8 +54,9 @@ export function getHeight(x, z) {
 function caveCarves(wx, wy, wz, surfaceH) {
   if (surfaceH - wy < 3) return false; // jamais de caverne juste sous l'herbe
   const n = noiseCave(wx * 0.09, wy * 0.12, wz * 0.09);
-  const threshold = wy < 8 ? 0.62 : 0.58; // un peu plus dur près de la bedrock : pas de gruyère
-  return n > threshold;
+  const detail = noiseCaveDetail(wx * 0.22, wy * 0.22, wz * 0.22);
+  const threshold = wy < 8 ? 0.58 : 0.53; // un peu plus dur près de la bedrock : pas de gruyère
+  return n + detail * 0.25 > threshold;
 }
 
 const TREE_CHANCE = 0.012;
@@ -90,7 +105,7 @@ export function generateChunk(cx, cz) {
         else type = 'stone';
         data[idx(lx, y, lz)] = BLOCK_ID[type];
       }
-      if (h < SEA_LEVEL) waterCells.push({ lx, lz });
+      if (h < SEA_LEVEL) waterCells.push({ lx, lz, h }); // `h` : hauteur du fond, pour remplir toute la colonne d'eau (cf. world.js)
     }
   }
 

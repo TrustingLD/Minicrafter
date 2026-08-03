@@ -26,7 +26,12 @@ import { texWater } from '../render/textures.js';
 export { WORLD_BORDER };
 
 const DEFAULT_RENDER_DISTANCE = 6; // en chunks (16 blocs) autour du joueur
-const CHUNKS_PER_FRAME = 3; // étale génération+meshing sur plusieurs frames après le boot
+// Budget de temps (ms) par frame pour charger de nouveaux chunks, plutôt qu'un
+// nombre fixe : un compte fixe (l'ancien CHUNKS_PER_FRAME=3) ne protège pas la frame
+// si un chunk particulier est plus coûteux (relief accidenté, beaucoup de veines/
+// grottes à sculpter) — un budget en temps absorbe cette variance automatiquement.
+const CHUNK_LOAD_BUDGET_MS = 6;
+const MAX_CHUNKS_PER_FRAME = 4; // garde-fou : jamais plus que ça même si le budget temps le permettrait
 const INITIAL_RADIUS = 3; // chargé de façon synchrone au démarrage (le reste suit via update())
 const DIFF_STORAGE_KEY = 'minicrafter_diffs_v1';
 
@@ -55,7 +60,11 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     transparent: true,
     opacity: 0.65,
   });
-  const waterGeometry = new THREE.BoxGeometry(1, 0.24, 1);
+  // cube unité : la hauteur réelle de chaque lac (variable selon la profondeur du
+  // bassin) est appliquée via l'échelle de la matrice d'instance dans buildWaterMesh,
+  // pas via la géométrie elle-même — ainsi un seul mesh partagé peut représenter des
+  // lacs peu profonds sur les berges et bien plus profonds au centre du bassin.
+  const waterGeometry = new THREE.BoxGeometry(1, 1, 1);
   const waterDummy = new THREE.Object3D();
 
   const diffs = loadDiffs(); // "cx,cz" -> { localIdx: blockId }
@@ -95,11 +104,16 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     if (record.waterCells.length === 0) return null;
     const mesh = new THREE.InstancedMesh(waterGeometry, waterMaterial, record.waterCells.length);
     record.waterCells.forEach((cell, i) => {
+      // remplit toute la colonne du fond du bassin (cell.h + 1) jusqu'à la surface
+      // (SEA_LEVEL) : avant, une simple plaque fine flottait au niveau de la mer,
+      // laissant un lac "creux" et sans fond visible dès qu'on s'en approchait.
+      const depth = Math.max(0.3, SEA_LEVEL - cell.h);
       waterDummy.position.set(
         record.cx * CHUNK_X + cell.lx + 0.5,
-        SEA_LEVEL - 0.5 + 0.35,
+        cell.h + 1 + depth / 2 - 0.15,
         record.cz * CHUNK_Z + cell.lz + 0.5,
       );
+      waterDummy.scale.set(1, depth, 1);
       waterDummy.updateMatrix();
       mesh.setMatrixAt(i, waterDummy.matrix);
     });
@@ -225,8 +239,13 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
       }
     }
     candidates.sort((a, b) => a.d2 - b.d2);
-    for (let i = 0; i < Math.min(CHUNKS_PER_FRAME, candidates.length); i++)
-      ensureChunk(candidates[i].cx, candidates[i].cz);
+    const start = performance.now();
+    let loaded = 0;
+    while (loaded < candidates.length && loaded < MAX_CHUNKS_PER_FRAME) {
+      ensureChunk(candidates[loaded].cx, candidates[loaded].cz);
+      loaded++;
+      if (performance.now() - start > CHUNK_LOAD_BUDGET_MS) break; // budget dépassé : le reste suivra la frame prochaine
+    }
 
     for (const record of Array.from(chunks.values())) {
       const dx = record.cx - pcx,

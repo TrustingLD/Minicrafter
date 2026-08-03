@@ -32,16 +32,18 @@ export function hash3(x, y, z, salt = 0) {
   return (h >>> 0) / 4294967296;
 }
 
+// NB (fix perf) : l'ancienne implémentation mémorisait un gradient par point entier
+// dans un objet JS (`grid[x+','+y] = ...`) qui ne se vidait JAMAIS. En explorant le
+// monde, cet objet grossissait sans limite (des milliers de clés string) -> V8 bascule
+// en mode "dictionnaire" (accès lents) + pression GC croissante = exactement le "60 -> 20
+// FPS d'un coup" observé pendant la génération de terrain. On calcule maintenant le
+// gradient à la volée à partir de hash2/hash3 (déjà utilisés ailleurs pour les arbres/
+// veines) : c'est une fonction PURE des coordonnées entières, donc aucun cache requis,
+// mémoire bornée, et pas plus lent (un hash + un cos/sin contre un accès dictionnaire).
 export function makeNoise2D(seed) {
-  const rand = mulberry32(seed);
-  const grid = {};
   function getGrad(x, y) {
-    const key = x + ',' + y;
-    if (!grid[key]) {
-      const angle = rand() * Math.PI * 2;
-      grid[key] = [Math.cos(angle), Math.sin(angle)];
-    }
-    return grid[key];
+    const angle = hash2(x, y, seed) * Math.PI * 2;
+    return [Math.cos(angle), Math.sin(angle)];
   }
   function dot(gx, gy, x, y) {
     const g = getGrad(gx, gy);
@@ -70,19 +72,13 @@ export function makeNoise2D(seed) {
 // bruit de Perlin 3D (pour les cavernes, Phase 4b) : même principe que la version 2D
 // mais interpolation trilinéaire sur les 8 coins du cube englobant.
 export function makeNoise3D(seed) {
-  const rand = mulberry32(seed);
-  const grid = {};
+  // même fix que makeNoise2D : gradient dérivé de hash3 (2 tirages indépendants via
+  // des sels différents pour theta/phi), aucun cache -> mémoire bornée quelle que
+  // soit la distance explorée dans le monde.
   function getGrad(x, y, z) {
-    const key = x + ',' + y + ',' + z;
-    let g = grid[key];
-    if (!g) {
-      // direction aléatoire sur la sphère unité
-      const theta = rand() * Math.PI * 2;
-      const phi = Math.acos(rand() * 2 - 1);
-      g = [Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)];
-      grid[key] = g;
-    }
-    return g;
+    const theta = hash3(x, y, z, seed) * Math.PI * 2;
+    const phi = Math.acos(hash3(x, y, z, seed + 101) * 2 - 1);
+    return [Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)];
   }
   function dot(gx, gy, gz, x, y, z) {
     const g = getGrad(gx, gy, gz);
