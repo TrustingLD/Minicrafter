@@ -114,8 +114,11 @@ crackMesh.visible = false;
 scene.add(crackMesh);
 
 /* ---------- Inventaire ---------- */
+// Vide au départ (Phase X) : avant, le joueur démarrait avec 5 bois gratuits. Casser
+// un bloc (breakBlockAt, plus bas) incrémente déjà `inventory[type]` tout seul, donc
+// l'inventaire se remplit naturellement au fil du jeu sans rien avoir à changer là-bas.
 const inventory = {
-  wood: 5,
+  wood: 0,
   planks: 0,
   stick: 0,
   dirt: 0,
@@ -422,7 +425,7 @@ function voxelRaycast(origin, dir, maxDist) {
     if (type) {
       return {
         block: { x, y, z },
-        place: { x: x - normal.x, y: y - normal.y, z: z - normal.z },
+        place: { x: x + normal.x, y: y + normal.y, z: z + normal.z },
         dist: t,
       };
     }
