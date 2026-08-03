@@ -38,6 +38,16 @@ export function buildBlockAtlas() {
   canvas.height = rows * TEX_SIZE;
   const ctx = canvas.getContext('2d');
 
+  // Fix (points verts sur les côtés de l'herbe) : les tuiles sont collées bord à bord
+  // dans l'atlas, sans marge. Même en NearestFilter/sans mipmaps, les UV touchant
+  // pile 0.0/1.0 du rectangle d'une tuile peuvent, à cause de l'imprécision flottante
+  // (mediump sur pas mal de GPU), échantillonner le texel de la tuile VOISINE — d'où
+  // les pixels d'herbe (verts) de `grassTop` qui fuient sur les bords de `grassSide`,
+  // sa voisine directe dans l'atlas. On rétrécit chaque rect d'un demi-texel de marge
+  // de chaque côté : impossible dès lors de toucher la tuile d'à côté.
+  const padX = 0.5 / canvas.width;
+  const padY = 0.5 / canvas.height;
+
   const rectByKey = {};
   keys.forEach((key, i) => {
     const cx = i % cols,
@@ -45,10 +55,10 @@ export function buildBlockAtlas() {
     const srcCanvas = TEXTURE_FN[key]().image; // .image = le <canvas> qui alimente la CanvasTexture
     ctx.drawImage(srcCanvas, cx * TEX_SIZE, cy * TEX_SIZE);
     rectByKey[key] = [
-      (cx * TEX_SIZE) / canvas.width,
-      (cy * TEX_SIZE) / canvas.height,
-      ((cx + 1) * TEX_SIZE) / canvas.width,
-      ((cy + 1) * TEX_SIZE) / canvas.height,
+      (cx * TEX_SIZE) / canvas.width + padX,
+      (cy * TEX_SIZE) / canvas.height + padY,
+      ((cx + 1) * TEX_SIZE) / canvas.width - padX,
+      ((cy + 1) * TEX_SIZE) / canvas.height - padY,
     ];
   });
 

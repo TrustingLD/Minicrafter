@@ -51,11 +51,19 @@ export function getHeight(x, z) {
 
 // seuil de sculpture d'une caverne en un point donné, `surfaceH` déjà connu par
 // l'appelant (évite de rappeler getHeight, coûteux, pour chaque bloc de la colonne)
+//
+// Fix (entrées de grottes trop rares) : l'ancienne version interdisait TOUTE caverne
+// à moins de 3 blocs sous la surface (`return false` dur) — une grotte ne pouvait
+// donc déboucher à l'air libre que via une pente très abrupte (rare, le relief est
+// lisse). On remplace le blocage dur par un seuil qui monte progressivement en
+// approchant de la surface : ça laisse une vraie chance d'entrée naturelle (rare,
+// mais pas quasi-nulle) sans transformer la surface en gruyère.
 function caveCarves(wx, wy, wz, surfaceH) {
-  if (surfaceH - wy < 3) return false; // jamais de caverne juste sous l'herbe
+  const depth = surfaceH - wy;
   const n = noiseCave(wx * 0.09, wy * 0.12, wz * 0.09);
   const detail = noiseCaveDetail(wx * 0.22, wy * 0.22, wz * 0.22);
-  const threshold = wy < 8 ? 0.58 : 0.53; // un peu plus dur près de la bedrock : pas de gruyère
+  let threshold = wy < 8 ? 0.58 : 0.53; // un peu plus dur près de la bedrock : pas de gruyère
+  if (depth < 4) threshold += (4 - depth) * 0.16; // de plus en plus dur près de la surface
   return n + detail * 0.25 > threshold;
 }
 

@@ -391,31 +391,82 @@ function aimRaycast() {
   raycaster.set(rayEye, rayDir);
 }
 
+// Fix (chute de FPS 60->20 qui s'aggrave à mesure que le monde se génère) : l'ancienne
+// version faisait `raycaster.intersectObjects(worldApi.chunkMeshList)`, un test
+// triangle-par-triangle contre TOUS les meshes de chunks chargés (jusqu'à ~110 avec
+// RENDER_DISTANCE=6), appelé plusieurs fois par frame. Le coût grandit avec le nombre
+// de chunks chargés/explorés, indépendamment de la portée réelle (6 blocs). Un DDA
+// voxel (on avance bloc par bloc le long du rayon via getBlock) coûte O(portée),
+// donc ~6 itérations, quel que soit le nombre de chunks générés autour du joueur.
+function voxelRaycast(origin, dir, maxDist) {
+  let x = Math.floor(origin.x),
+    y = Math.floor(origin.y),
+    z = Math.floor(origin.z);
+  const stepX = Math.sign(dir.x),
+    stepY = Math.sign(dir.y),
+    stepZ = Math.sign(dir.z);
+  const tDelta = (d) => (d === 0 ? Infinity : Math.abs(1 / d));
+  let tMaxX =
+    stepX === 0 ? Infinity : ((stepX > 0 ? Math.floor(origin.x) + 1 - origin.x : origin.x - Math.floor(origin.x)) / Math.abs(dir.x));
+  let tMaxY =
+    stepY === 0 ? Infinity : ((stepY > 0 ? Math.floor(origin.y) + 1 - origin.y : origin.y - Math.floor(origin.y)) / Math.abs(dir.y));
+  let tMaxZ =
+    stepZ === 0 ? Infinity : ((stepZ > 0 ? Math.floor(origin.z) + 1 - origin.z : origin.z - Math.floor(origin.z)) / Math.abs(dir.z));
+  const dtX = tDelta(dir.x),
+    dtY = tDelta(dir.y),
+    dtZ = tDelta(dir.z);
+  let t = 0,
+    normal = { x: 0, y: 0, z: 0 };
+  while (t <= maxDist) {
+    const type = worldApi.getBlock(x, y, z);
+    if (type) {
+      return {
+        block: { x, y, z },
+        place: { x: x - normal.x, y: y - normal.y, z: z - normal.z },
+        dist: t,
+      };
+    }
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      x += stepX;
+      t = tMaxX;
+      tMaxX += dtX;
+      normal = { x: -stepX, y: 0, z: 0 };
+    } else if (tMaxY < tMaxZ) {
+      y += stepY;
+      t = tMaxY;
+      tMaxY += dtY;
+      normal = { x: 0, y: -stepY, z: 0 };
+    } else {
+      z += stepZ;
+      t = tMaxZ;
+      tMaxZ += dtZ;
+      normal = { x: 0, y: 0, z: -stepZ };
+    }
+  }
+  return null;
+}
+
 function getTargetedBlock() {
   aimRaycast();
-  const intersects = raycaster.intersectObjects(worldApi.chunkMeshList);
-  if (intersects.length === 0) return null;
-  const hit = intersects[0];
-  const n = hit.face.normal; // le mesh de chunk n'a qu'une translation (pas de rotation
-  // ni d'échelle), donc la normale locale de la face EST la normale monde
-  const p = hit.point; // déjà en coordonnées monde
-  // le point d'impact tombe pile sur la face du cube [x,x+1) : reculer d'un demi-bloc
-  // le long de -normale retombe toujours sur le coin (x,y,z) du bloc visé, quelle que
-  // soit la face touchée (cf. PLAN.md §3.1 sur le décalage +0.5 des blocs)
-  const x = Math.floor(p.x - n.x * 0.5);
-  const y = Math.floor(p.y - n.y * 0.5);
-  const z = Math.floor(p.z - n.z * 0.5);
-  return {
-    block: { x, y, z },
-    place: { x: x + n.x, y: y + n.y, z: z + n.z },
-    dist: hit.distance,
-  };
+  return voxelRaycast(rayEye, rayDir, raycaster.far);
 }
 function getTargetedMob() {
   aimRaycast();
+  // liste courte (quelques mobs proches) : le raycast triangle Three.js reste tout à
+  // fait bon marché ici, pas besoin d'un DDA.
   const intersects = raycaster.intersectObjects(mobSystem.mobHitboxes);
   if (intersects.length === 0) return null;
   return { mob: intersects[0].object.userData.mob, dist: intersects[0].distance };
+}
+
+// Le viseur bloc/mob ne change qu'une fois par frame : on le calcule une seule fois
+// dans animate() et on réutilise le résultat partout ailleurs (clic gauche/droit),
+// plutôt que de relancer le raycast à chaque appel.
+let cachedBlockHit = null;
+let cachedMobHit = null;
+function refreshAimCache() {
+  cachedMobHit = getTargetedMob();
+  cachedBlockHit = getTargetedBlock();
 }
 
 // Cassage progressif (TODO 16) : maintenir le clic use le temps réel plutôt que de
@@ -449,8 +500,8 @@ let breakProgress = 0;
 // les deux entrées appellent exactement la même logique (cf. Phase 6 : le tactile est
 // un second producteur des mêmes actions, pas un second chemin de code).
 function performPrimaryAction() {
-  const mobHit = getTargetedMob();
-  const blockHit = getTargetedBlock();
+  const mobHit = cachedMobHit;
+  const blockHit = cachedBlockHit;
   triggerHandSwing();
   leftMouseDown = true;
   // priorité au mob si plus proche que le bloc
@@ -466,7 +517,7 @@ function performPrimaryAction() {
 
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
 function performSecondaryAction() {
-  const blockHit = getTargetedBlock();
+  const blockHit = cachedBlockHit;
   if (!blockHit) return;
   const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
   if (worldApi.getBlock(tx, ty, tz) === 'crafting_table') {
@@ -691,8 +742,9 @@ function animate() {
   }
 
   posEl.textContent = `${player.pos.x.toFixed(1)}, ${player.pos.y.toFixed(1)}, ${player.pos.z.toFixed(1)}`;
-  const mobHit = getTargetedMob();
-  const blockHit = getTargetedBlock();
+  refreshAimCache();
+  const mobHit = cachedMobHit;
+  const blockHit = cachedBlockHit;
   if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
     targetEl.textContent = `${mobHit.mob.data.name} (${mobHit.mob.health}/${mobHit.mob.maxHealth} PV)`;
     hintEl.style.display = 'none';
