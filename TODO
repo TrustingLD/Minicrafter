@@ -6,9 +6,8 @@ NEW Lun 3 Aout 11:07
 - Terrain plus profond
 - jaimerais que la barre d'inventaire soit un emplacement de stockage : 9 cases vides et qui se remplissent par les items récupérées AU SOL (quand on casse un bloc l'item tombe au sol et apres quand on le récupere ca va dans l'inventaire) (système de drop au sol)
 - La hache doit être tenue DANS la main et le bloc aussi.
-- meilleur cycle jour/nuit
+- meilleur cycle jour/nuit : ajout des etoiles pendant la nuit , et lune et soleil plus gros et plus brillants
 - meilleure animation de cassage de bloc
-- meilleure texture de l’eau
 - Multijoueur
 - Grotte parfaite
 - Nous mob : sheep
@@ -19,6 +18,37 @@ NEW Lun 3 Aout 11:07
 - biomes
 - four
 - spawn des mobs quand on sort de la zone initiale
-- historique de chat
-- nuages
-- l’eau doit couler et ne doit pas avoir de texture sur les cotés quand elle est stockée dans de la terre
+- historique de chat et commandes dans le chat
+- l’eau doit couler et ne doit pas avoir de texture sur les cotés quand elle est stockée dans de la terre (donc liaison des blocks)
+- quand on est entierement dans l'eau, au bout de 15 secondes on commence a perdre 1 demi coeur chaque seconde
+- les nuages doivent spawn avec la génération et doivent apparaitre en blocs entiers
+
+
+
+
+
+
+Difficulté	Tâche	Pourquoi ce niveau
+🟢 Facile	Historique de chat	Stocker les messages déjà envoyés (ui/chat.js) dans un tableau et les réafficher
+🟢 Facile	Régler le problème de FPS	J'ai déjà repéré la cause probable (fuite mémoire dans le cache de bruit Perlin) — fix ciblé, pas une refonte
+🟡 Moyen	Barre de bouffe (faim)	Même logique que la barre de vie (ui/health.js) qu'il suffit de dupliquer/adapter
+🟡 Moyen	Torches	Nouveau bloc + une vraie source de lumière (THREE.PointLight) à gérer par chunk
+🟡 Moyen	Four (crafting)	Extension du système de craft existant (ui/craft.js) avec une recette "cuisson" + timer
+🟡 Moyen	Meilleur cycle jour/nuit	Le système existe déjà (branche main), à améliorer/porter (couleurs ciel, lumière progressive)
+🟡 Moyen	Meilleure animation de cassage de bloc	Effet visuel (shake, fissures progressives) sur le bloc ciblé
+🟡 Moyen	Grotte parfaite	Le système existe déjà, il faut retravailler les seuils de bruit pour des grottes plus fréquentes/lisibles
+🟡 Moyen	Terrain plus profond	Augmenter CHUNK_Y + adapter le générateur, attention à l'impact FPS
+🟡 Moyen	Nouveau mob : sheep	Modèle + IA de déplacement simple, sur la base du système mob.js existant
+🟡 Moyen	Spawn des mobs hors zone initiale	Logique de spawn périodique autour du joueur, à limiter en performance
+🟠 Difficile	Monstres qui attaquent à travers les blocs	Il faut un raycast de ligne de vue avant chaque attaque de mob
+🟠 Difficile	Hache/bloc tenu dans la main	Modèle 3D d'item attaché à la main du joueur en vue première personne, synchronisé avec la hotbar
+🟠 Difficile	Biomes	Plusieurs types de terrain/textures avec transitions propres, pas juste un mask
+🟠 Difficile	Inventaire avec drop au sol + ramassage	Nouveau système d'entités "item au sol" (physique simple, despawn, hitbox de ramassage) lié à l'inventaire
+🔴 Très difficile	Océan / rivière	Génération cohérente à grande échelle (au-delà d'un chunk), niveau d'eau variable, raccords entre chunks
+🔴 Très difficile	L'eau qui coule	Simulation de fluide (propagation, niveaux), coûteux en calcul et complexe à intégrer au système de blocs
+🔴 Très difficile	Multijoueur	Serveur, synchronisation d'état, gestion de la latence — gros chantier à part entière
+
+Tu veux qu'on attaque un point en particulier maintenant ?
+
+
+
