@@ -19,11 +19,19 @@ import { createHotbarUI } from './ui/hotbar.js';
 import { createHealthUI } from './ui/health.js';
 import { createCraftUI } from './ui/craft.js';
 import { createChatUI } from './ui/chat.js';
+import { isTouchDevice, createTouchUI } from './ui/touch.js';
 
 /* ---------- Bus d'événements ---------- */
 // L'UI s'abonne ici une fois pour toutes ; la logique de jeu n'a plus besoin
 // d'appeler hotbarUI.render/healthUI.render à chaque endroit qui change l'état.
 const bus = createEventBus();
+
+// Phase 6 : le tactile n'ajoute pas un second jeu de règles, juste un second
+// producteur des mêmes actions (cf. src/ui/touch.js). Tout ce qui suit qui teste
+// `touchMode` sert soit à éviter le pointer lock (absent sur tactile), soit à
+// baisser la qualité (distance de rendu, ombres, pixel ratio) pour tenir 60 FPS
+// sur un GPU de téléphone.
+const touchMode = isTouchDevice();
 
 /* ---------- Scène / caméra / renderer ---------- */
 const scene = new THREE.Scene();
@@ -34,14 +42,15 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 scene.add(camera); // nécessaire pour que les objets attachés à la caméra (main FPS) soient rendus
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touchMode ? 1 : 2));
+renderer.shadowMap.enabled = !touchMode;
 document.body.appendChild(renderer.domElement);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.65);
 scene.add(ambient);
 const sun = new THREE.DirectionalLight(0xffffff, 0.8);
 sun.position.set(50, 80, 30);
-sun.castShadow = true;
+sun.castShadow = !touchMode;
 sun.shadow.camera.left = -60;
 sun.shadow.camera.right = 60;
 sun.shadow.camera.top = 60;
@@ -83,7 +92,7 @@ document.getElementById('musicHint').addEventListener('click', music.toggleBgmMu
 // autour de (0,0) de façon synchrone (le joueur n'apparaît jamais dans le vide),
 // le reste se charge à la volée via worldApi.update(player.pos) dans animate().
 const blockAssets = createBlockAssets();
-const worldApi = createWorld({ scene });
+const worldApi = createWorld({ scene, renderDistance: touchMode ? 4 : 6 });
 
 // Bordure du monde : mur purement invisible, seule la collision existe (cf.
 // collidesAtBox dans world.js). Pas de plan rouge/brume — juste un stop net.
@@ -166,8 +175,10 @@ function closeCraft() {
   craftOpen = false;
   craftUI.hide();
   // le pointeur a été relâché à l'ouverture : on invite le joueur à re-cliquer
-  // pour reprendre le contrôle de la caméra (sinon la souris semblait "morte")
-  if (document.pointerLockElement !== renderer.domElement) blocker.style.display = 'flex';
+  // pour reprendre le contrôle de la caméra (sinon la souris semblait "morte").
+  // Non pertinent sur tactile : il n'y a jamais eu de pointer lock à reprendre.
+  if (!touchMode && document.pointerLockElement !== renderer.domElement)
+    blocker.style.display = 'flex';
 }
 document.getElementById('closeCraft').addEventListener('click', closeCraft);
 
@@ -246,7 +257,8 @@ const chatUI = createChatUI({
   inputEl: document.getElementById('chatInput'),
   onSend: (text) => bus.emit('chat:message', text),
   onClose: () => {
-    if (document.pointerLockElement !== renderer.domElement) blocker.style.display = 'flex';
+    if (!touchMode && document.pointerLockElement !== renderer.domElement)
+      blocker.style.display = 'flex';
   },
 });
 
@@ -433,51 +445,59 @@ let leftMouseDown = false;
 let breakKey = null;
 let breakProgress = 0;
 
-renderer.domElement.addEventListener('mousedown', (e) => {
-  if (document.pointerLockElement !== renderer.domElement || craftOpen) return;
+// Casser/attaquer (clic gauche desktop, ⛏ maintenu sur tactile) : factorisé pour que
+// les deux entrées appellent exactement la même logique (cf. Phase 6 : le tactile est
+// un second producteur des mêmes actions, pas un second chemin de code).
+function performPrimaryAction() {
   const mobHit = getTargetedMob();
   const blockHit = getTargetedBlock();
-
-  if (e.button === 0) {
-    triggerHandSwing();
-    leftMouseDown = true;
-    // priorité au mob si plus proche que le bloc
-    if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
-      const hasSword =
-        TOOL_CATEGORY[selectedBlock] === 'sword' && (inventory[selectedBlock] || 0) > 0;
-      mobHit.mob.hit(hasSword ? 5 : 1);
-      return;
-    }
-    // le cassage lui-même est géré dans animate() : il faut maintenir le clic
-    // pointé sur le même bloc pendant breakTimeFor(type) secondes
-  } else if (e.button === 2) {
-    if (blockHit) {
-      const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
-      if (worldApi.getBlock(tx, ty, tz) === 'crafting_table') {
-        openCraft();
-        return;
-      }
-      if (NON_PLACEABLE.has(selectedBlock)) {
-        hotbarUI.flashEmptySlot(selectedIndex);
-        return;
-      }
-      if ((inventory[selectedBlock] || 0) <= 0) {
-        hotbarUI.flashEmptySlot(selectedIndex);
-        return;
-      }
-      const { x, y, z } = blockHit.place; // case vide adjacente où poser le nouveau bloc
-      const px = Math.floor(player.pos.x),
-        py0 = Math.floor(player.pos.y),
-        py1 = Math.floor(player.pos.y + player.height),
-        pz = Math.floor(player.pos.z);
-      if (!(x === px && z === pz && (y === py0 || y === py1)) && !worldApi.getBlock(x, y, z)) {
-        worldApi.setBlock(x, y, z, selectedBlock);
-        inventory[selectedBlock]--;
-        bus.emit('inventory:changed');
-        sfx.playSound('place');
-      }
-    }
+  triggerHandSwing();
+  leftMouseDown = true;
+  // priorité au mob si plus proche que le bloc
+  if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
+    const hasSword =
+      TOOL_CATEGORY[selectedBlock] === 'sword' && (inventory[selectedBlock] || 0) > 0;
+    mobHit.mob.hit(hasSword ? 5 : 1);
+    return;
   }
+  // le cassage lui-même est géré dans animate() : il faut maintenir l'action
+  // pointée sur le même bloc pendant breakTimeFor(type) secondes
+}
+
+// Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
+function performSecondaryAction() {
+  const blockHit = getTargetedBlock();
+  if (!blockHit) return;
+  const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
+  if (worldApi.getBlock(tx, ty, tz) === 'crafting_table') {
+    openCraft();
+    return;
+  }
+  if (NON_PLACEABLE.has(selectedBlock)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  if ((inventory[selectedBlock] || 0) <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const { x, y, z } = blockHit.place; // case vide adjacente où poser le nouveau bloc
+  const px = Math.floor(player.pos.x),
+    py0 = Math.floor(player.pos.y),
+    py1 = Math.floor(player.pos.y + player.height),
+    pz = Math.floor(player.pos.z);
+  if (!(x === px && z === pz && (y === py0 || y === py1)) && !worldApi.getBlock(x, y, z)) {
+    worldApi.setBlock(x, y, z, selectedBlock);
+    inventory[selectedBlock]--;
+    bus.emit('inventory:changed');
+    sfx.playSound('place');
+  }
+}
+
+renderer.domElement.addEventListener('mousedown', (e) => {
+  if (document.pointerLockElement !== renderer.domElement || craftOpen) return;
+  if (e.button === 0) performPrimaryAction();
+  else if (e.button === 2) performSecondaryAction();
 });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 function stopBreaking() {
@@ -490,6 +510,52 @@ renderer.domElement.addEventListener('mouseup', (e) => {
   if (e.button === 0) stopBreaking();
 });
 window.addEventListener('blur', stopBreaking);
+
+/* ---------- Contrôles tactiles (Phase 6) ---------- */
+let touchMoveVec = { x: 0, z: 0 };
+let touchUI = null; // référencé dans animate() pour désactiver joystick/visée pendant craft/chat
+if (touchMode) {
+  blocker.style.display = 'none'; // pas de pointer lock sur tactile : on démarre directement
+
+  touchUI = createTouchUI({
+    onMove: (dx, dz) => {
+      touchMoveVec.x = dx;
+      touchMoveVec.z = dz;
+    },
+    onLook: (dYaw, dPitch) => {
+      yaw -= dYaw;
+      pitch -= dPitch;
+      pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+    },
+    onBreakStart: () => {
+      if (!craftOpen && !chatUI.isOpen) performPrimaryAction();
+    },
+    onBreakEnd: stopBreaking,
+    onPlace: () => {
+      if (!craftOpen && !chatUI.isOpen) performSecondaryAction();
+    },
+    onJump: (down) => {
+      keys['Space'] = down;
+    },
+    onInventory: () => (craftOpen ? closeCraft() : openCraft()),
+  });
+
+  // premier contact = geste utilisateur requis pour débloquer l'audio et tenter le
+  // plein écran / wake lock (échouent silencieusement si le navigateur refuse)
+  window.addEventListener(
+    'touchstart',
+    function unlockOnce() {
+      sfx.resumeAudio();
+      music.startBgm();
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(() => {});
+      }
+      window.removeEventListener('touchstart', unlockOnce);
+    },
+    { once: true },
+  );
+}
 
 /* ============================================================
    BOUCLE PRINCIPALE
@@ -544,9 +610,12 @@ function animate() {
   worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;
   worldApi.update(player.pos); // charge/décharge les chunks proches (Phase 4a)
 
+  // joystick/visée tactiles coupés pendant craft/chat, comme le reste des contrôles
+  if (touchUI) touchUI.setActive(!craftOpen && !chatUI.isOpen);
+
   if (!craftOpen && !chatUI.isOpen) {
-    let dx = 0,
-      dz = 0;
+    let dx = touchMoveVec.x,
+      dz = touchMoveVec.z;
     if (keys['KeyW'] || keys['ArrowUp']) dz -= 1;
     if (keys['KeyS'] || keys['ArrowDown']) dz += 1;
     if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
@@ -645,7 +714,7 @@ function animate() {
     !leftMouseDown ||
     craftOpen ||
     chatUI.isOpen ||
-    document.pointerLockElement !== renderer.domElement;
+    (!touchMode && document.pointerLockElement !== renderer.domElement);
   if (mustStopBreaking) {
     breakKey = null;
     breakProgress = 0;

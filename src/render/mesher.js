@@ -69,13 +69,6 @@ const FACES = [
     ],
   },
 ];
-const FACE_UV = [
-  [0, 0],
-  [1, 0],
-  [1, 1],
-  [0, 1],
-];
-
 function faceSlot(nx, ny) {
   if (ny === 1) return 'top';
   if (ny === -1) return 'bottom';
@@ -106,10 +99,23 @@ export function meshChunk(data, uvByBlockId) {
           if (get(x + nx, y + ny, z + nz)) continue; // face cachée
           const rect = uv[faceSlot(nx, ny)];
           const base = vertCount;
-          face.v.forEach((corner, i) => {
+          face.v.forEach((corner) => {
             positions.push(x + corner[0], y + corner[1], z + corner[2]);
             normals.push(nx, ny, nz);
-            const [s, t] = FACE_UV[i];
+            // UV par sommet dérivé de sa position dans le bloc (pas d'une table fixe
+            // indexée par i) : pour une face verticale, l'axe texture V DOIT suivre
+            // l'axe monde Y, sinon la bande herbe/terre de grassSide s'aligne sur X/Z
+            // au lieu du haut du bloc — bug "herbe en diagonale" vu de profil. v=0 de
+            // l'atlas = haut du canvas = herbe (flipY=false, cf. atlas.js), donc
+            // y=1 (haut du bloc) -> t=0, y=0 (bas) -> t=1.
+            let s, t;
+            if (ny !== 0) {
+              s = corner[0];
+              t = corner[2];
+            } else {
+              t = 1 - corner[1];
+              s = nx !== 0 ? corner[2] : corner[0];
+            }
             uvs.push(rect[0] + s * (rect[2] - rect[0]), rect[1] + t * (rect[3] - rect[1]));
           });
           indices.push(base, base + 1, base + 2, base, base + 2, base + 3);

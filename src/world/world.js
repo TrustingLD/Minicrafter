@@ -25,8 +25,7 @@ import { texWater } from '../render/textures.js';
 
 export { WORLD_BORDER };
 
-const RENDER_DISTANCE = 6; // en chunks (16 blocs) autour du joueur
-const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
+const DEFAULT_RENDER_DISTANCE = 6; // en chunks (16 blocs) autour du joueur
 const CHUNKS_PER_FRAME = 3; // étale génération+meshing sur plusieurs frames après le boot
 const INITIAL_RADIUS = 3; // chargé de façon synchrone au démarrage (le reste suit via update())
 const DIFF_STORAGE_KEY = 'minicrafter_diffs_v1';
@@ -39,7 +38,11 @@ function loadDiffs() {
   }
 }
 
-export function createWorld({ scene }) {
+// renderDistance réglable (Phase 6, qualité adaptative) : un mobile tient une distance
+// de rendu plus courte qu'un desktop pour le même budget de frame.
+export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE }) {
+  const RENDER_DISTANCE = renderDistance;
+  const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
   const { texture: atlasTexture, uvByBlockId } = buildBlockAtlas();
   const atlasMaterial = new THREE.MeshLambertMaterial({ map: atlasTexture });
 

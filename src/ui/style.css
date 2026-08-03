@@ -10,6 +10,70 @@ body {
 canvas {
   display: block;
   image-rendering: pixelated;
+  touch-action: none;
+}
+
+/* ---------- Contrôles tactiles (Phase 6) ---------- */
+#touchControls {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+}
+#tcLookZone {
+  position: absolute;
+  inset: 0;
+  left: 40%;
+  touch-action: none;
+}
+#tcJoystickBase {
+  position: absolute;
+  left: 26px;
+  bottom: 116px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  touch-action: none;
+}
+#tcJoystickStick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+#tcButtons {
+  position: absolute;
+  right: 18px;
+  bottom: 110px;
+  display: grid;
+  grid-template-columns: repeat(2, 56px);
+  gap: 10px;
+  justify-items: center;
+}
+.tcBtn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 22px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tcBtn:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+.tcBtnBig {
+  grid-column: span 2;
+  width: 100%;
 }
 
 #crosshair {
@@ -179,14 +243,16 @@ canvas {
 }
 .heart {
   width: 18px;
-  height: 18px;
+  height: 16px;
   background: #d32f2f;
-  border: 1px solid #7a0000;
-  border-radius: 3px;
+  clip-path: path(
+    'M9,16 C9,16 0,9.5 0,4.8 C0,1.9 2.2,0 4.7,0 C6.6,0 8.2,1.1 9,2.9 C9.8,1.1 11.4,0 13.3,0 C15.8,0 18,1.9 18,4.8 C18,9.5 9,16 9,16 Z'
+  );
+  filter: drop-shadow(0 0 1px #7a0000) drop-shadow(0 0 1px #7a0000);
 }
 .heart.empty {
   background: #333;
-  border-color: #111;
+  filter: drop-shadow(0 0 1px #111) drop-shadow(0 0 1px #111);
 }
 
 #blocker {
