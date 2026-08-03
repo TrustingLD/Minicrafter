@@ -29,6 +29,7 @@ const noiseMountain = makeNoise2D(9001); // bruit séparé, basse fréquence, po
 const noiseLake = makeNoise2D(2024); // bruit basse fréquence dédié aux cuvettes de lac
 const noiseCave = makeNoise3D(4242); // bruit 3D principal pour les cavernes (Phase 4b)
 const noiseCaveDetail = makeNoise3D(7777); // 2e octave, plus fine, pour des tunnels moins "en boule"
+const noiseLava = makeNoise3D(5150); // bruit dédié aux mares de lave, basse fréquence -> grosses poches
 
 // Lacs : avant ce fix, un point ne passait sous SEA_LEVEL que par accident (creux
 // isolé du bruit de base `noise`), donc quasi invisible en jeu. `lakeMask` est un
@@ -67,6 +68,16 @@ function caveCarves(wx, wy, wz, surfaceH) {
   return n + detail * 0.25 > threshold;
 }
 
+// Lave (Phase 4c) : uniquement dans le fond des cavernes déjà creusées (jamais dans
+// la pierre pleine), et seulement en profondeur -> pas de lac de lave à ciel ouvert.
+// Bruit dédié à basse fréquence (0.045) pour former de vraies mares connexes plutôt
+// que des cellules isolées façon poivre-et-sel.
+export const LAVA_LEVEL = 6;
+function lavaPoolAt(wx, wy, wz) {
+  if (wy > LAVA_LEVEL || wy <= 0) return false;
+  return noiseLava(wx * 0.045, wy * 0.09, wz * 0.045) > 0.42;
+}
+
 const TREE_CHANCE = 0.012;
 const TREE_MARGIN = 4; // rayon de scan autour du chunk : le feuillage (rayon 2) d'un
 // arbre raciné dans le chunk voisin peut déborder ici ; en le recalculant (déterministe)
@@ -92,6 +103,7 @@ function setLocal(data, lx, ly, lz, blockId) {
 export function generateChunk(cx, cz) {
   const data = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
   const waterCells = [];
+  const lavaCells = [];
   const originX = cx * CHUNK_X;
   const originZ = cz * CHUNK_Z;
 
@@ -106,7 +118,11 @@ export function generateChunk(cx, cz) {
           data[idx(lx, y, lz)] = BLOCK_ID.bedrock;
           continue;
         }
-        if (caveCarves(wx, y, wz, h)) continue; // caverne : on laisse de l'air
+        if (caveCarves(wx, y, wz, h)) {
+          // caverne : on laisse de l'air, sauf poche de lave en profondeur
+          if (lavaPoolAt(wx, y, wz)) lavaCells.push({ lx, ly: y, lz });
+          continue;
+        }
         let type;
         if (y === h) type = h > SNOW_LEVEL ? 'snow' : 'grass';
         else if (y > h - 3) type = 'dirt';
@@ -171,7 +187,7 @@ export function generateChunk(cx, cz) {
     }
   }
 
-  return { data, waterCells };
+  return { data, waterCells, lavaCells };
 }
 
 // hauteur du sol réellement solide (creuse au travers des cavernes/arbres) en un

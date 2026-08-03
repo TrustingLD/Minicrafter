@@ -21,7 +21,7 @@ import {
 import { BLOCK_ID, BLOCK_BY_ID } from '../data/blocks.js';
 import { buildBlockAtlas } from '../render/atlas.js';
 import { meshChunk } from '../render/mesher.js';
-import { texWater } from '../render/textures.js';
+import { texWater, texLava } from '../render/textures.js';
 
 export { WORLD_BORDER };
 
@@ -66,6 +66,15 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
   // lacs peu profonds sur les berges et bien plus profonds au centre du bassin.
   const waterGeometry = new THREE.BoxGeometry(1, 1, 1);
   const waterDummy = new THREE.Object3D();
+
+  // Lave (Phase 4c) : même schéma que l'eau (InstancedMesh partagée par chunk), mais
+  // en MeshBasicMaterial (non affecté par l'éclairage de la scène) pour qu'elle reste
+  // incandescente même dans le noir complet d'une caverne profonde -- une lave "éteinte"
+  // sous MeshLambertMaterial perdrait tout son intérêt visuel comme signal de danger.
+  const lavaTexture = texLava();
+  const lavaMaterial = new THREE.MeshBasicMaterial({ map: lavaTexture });
+  const lavaGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const lavaDummy = new THREE.Object3D();
 
   const diffs = loadDiffs(); // "cx,cz" -> { localIdx: blockId }
   let diffsDirty = false;
@@ -121,15 +130,50 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     return mesh;
   }
 
+  // contrairement à l'eau (une plaque de hauteur variable par colonne), une mare de
+  // lave est un volume de cellules déjà creusées une à une par le générateur -> chaque
+  // cellule est simplement un cube plein 1x1x1 posé à sa position exacte.
+  function buildLavaMesh(record) {
+    if (record.lavaCells.length === 0) return null;
+    const mesh = new THREE.InstancedMesh(lavaGeometry, lavaMaterial, record.lavaCells.length);
+    record.lavaCells.forEach((cell, i) => {
+      lavaDummy.position.set(
+        record.cx * CHUNK_X + cell.lx + 0.5,
+        cell.ly + 0.5,
+        record.cz * CHUNK_Z + cell.lz + 0.5,
+      );
+      lavaDummy.scale.set(1, 1, 1);
+      lavaDummy.updateMatrix();
+      mesh.setMatrixAt(i, lavaDummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    return mesh;
+  }
+
   function ensureChunk(cx, cz) {
     const key = chunkKey(cx, cz);
     let record = chunks.get(key);
     if (record) return record;
 
-    const { data, waterCells } = generateChunk(cx, cz);
+    const { data, waterCells, lavaCells } = generateChunk(cx, cz);
     applySavedDiffs(key, data);
 
-    record = { cx, cz, key, data, waterCells, mesh: null, waterMesh: null };
+    // lookup rapide "lx,ly,lz" -> cellule de lave, pour isInLava() sans reparcourir
+    // le tableau à chaque frame (cf. commentaire sur isInLava plus bas)
+    const lavaSet = new Set(lavaCells.map((c) => `${c.lx},${c.ly},${c.lz}`));
+
+    record = {
+      cx,
+      cz,
+      key,
+      data,
+      waterCells,
+      lavaCells,
+      lavaSet,
+      mesh: null,
+      waterMesh: null,
+      lavaMesh: null,
+    };
     record.mesh = new THREE.Mesh(buildGeometry(data), atlasMaterial);
     record.mesh.position.set(cx * CHUNK_X, 0, cz * CHUNK_Z);
     record.mesh.receiveShadow = true;
@@ -138,6 +182,9 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
 
     record.waterMesh = buildWaterMesh(record);
     if (record.waterMesh) scene.add(record.waterMesh);
+
+    record.lavaMesh = buildLavaMesh(record);
+    if (record.lavaMesh) scene.add(record.lavaMesh);
 
     chunks.set(key, record);
     return record;
@@ -153,9 +200,10 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     record.mesh.geometry.dispose();
     const i = chunkMeshList.indexOf(record.mesh);
     if (i >= 0) chunkMeshList.splice(i, 1);
-    // waterGeometry/waterMaterial sont partagés par tous les chunks : on ne les
-    // dispose jamais ici, seulement retirer CE mesh de la scène.
+    // waterGeometry/waterMaterial (et pareil pour la lave) sont partagés par tous les
+    // chunks : on ne les dispose jamais ici, seulement retirer CE mesh de la scène.
     if (record.waterMesh) scene.remove(record.waterMesh);
+    if (record.lavaMesh) scene.remove(record.lavaMesh);
     chunks.delete(record.key);
     // NB: `diffs` n'est PAS nettoyé ici — les modifications du joueur doivent survivre
     // au déchargement, elles sont réappliquées par applySavedDiffs() au rechargement.
@@ -187,6 +235,18 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
 
   function isSolid(x, y, z) {
     return !!getBlock(x, y, z);
+  }
+
+  // la lave n'est PAS stockée dans `data` (comme l'eau) : elle est traversable/non
+  // solide par nature (on doit pouvoir y tomber dedans), donc on la teste via son
+  // propre index plutôt que via getBlock/isSolid.
+  function isInLava(x, y, z) {
+    const [cx, cz] = worldToChunk(x, z);
+    const record = chunks.get(chunkKey(cx, cz));
+    if (!record || record.lavaSet.size === 0) return false;
+    const [lx, lz] = worldToLocal(x, z);
+    const ly = Math.floor(y);
+    return record.lavaSet.has(`${lx},${ly},${lz}`);
   }
 
   // collision boîte générique (utilisée par le joueur ET les mobs) : identique à
@@ -258,10 +318,12 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     getBlock,
     setBlock,
     isSolid,
+    isInLava,
     collidesAtBox,
     getGroundHeight,
     update,
     chunkMeshList,
     waterTexture,
+    lavaTexture,
   };
 }

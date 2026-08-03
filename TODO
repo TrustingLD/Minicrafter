@@ -22,6 +22,7 @@ NEW Lun 3 Aout 11:07
 - l’eau doit couler et ne doit pas avoir de texture sur les cotés quand elle est stockée dans de la terre (donc liaison des blocks)
 - quand on est entierement dans l'eau, au bout de 15 secondes on commence a perdre 1 demi coeur chaque seconde
 - les nuages doivent spawn avec la génération et doivent apparaitre en blocs entiers
+- lave
 
 
 
@@ -48,7 +49,6 @@ Difficulté	Tâche	Pourquoi ce niveau
 🔴 Très difficile	L'eau qui coule	Simulation de fluide (propagation, niveaux), coûteux en calcul et complexe à intégrer au système de blocs
 🔴 Très difficile	Multijoueur	Serveur, synchronisation d'état, gestion de la latence — gros chantier à part entière
 
-Tu veux qu'on attaque un point en particulier maintenant ?
 
 
 

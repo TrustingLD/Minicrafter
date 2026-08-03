@@ -618,6 +618,7 @@ if (touchMode) {
    ============================================================ */
 const clock = new THREE.Clock();
 let footstepTimer = 0;
+let lavaDamageTimer = 0; // cooldown entre deux tics de dégâts tant qu'on reste dans la lave
 const posEl = document.getElementById('pos');
 const targetEl = document.getElementById('target');
 const hintEl = document.getElementById('hint');
@@ -635,6 +636,10 @@ function isUnderwater() {
     player.pos.y < SEA_LEVEL + 0.6 &&
     getHeight(Math.round(player.pos.x), Math.round(player.pos.z)) < SEA_LEVEL
   );
+}
+
+function isInLava() {
+  return worldApi.isInLava(player.pos.x, player.pos.y, player.pos.z);
 }
 
 function respawnPlayer() {
@@ -670,6 +675,8 @@ function animate() {
   updateSun(dt);
   worldApi.waterTexture.offset.x = (worldApi.waterTexture.offset.x + dt * 0.025) % 1;
   worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;
+  worldApi.lavaTexture.offset.x = (worldApi.lavaTexture.offset.x + dt * 0.012) % 1;
+  worldApi.lavaTexture.offset.y = (worldApi.lavaTexture.offset.y + dt * 0.008) % 1;
   worldApi.update(player.pos); // charge/décharge les chunks proches (Phase 4a)
   cloudsApi.update(dt, player.pos);
 
@@ -690,8 +697,26 @@ function animate() {
     player.height = crouching ? CROUCH_HEIGHT : STAND_HEIGHT;
     if (crouching) sprinting = false;
     const underwater = isUnderwater();
+    const inLava = isInLava();
     const speed =
-      player.speed * (sprinting ? 1.6 : 1) * (crouching ? 0.6 : 1) * (underwater ? 0.5 : 1);
+      player.speed *
+      (sprinting ? 1.6 : 1) *
+      (crouching ? 0.6 : 1) *
+      (underwater || inLava ? 0.5 : 1);
+
+    // dégâts en tic (pas à chaque frame) tant qu'on reste dans la lave -- même
+    // mécanique que onPlayerHurt utilisé par les mobs (cf. main.js plus haut)
+    if (inLava) {
+      lavaDamageTimer -= dt;
+      if (lavaDamageTimer <= 0) {
+        player.health = Math.max(0, player.health - 4);
+        bus.emit('player:health');
+        sfx.playSound('hurt');
+        lavaDamageTimer = 0.5;
+      }
+    } else {
+      lavaDamageTimer = 0;
+    }
 
     const isMoving = dx !== 0 || dz !== 0;
     if (isMoving) {
