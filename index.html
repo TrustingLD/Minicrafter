@@ -1263,23 +1263,30 @@ handPivot.add(handMesh);
 
 function buildHeldItemMesh(type) {
   if (BLOCK_TYPES[type]) {
-    return new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), materials[type]);
+    return new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), materials[type]);
   }
   const iconTex = { wood_sword: tWoodSword, wood_pickaxe: tWoodPickaxe, wood_axe: tWoodAxe }[type];
   if (iconTex) {
     const m = new THREE.MeshLambertMaterial({ map: iconTex, transparent: true, side: THREE.DoubleSide });
-    return new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), m);
+    return new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), m);
   }
   return null;
 }
 let heldItemMesh = null;
 function refreshHeldItem() {
-  if (heldItemMesh) { handPivot.remove(heldItemMesh); heldItemMesh = null; }
+  if (heldItemMesh) { handMesh.remove(heldItemMesh); heldItemMesh = null; }
   const mesh = buildHeldItemMesh(selectedBlock);
   if (mesh) {
-    mesh.position.set(0, 0.08, -0.32);
-    mesh.rotation.set(0.2, 0.6, 0.1);
-    handPivot.add(mesh);
+    if (BLOCK_TYPES[selectedBlock]) {
+      // bloc calé contre la paume, comme si le poing se refermait dessus
+      mesh.position.set(0, 0.05, -0.2);
+      mesh.rotation.set(0.3, 0.5, 0.15);
+    } else {
+      // outil : le manche disparaît dans le poing, la tête dépasse en diagonale devant
+      mesh.position.set(0.02, 0.2, -0.08);
+      mesh.rotation.set(0.35, 0.7, -0.25);
+    }
+    handMesh.add(mesh);
     heldItemMesh = mesh;
   }
 }
