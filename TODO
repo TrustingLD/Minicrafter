@@ -9,7 +9,6 @@ NEW Lun 3 Aout 11:07
 - meilleur cycle jour/nuit
 - meilleure animation de cassage de bloc
 - meilleure texture de l’eau
-- l’eau doit couler
 - Multijoueur
 - Grotte parfaite
 - Nous mob : sheep
@@ -22,3 +21,4 @@ NEW Lun 3 Aout 11:07
 - spawn des mobs quand on sort de la zone initiale
 - historique de chat
 - nuages
+- l’eau doit couler et ne doit pas avoir de texture sur les cotés quand elle est stockée dans de la terre
