@@ -484,6 +484,13 @@ function keyOf(x, y, z) { return x + "," + y + "," + z; }
 
 const SEA_LEVEL = 4;
 const SNOW_LEVEL = 26;
+const WATER_SURFACE_Y = SEA_LEVEL + 0.41; // haut du plan d'eau (voir waterMesh, position + demi-épaisseur)
+
+// vrai si le point (x,y,z) est immergé : la colonne est un lac/une mer (hauteur de
+// terrain < SEA_LEVEL) ET le point est sous la surface de l'eau
+function isInWater(x, y, z) {
+  return getHeight(Math.round(x), Math.round(z)) < SEA_LEVEL && y < WATER_SURFACE_Y;
+}
 
 function getHeight(x, z) {
   const base = 6 + noise(x * 0.05, z * 0.05) * 5 + noise(x * 0.12, z * 0.12) * 2;
@@ -641,6 +648,113 @@ sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
 sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
 sun.shadow.mapSize.set(512, 512); // réduit (était 1024) : moins coûteux à calculer
 scene.add(sun);
+scene.add(sun.target);
+
+/* ------------------------------------------------------------
+   Cycle jour / nuit : basé sur le temps réel écoulé depuis le
+   chargement de la page (minutes IRL), pas sur un "temps de jeu".
+   Fait évoluer la couleur du ciel/brouillard, l'intensité des
+   lumières, et anime un soleil, une lune et des étoiles.
+   ------------------------------------------------------------ */
+const DAY_LENGTH_MINUTES = 12; // durée d'un cycle jour+nuit complet, en minutes IRL (modifiable)
+const DAY_LENGTH_MS = DAY_LENGTH_MINUTES * 60 * 1000;
+const dayStartTime = performance.now();
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+// lune : lumière douce et froide qui prend le relais du soleil la nuit
+const moonLight = new THREE.DirectionalLight(0xaac0ff, 0);
+scene.add(moonLight);
+scene.add(moonLight.target);
+
+// disques lumineux du soleil et de la lune : des sprites (toujours face caméra)
+function texGlowDisc(coreColor, glowColor) {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, coreColor);
+  g.addColorStop(0.35, coreColor);
+  g.addColorStop(0.55, glowColor);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: texGlowDisc('#fff8e0', 'rgba(255,220,120,0.55)'), transparent: true, depthWrite: false, depthTest: false, fog: false
+}));
+sunSprite.scale.set(26, 26, 1);
+scene.add(sunSprite);
+const moonSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: texGlowDisc('#f4f6ff', 'rgba(180,200,255,0.4)'), transparent: true, depthWrite: false, depthTest: false, fog: false
+}));
+moonSprite.scale.set(18, 18, 1);
+scene.add(moonSprite);
+
+// étoiles : semis de points sur une grande sphère recentrée sur le joueur chaque
+// frame, pour donner l'illusion d'un ciel infiniment loin (pas de parallax)
+const STAR_COUNT = 900;
+const starPositions = new Float32Array(STAR_COUNT * 3);
+for (let i = 0; i < STAR_COUNT; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(Math.random() * 1.4 - 0.7); // favorise le haut du ciel
+  const r = 280 + Math.random() * 40;
+  starPositions[i*3]     = r * Math.sin(phi) * Math.cos(theta);
+  starPositions[i*3 + 1] = Math.abs(r * Math.cos(phi)) + 20; // toujours au-dessus de l'horizon
+  starPositions[i*3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, transparent: true, opacity: 0, depthWrite: false, fog: false });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+const SKY_DAY = new THREE.Color(0x87CEEB);
+const SKY_NIGHT = new THREE.Color(0x060a1f);
+const SKY_DUSK = new THREE.Color(0xff9a5a);
+const skyColor = new THREE.Color();
+
+// à appeler à chaque frame : fait avancer le cycle et met à jour tout le rendu du ciel
+function updateDayNight() {
+  const cycleT = ((performance.now() - dayStartTime) % DAY_LENGTH_MS) / DAY_LENGTH_MS; // 0..1
+  const angle = cycleT * Math.PI * 2 - Math.PI / 2; // démarre à l'aube (soleil à l'horizon, qui monte)
+  const sunDir = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0.2).normalize();
+  const sunHeight = sunDir.y;
+
+  const dayAmount = smoothstep(-0.2, 0.15, sunHeight);              // 0 = nuit noire, 1 = plein jour
+  const duskAmount = Math.max(0, 1 - Math.abs(sunHeight) / 0.28);    // pic au lever/coucher du soleil
+
+  skyColor.copy(SKY_NIGHT).lerp(SKY_DAY, dayAmount).lerp(SKY_DUSK, duskAmount * 0.5);
+  scene.background = skyColor;
+  scene.fog.color.copy(skyColor);
+
+  ambient.intensity = 0.12 + dayAmount * 0.53;
+  sun.intensity = dayAmount * 0.85;
+  moonLight.intensity = (1 - dayAmount) * 0.22;
+
+  const base = player.pos;
+  sun.position.copy(base).addScaledVector(sunDir, 120);
+  sun.target.position.copy(base);
+  sun.target.updateMatrixWorld();
+  sunSprite.position.copy(sun.position);
+  sunSprite.material.opacity = smoothstep(-0.03, 0.08, sunHeight);
+  sunSprite.visible = sunSprite.material.opacity > 0.01;
+
+  const moonDir = sunDir.clone().negate();
+  moonLight.position.copy(base).addScaledVector(moonDir, 120);
+  moonLight.target.position.copy(base);
+  moonLight.target.updateMatrixWorld();
+  moonSprite.position.copy(moonLight.position);
+  const moonOpacity = smoothstep(-0.03, 0.08, moonDir.y);
+  moonSprite.material.opacity = moonOpacity;
+  moonSprite.visible = moonOpacity > 0.01;
+
+  stars.position.copy(base);
+  starMat.opacity = (1 - dayAmount) * 0.85;
+}
 
 /* ------------------------------------------------------------
    Rendu du terrain via InstancedMesh : au lieu d'un Mesh (donc
@@ -774,6 +888,40 @@ function texCowSkin() {
   speckle(ctx, ['#e6ddc9'], 20);
   return canvasToTexture(c);
 }
+// visage du cochon : yeux + groin, appliqué sur la face avant de la tête
+function texPigFace() {
+  const c = newCanvas(); const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e8a0a8'; ctx.fillRect(0,0,TEX_SIZE,TEX_SIZE);
+  speckle(ctx, ['#c97e88'], 20);
+  // yeux
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(TEX_SIZE*0.18, TEX_SIZE*0.28, TEX_SIZE*0.14, TEX_SIZE*0.14);
+  ctx.fillRect(TEX_SIZE*0.68, TEX_SIZE*0.28, TEX_SIZE*0.14, TEX_SIZE*0.14);
+  // groin
+  ctx.fillStyle = '#d88a94';
+  ctx.beginPath(); ctx.ellipse(TEX_SIZE*0.5, TEX_SIZE*0.68, TEX_SIZE*0.24, TEX_SIZE*0.18, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#a85f6a';
+  ctx.beginPath(); ctx.ellipse(TEX_SIZE*0.4, TEX_SIZE*0.68, TEX_SIZE*0.045, TEX_SIZE*0.06, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(TEX_SIZE*0.6, TEX_SIZE*0.68, TEX_SIZE*0.045, TEX_SIZE*0.06, 0, 0, Math.PI*2); ctx.fill();
+  return canvasToTexture(c);
+}
+// visage de la vache : yeux + museau, appliqué sur la face avant de la tête
+function texCowFace() {
+  const c = newCanvas(); const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f5f0e6'; ctx.fillRect(0,0,TEX_SIZE,TEX_SIZE);
+  blotches(ctx, ['#2b2620','#3a332a'], 3, 3, 5);
+  // yeux
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(TEX_SIZE*0.16, TEX_SIZE*0.26, TEX_SIZE*0.15, TEX_SIZE*0.15);
+  ctx.fillRect(TEX_SIZE*0.7, TEX_SIZE*0.26, TEX_SIZE*0.15, TEX_SIZE*0.15);
+  // museau
+  ctx.fillStyle = '#e8b8c0';
+  ctx.beginPath(); ctx.ellipse(TEX_SIZE*0.5, TEX_SIZE*0.72, TEX_SIZE*0.26, TEX_SIZE*0.2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#7a4a52';
+  ctx.beginPath(); ctx.ellipse(TEX_SIZE*0.4, TEX_SIZE*0.72, TEX_SIZE*0.04, TEX_SIZE*0.05, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(TEX_SIZE*0.6, TEX_SIZE*0.72, TEX_SIZE*0.04, TEX_SIZE*0.05, 0, 0, Math.PI*2); ctx.fill();
+  return canvasToTexture(c);
+}
 // tête de zombie : visage abîmé avec des yeux, vue de face
 function texZombieFace() {
   const c = newCanvas(); const ctx = c.getContext('2d');
@@ -811,6 +959,8 @@ function texZombieShirt() {
 }
 const tPig = texMobSkin('#e8a0a8', '#c97e88');
 const tCow = texCowSkin();
+const tPigFace = texPigFace();
+const tCowFace = texCowFace();
 const tZombieSkin = texMobSkin('#5f8a52', '#4d7343');
 const tZombieFace = texZombieFace();
 const tZombieShirt = texZombieShirt();
@@ -836,7 +986,9 @@ function buildMobMesh(type) {
 
   if (type === 'pig' || type === 'cow') {
     const skin = type === 'pig' ? tPig : tCow;
+    const face = type === 'pig' ? tPigFace : tCowFace;
     const bodyMat = new THREE.MeshLambertMaterial({ map: skin });
+    const faceMat = new THREE.MeshLambertMaterial({ map: face });
     const scale = type === 'cow' ? 1.25 : 1;
     const bodyGeo = new THREE.BoxGeometry(0.9*scale, 0.6*scale, 1.3*scale);
     const body = new THREE.Mesh(bodyGeo, bodyMat);
@@ -844,8 +996,11 @@ function buildMobMesh(type) {
     body.castShadow = true;
     group.add(body); parts.push(body);
 
+    // ordre des faces BoxGeometry : [+x, -x, +y, -y, +z, -z] -> l'avant local (sens de
+    // déplacement, cf. group.rotation.y = moveAngle) est +z, donc le visage va en index 4
+    const headMats = [bodyMat, bodyMat, bodyMat, bodyMat, faceMat, bodyMat];
     const headGeo = new THREE.BoxGeometry(0.5*scale, 0.5*scale, 0.5*scale);
-    const head = new THREE.Mesh(headGeo, bodyMat);
+    const head = new THREE.Mesh(headGeo, headMats);
     head.position.set(0, 0.65*scale, 0.75*scale);
     head.castShadow = true;
     group.add(head); parts.push(head);
@@ -862,8 +1017,9 @@ function buildMobMesh(type) {
     // zombie : matériaux différents par partie (peau visible sur la tête, vêtements sur le corps)
     const shirtMat = new THREE.MeshLambertMaterial({ map: tZombieShirt });
     const skinMat = new THREE.MeshLambertMaterial({ map: tZombieSkin });
-    // ordre des faces BoxGeometry : [+x, -x, +y, -y, +z, -z] -> le visage regarde vers -z (avant local)
-    const headMats = [skinMat, skinMat, skinMat, skinMat, skinMat, new THREE.MeshLambertMaterial({ map: tZombieFace })];
+    // ordre des faces BoxGeometry : [+x, -x, +y, -y, +z, -z] -> l'avant local (sens de
+    // déplacement, cf. group.rotation.y = moveAngle) est +z, donc le visage va en index 4
+    const headMats = [skinMat, skinMat, skinMat, skinMat, new THREE.MeshLambertMaterial({ map: tZombieFace }), skinMat];
 
     const bodyGeo = new THREE.BoxGeometry(0.6, 0.9, 0.35);
     const body = new THREE.Mesh(bodyGeo, shirtMat);
@@ -1496,7 +1652,11 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
+  updateDayNight();
+
   if (!craftOpen) {
+    const inWater = isInWater(player.pos.x, player.pos.y, player.pos.z);
+
     let dx = 0, dz = 0;
     if (keys["KeyW"] || keys["ArrowUp"]) dz -= 1;
     if (keys["KeyS"] || keys["ArrowDown"]) dz += 1;
@@ -1507,9 +1667,10 @@ function animate() {
     if (isMoving) {
       const len = Math.hypot(dx, dz);
       dx /= len; dz /= len;
+      const speedMul = inWater ? 0.6 : 1; // on nage plus lentement qu'on ne marche
       // vecteur "avant" caméra = (sin(yaw), cos(yaw)) ; vecteur "droite" = (cos(yaw), -sin(yaw))
-      const moveX = (dz * Math.sin(yaw) + dx * Math.cos(yaw)) * player.speed * dt;
-      const moveZ = (dz * Math.cos(yaw) - dx * Math.sin(yaw)) * player.speed * dt;
+      const moveX = (dz * Math.sin(yaw) + dx * Math.cos(yaw)) * player.speed * speedMul * dt;
+      const moveZ = (dz * Math.cos(yaw) - dx * Math.sin(yaw)) * player.speed * speedMul * dt;
       if (!collidesAt(player.pos.x + moveX, player.pos.y, player.pos.z)) player.pos.x += moveX;
       if (!collidesAt(player.pos.x, player.pos.y, player.pos.z + moveZ)) player.pos.z += moveZ;
       if (player.onGround) {
@@ -1519,7 +1680,18 @@ function animate() {
     }
 
     const wasOnGround = player.onGround;
-    player.velY -= 20 * dt;
+    if (inWater) {
+      // sous l'eau : gravité fortement réduite + amortissement (frottement visqueux),
+      // une légère flottaison passive empêche de rester coincé au fond, et Espace
+      // permet de nager activement vers la surface (comme un vrai coup de bras)
+      player.velY -= 6 * dt;
+      player.velY *= (1 - Math.min(1, dt * 3));
+      player.velY += (keys["Space"] ? 16 : 2.2) * dt;
+      player.velY = Math.max(-3, Math.min(4.5, player.velY));
+      player.onGround = false;
+    } else {
+      player.velY -= 20 * dt;
+    }
     const newY = player.pos.y + player.velY * dt;
     if (player.velY < 0) {
       if (collidesAt(player.pos.x, newY, player.pos.z)) { player.velY = 0; player.onGround = true; }
@@ -1529,7 +1701,7 @@ function animate() {
       else player.velY = 0;
     }
     if (!wasOnGround && player.onGround) playSound('land');
-    if (keys["Space"] && player.onGround) { player.velY = player.jumpForce; player.onGround = false; playSound('jump'); }
+    if (keys["Space"] && player.onGround && !inWater) { player.velY = player.jumpForce; player.onGround = false; playSound('jump'); }
 
     if (player.pos.y < -10) respawnPlayer();
     if (player.health <= 0) respawnPlayer();
