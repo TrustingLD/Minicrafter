@@ -18,7 +18,7 @@ NEW Lun 3 Aout 11:07
 - biomes
 - four
 - spawn des mobs quand on sort de la zone initiale
-- historique de chat et commandes dans le chat
+- j'aimerais que tu me fasse un historique de chat et la possibilité de faire des commandes de base dans le chat avec le / au début (ex : /fly pour voler et /give "nom du bloc" pour se donner un bloc dans l'inventaire)
 - l’eau doit couler et ne doit pas avoir de texture sur les cotés quand elle est stockée dans de la terre (donc liaison des blocks)
 - quand on est entierement dans l'eau, au bout de 15 secondes on commence a perdre 1 demi coeur chaque seconde
 - les nuages doivent spawn avec la génération et doivent apparaitre en blocs entiers
