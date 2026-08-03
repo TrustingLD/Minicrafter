@@ -644,13 +644,19 @@ function respawnPlayer() {
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = clock.getDelta();
+  const dt = Math.min(rawDt, 0.05); // plafonné pour la physique/mouvement (évite les gros sauts en cas de lag)
 
   // FPS (moyenne glissante — la valeur instantanée saute trop pour être lisible).
-  // Le tout premier dt (juste après la création du Clock) peut être ~0 : on l'ignore
-  // pour ne pas injecter une division par zéro dans la moyenne.
-  if (dt > 0.001) {
-    fpsSmoothed += (1 / dt - fpsSmoothed) * 0.1;
+  // IMPORTANT : on utilise rawDt (non plafonné) et pas dt ici. dt est plafonné à 0.05
+  // pour que le mouvement ne saute pas d'un coup après un lag, mais ça implique que
+  // 1/dt ne peut jamais descendre sous 20 — en réutilisant dt pour le FPS, le compteur
+  // ne pouvait donc jamais afficher moins de ~20 FPS, même en cas de vrai ralentissement
+  // (précisément quand on a besoin de voir le vrai chiffre, ex. pendant le chargement
+  // des chunks). Le tout premier rawDt (juste après la création du Clock) peut être ~0 :
+  // on l'ignore pour ne pas injecter une division par zéro dans la moyenne.
+  if (rawDt > 0.001) {
+    fpsSmoothed += (1 / rawDt - fpsSmoothed) * 0.1;
     fpsEl.textContent = `${Math.round(fpsSmoothed)} FPS`;
   }
 
