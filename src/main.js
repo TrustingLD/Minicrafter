@@ -12,6 +12,7 @@ import { ITEM_NAMES, RECIPES, HOTBAR, NON_PLACEABLE, TOOL_CATEGORY } from './dat
 import { SEA_LEVEL, getHeight } from './world/generator.js';
 import { createWorld } from './world/world.js';
 import { createClouds } from './world/clouds.js';
+import { createSky } from './world/sky.js';
 import { createSfx } from './audio/sfx.js';
 import { createMusic } from './audio/music.js';
 import { createMobTextures, createMobSystem } from './entities/mob.js';
@@ -60,27 +61,6 @@ sun.shadow.mapSize.set(512, 512); // réduit : moins coûteux à calculer
 scene.add(sun);
 scene.add(sun.target);
 
-// billboard du soleil (juste visuel — fog:false pour qu'il reste visible loin dans le ciel)
-// + la lumière directionnelle suit sa position : base pour le cycle jour/nuit (Phase 9,
-// qui n'aura qu'à ajouter des rampes de couleur, le mouvement existe déjà)
-const sunMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(8, 12, 12),
-  new THREE.MeshBasicMaterial({ color: 0xfff2a8, fog: false }),
-);
-scene.add(sunMesh);
-let sunAngle = Math.PI / 3;
-const SUN_LIGHT_DIST = 100,
-  SUN_MESH_DIST = 300;
-function updateSun(dt) {
-  sunAngle += dt * 0.01; // cycle complet ~10 min : lent, on veut le voir bouger, pas un jour/nuit complet
-  const dirX = Math.cos(sunAngle),
-    dirZ = Math.sin(sunAngle),
-    // élévation ~52-62° tout le temps (comme la position fixe d'origine) : le soleil
-    // tourne à l'horizontale mais reste toujours haut, jamais rasant/terne façon crépuscule
-    dirY = 1.6 + Math.sin(sunAngle * 0.5) * 0.3;
-  sun.position.set(dirX * SUN_LIGHT_DIST, dirY * SUN_LIGHT_DIST, dirZ * SUN_LIGHT_DIST);
-  sunMesh.position.set(dirX * SUN_MESH_DIST, dirY * SUN_MESH_DIST, dirZ * SUN_MESH_DIST);
-}
 
 /* ---------- Audio ---------- */
 const sfx = createSfx();
@@ -95,6 +75,7 @@ document.getElementById('musicHint').addEventListener('click', music.toggleBgmMu
 const blockAssets = createBlockAssets();
 const worldApi = createWorld({ scene, renderDistance: touchMode ? 4 : 6 });
 const cloudsApi = createClouds({ scene });
+const skyApi = createSky({ scene, ambientLight: ambient, sunLight: sun });
 
 // Bordure du monde : mur purement invisible, seule la collision existe (cf.
 // collidesAtBox dans world.js). Pas de plan rouge/brume — juste un stop net.
@@ -672,7 +653,7 @@ function animate() {
     camera.updateProjectionMatrix();
   }
 
-  updateSun(dt);
+  skyApi.update(dt, player.pos);
   worldApi.waterTexture.offset.x = (worldApi.waterTexture.offset.x + dt * 0.025) % 1;
   worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;
   worldApi.lavaTexture.offset.x = (worldApi.lavaTexture.offset.x + dt * 0.012) % 1;
