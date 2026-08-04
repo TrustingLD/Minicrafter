@@ -10,15 +10,19 @@ import { BLOCK_ID, ORE_TYPES } from '../data/blocks.js';
 import { CHUNK_X, CHUNK_Y, CHUNK_Z, idx, inBounds } from './chunk.js';
 import { BIOMES, biomeAt, noiseContinent, noiseRiver } from './biomes.js';
 
-// taille "logique" du monde (TODO 9) : les chunks au-delà ne sont simplement jamais
-// générés/rendus, donc ce nombre ne coûte plus de mémoire (Phase 4a lève l'ancien
-// plafond MAX_INSTANCES qui limitait le monde à 150x150).
-export const WORLD_SIZE = 1000;
+// Monde infini : plus de mur invisible. `getHeight`/`generateChunk` sont des
+// fonctions PURES des coordonnées (bruit à base de hash2/hash3, cf. core/math.js) —
+// aucune table finie, aucun modulo périodique — donc rien n'empêchait déjà le monde
+// de continuer au-delà de l'ancien WORLD_SIZE=1000 ; seul collidesAtBox/rebuildLoadQueue
+// (world.js) imposaient artificiellement cette limite via WORLD_BORDER. En la mettant
+// à Infinity, tous les tests `> WORLD_BORDER` deviennent toujours faux et le mur
+// disparaît, sans toucher au streaming de chunks (chargement/déchargement autour du
+// joueur, cf. world.js) qui, lui, était déjà conçu pour un monde de taille arbitraire.
+// Limite réelle : la précision flottante (~2^53) et le wrap int32 de Math.imul dans
+// hash2/hash3 — des milliards de blocs dans chaque direction avant d'en sentir l'effet.
 export const SEA_LEVEL = 4;
 export const SNOW_LEVEL = 26;
-// mur invisible : un cran à l'intérieur de WORLD_SIZE pour laisser une bordure de
-// blocs visible avant le mur (sinon on tombe dans le vide en le touchant).
-export const WORLD_BORDER = WORLD_SIZE / 2 - 2;
+export const WORLD_BORDER = Infinity;
 
 // blocs "de canopée" à ignorer quand on cherche la vraie surface du terrain :
 // sans ça, un mob (ou le joueur au spawn) pouvait atterrir en haut d'un arbre
