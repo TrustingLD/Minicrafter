@@ -82,7 +82,13 @@ function faceSlot(nx, ny) {
 // texture. Plancher à 0.06 plutôt que 0 : à lumière nulle un sommet à (0,0,0) donne
 // un noir total qui plaque la face en silhouette pure, illisible ; un vrai voxel game
 // garde un minimum de "gris" visible même dans le noir complet (cf. PLAN.md Phase 13).
-const MIN_LIGHT_FACTOR = 0.06;
+// Remonté à 0.14 (retour utilisateur) : un tunnel miné en ligne droite sans torche
+// tombe légitimement à 0 au bout d'une quinzaine de blocs (la lumière décroît de 1
+// par bloc depuis la source la plus proche, cf. world/light.js) -- ce N'EST PAS un
+// bug, les torches restent nécessaires pour vraiment voir. Mais à 0.06 le tunnel
+// devenait totalement illisible (silhouette plate, aucun relief) plutôt que "sombre
+// et sans repère" ; 0.14 garde ce sentiment tout en laissant deviner les parois.
+const MIN_LIGHT_FACTOR = 0.14;
 function lightFactor(level) {
   return MIN_LIGHT_FACTOR + (1 - MIN_LIGHT_FACTOR) * (level / 15);
 }

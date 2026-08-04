@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { Entity } from './entity.js';
+import { TEX_SIZE } from '../render/textures.js';
 
 const ITEM_SCALE = 0.28;
 const PICKUP_RADIUS = 1.2;
@@ -37,7 +38,12 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
   const entities = [];
   const pools = new Map(); // item -> { mesh, free: number[] }
   const dummy = new THREE.Object3D();
-  const iconGeometry = new THREE.PlaneGeometry(1, 1);
+  // Épaisseur des items "2D" (retour utilisateur) : un simple PlaneGeometry disparaît
+  // complètement vu de profil (une carte à plat, invisible tranche sur tranche). Un
+  // fin BoxGeometry donne un semblant de volume, comme les items extrudés de Minecraft.
+  // "2 pixels" au sens texture (TEX_SIZE=32px de large pour l'icône) -> 2/32 d'unité.
+  const ICON_THICKNESS = 2 / TEX_SIZE;
+  const iconGeometry = new THREE.BoxGeometry(1, 1, ICON_THICKNESS);
 
   function materialFor(item) {
     if (blockAssets.materials[item]) return blockAssets.materials[item]; // array de 6 (comme un Mesh multi-matériaux)
@@ -48,7 +54,14 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
       const t = new THREE.CanvasTexture(iconImg);
       t.magFilter = THREE.NearestFilter;
       t.minFilter = THREE.NearestFilter;
-      return new THREE.MeshLambertMaterial({ map: t, transparent: true, side: THREE.DoubleSide });
+      const face = new THREE.MeshLambertMaterial({ map: t, transparent: true, side: THREE.DoubleSide });
+      // BoxGeometry groupe ses faces dans l'ordre [+x,-x,+y,-y,+z,-z] (même convention
+      // que blockAssets.geometry, cf. render/block-assets.js). +z/-z portent l'icône
+      // recto-verso ; les 4 tranches (+x,-x,+y,-y) réutilisent la MÊME texture, juste
+      // très étirée sur leur largeur minuscule -- un liseré de couleur cohérent avec
+      // l'icône plutôt qu'une teinte arbitraire, sans avoir à générer une texture de
+      // tranche séparée pour chaque item.
+      return [face, face, face, face, face, face];
     }
     return new THREE.MeshLambertMaterial({ color: 0xdfc27b }); // même teinte que le placeholder du bâton en UI
   }

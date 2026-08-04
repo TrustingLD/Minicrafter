@@ -42,7 +42,7 @@ test('meshChunk: a face exposed to a dark (level 0) neighbour gets the dim floor
   const lightData = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z); // tout à 0 : aucune lumière nulle part
   const { colors } = meshChunk(data, FAKE_UV, lightData);
   // jamais un noir absolu (cf. MIN_LIGHT_FACTOR dans mesher.js) : lisible même dans le noir complet
-  assert.ok(colors.every((c) => c > 0 && c < 0.1));
+  assert.ok(colors.every((c) => c > 0 && c < 0.2));
 });
 
 test('meshChunk: a face exposed to a fully-lit (level 15) neighbour is full brightness', () => {
