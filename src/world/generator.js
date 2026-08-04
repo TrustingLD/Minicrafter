@@ -140,6 +140,60 @@ function caveCarves(wx, wy, wz, surfaceH) {
   return n + detail * 0.25 > threshold;
 }
 
+// Fix 2 (entrées de grotte "un peu partout") : le fix ci-dessus rend une ouverture
+// possible, mais ça reste un coup de chance ponctuel -- il fallait que le bruit 3D de
+// `caveCarves` dépasse un seuil déjà élevé PRÉCISÉMENT là où le relief passe sous
+// 4 blocs de profondeur. Mesure faite sur un large échantillon : dans la pratique ça
+// n'arrivait presque jamais (caverne trop rare en tout, entrée visible quasi jamais).
+// Plutôt que de complexifier encore ce seuil, on ajoute un système dédié et
+// indépendant : des puits d'entrée placés explicitement, un peu partout sur la carte,
+// exactement comme les arbres (`treeAt`) ou les décorations de désert (`desertDecorAt`)
+// -- une grille de cellules, une seed déterministe par cellule (même schéma que
+// hash2 partout ailleurs), donc reproductible sans coordination entre chunks.
+const CAVE_ENTRANCE_CELL = 24; // taille de cellule -> repère "un peu partout" sans se marcher dessus
+const CAVE_ENTRANCE_CHANCE = 0.45; // fraction de cellules qui ont effectivement une entrée
+export const CAVE_ENTRANCE_MARGIN = 3; // rayon max du puits (+ wobble) : marge de scan nécessaire
+
+// choisit, pour une cellule de la grille, si elle contient une entrée et où -- pure
+// fonction des coordonnées de cellule (même principe que treeAt/desertDecorAt), donc
+// cohérente quel que soit le chunk qui la recalcule.
+function caveEntranceSeed(cellX, cellZ) {
+  if (hash2(cellX, cellZ, 8181) >= CAVE_ENTRANCE_CHANCE) return null;
+  const ex = cellX * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8182) * CAVE_ENTRANCE_CELL);
+  const ez = cellZ * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8183) * CAVE_ENTRANCE_CELL);
+  const h = getHeight(ex, ez);
+  if (h <= SEA_LEVEL + 2) return null; // pas d'entrée noyée ou au ras de l'eau
+  if (h >= SNOW_LEVEL) return null; // pas de trou incongru au sommet d'un pic enneigé
+  const depth = 6 + Math.floor(hash2(cellX, cellZ, 8184) * 8); // puits de 6 à 13 blocs
+  const radius = 1 + hash2(cellX, cellZ, 8185); // bouche de 1 à 2 blocs de rayon -> on peut y entrer
+  return { ex, ez, h, depth, radius };
+}
+
+// vrai si (wx, wy, wz) tombe dans le puits d'une entrée de grotte -- scanne les
+// cellules voisines (une entrée près du bord de sa cellule peut déborder dessus) et
+// creuse un puits légèrement tourmenté (bruit 3D en guise de contour, pas un cylindre
+// parfait) qui plonge jusqu'au réseau de cavernes normal.
+function caveEntranceCarves(wx, wy, wz) {
+  const cellX = Math.floor(wx / CAVE_ENTRANCE_CELL);
+  const cellZ = Math.floor(wz / CAVE_ENTRANCE_CELL);
+  for (let dcx = -1; dcx <= 1; dcx++) {
+    for (let dcz = -1; dcz <= 1; dcz++) {
+      const seed = caveEntranceSeed(cellX + dcx, cellZ + dcz);
+      if (!seed) continue;
+      const { ex, ez, h, depth, radius } = seed;
+      if (wy > h || wy < h - depth) continue;
+      const dx = wx - ex,
+        dz = wz - ez;
+      if (dx * dx + dz * dz > (radius + CAVE_ENTRANCE_MARGIN) * (radius + CAVE_ENTRANCE_MARGIN))
+        continue; // sortie rapide avant le bruit 3D (coûteux), hors de portée même avec wobble
+      const wobble = noiseCaveDetail(wx * 0.3, wy * 0.3, wz * 0.3) * 0.8; // contour irrégulier
+      const effRadius = radius + wobble;
+      if (dx * dx + dz * dz <= effRadius * effRadius) return true;
+    }
+  }
+  return false;
+}
+
 // Lave (Phase 4c) : uniquement dans le fond des cavernes déjà creusées (jamais dans
 // la pierre pleine), et seulement en profondeur -> pas de lac de lave à ciel ouvert.
 // Bruit dédié à basse fréquence (0.045) pour former de vraies mares connexes plutôt
@@ -223,8 +277,9 @@ export function generateChunk(cx, cz) {
           data[idx(lx, y, lz)] = BLOCK_ID.bedrock;
           continue;
         }
-        if (caveCarves(wx, y, wz, h)) {
-          // caverne : on laisse de l'air, sauf poche de lave en profondeur
+        if (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz)) {
+          // caverne (naturelle ou puits d'entrée) : on laisse de l'air, sauf poche de
+          // lave en profondeur
           if (lavaPoolAt(wx, y, wz)) data[idx(lx, y, lz)] = BLOCK_ID.lava;
           continue;
         }
@@ -345,7 +400,7 @@ export function findSpawnColumn(maxRadius = 128) {
         if (h <= SEA_LEVEL + 1) continue; // rivière / lac / océan : jamais
         if (h >= SNOW_LEVEL) continue; // ni sur un sommet enneigé
         if (getBiome(dx, dz) === 'ocean') continue;
-        if (caveCarves(dx, h, dz, h)) continue; // sol de surface évidé par une grotte
+        if (caveCarves(dx, h, dz, h) || caveEntranceCarves(dx, h, dz)) continue; // sol évidé (grotte ou puits d'entrée)
         if (treeAt(dx, dz)) continue; // pas à l'intérieur d'un tronc
         return { x: dx, y: h, z: dz };
       }
