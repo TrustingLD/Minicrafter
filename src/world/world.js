@@ -11,7 +11,16 @@
 // stutter en vrai, plutôt que le construire par principe.
 
 import * as THREE from 'three';
-import { CHUNK_X, CHUNK_Y, CHUNK_Z, idx, chunkKey, worldToChunk, worldToLocal } from './chunk.js';
+import {
+  CHUNK_X,
+  CHUNK_Y,
+  CHUNK_Z,
+  idx,
+  chunkKey,
+  worldToChunk,
+  worldToLocal,
+  inBounds,
+} from './chunk.js';
 import {
   generateChunk,
   getGroundHeight as computeGroundHeight,
@@ -338,6 +347,28 @@ export function createWorld({
         [{ x: lx, y, z: lz, level: newEmits }],
         isOpaqueBlock,
       );
+    // Fix : un bloc plein ne porte JAMAIS de lumière (spread() refuse d'écrire dans
+    // l'opaque, cf. light.js) -- sa cellule reste donc à 0 tant qu'il est là. Le
+    // casser (ou le remplacer par une torche/de l'eau, non-opaques) EXPOSE cette
+    // cellule à 0 aux voisins déjà éclairés (couloir éclairé à la torche, grotte
+    // ouverte...) sans qu'aucun BFS ne la ré-ensemence -- d'où les faces des blocs
+    // d'à côté qui tombent au minimum (quasi noir) juste après avoir creusé. On
+    // relance donc propagate() depuis les 6 voisins à LEUR niveau actuel : spread()
+    // recalcule tout seul la bonne valeur (niveau du voisin - 1) pour cette cellule,
+    // puis continue de proche en proche si ça rallume plus loin que prévu.
+    if (!isOpaqueBlock(id)) {
+      const relightSources = [];
+      for (const [dx, dy, dz] of FLUID_NEIGHBORS) {
+        const nx = lx + dx,
+          ny = y + dy,
+          nz = lz + dz;
+        if (!inBounds(nx, ny, nz)) continue;
+        const level = record.lightData[idx(nx, ny, nz)];
+        if (level > 1) relightSources.push({ x: nx, y: ny, z: nz, level });
+      }
+      if (relightSources.length)
+        propagateLight(record.data, record.lightData, relightSources, isOpaqueBlock);
+    }
     computeSkylightColumn(record.data, record.lightData, lx, lz, isOpaqueBlock);
     // même raison qu'au chargement du chunk : creuser rouvre une colonne au ciel, et
     // ce ciel doit se répandre de côté sous le trou, pas juste tomber tout droit.

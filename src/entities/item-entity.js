@@ -62,6 +62,15 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
     if (pool) return pool;
     const mesh = new THREE.InstancedMesh(geometryFor(item), materialFor(item), POOL_CAPACITY);
     mesh.count = 0;
+    // Fix : le mesh lui-même reste à l'origine (0,0,0), seules les instances bougent
+    // via leur propre matrice (setMatrixAt plus bas). Or Three.js ne calcule la
+    // boundingSphere d'un InstancedMesh QU'UNE FOIS (au premier passage de frustum
+    // culling), jamais recalculée ensuite -- même quand les items tombent/rebondissent
+    // ou que d'autres apparaissent ailleurs. Cette sphère devient donc vite obsolète
+    // et le moteur finit par éliminer des items pourtant bien dans le champ de vision
+    // (invisibles malgré eux). Un pool fait au plus POOL_CAPACITY=64 items : désactiver
+    // le frustum culling ne coûte rien de mesurable et règle le problème définitivement.
+    mesh.frustumCulled = false;
     scene.add(mesh);
     pool = { mesh, free: Array.from({ length: POOL_CAPACITY }, (_, i) => POOL_CAPACITY - 1 - i) };
     pools.set(item, pool);
