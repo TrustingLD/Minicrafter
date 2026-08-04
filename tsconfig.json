@@ -8,10 +8,7 @@
     "moduleResolution": "Bundler",
     "strict": false,
     "skipLibCheck": true,
-    "lib": ["ES2022", "DOM"],
-    "paths": {
-      "three": ["./node_modules/@types/three/index.d.ts"]
-    }
+    "lib": ["ES2022", "DOM"]
   },
-  "include": ["src/**/*.js"]
+  "include": ["src/**/*.js", "three.d.ts"]
 }
