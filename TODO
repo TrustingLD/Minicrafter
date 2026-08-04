@@ -57,3 +57,65 @@ Difficulté	Tâche	Pourquoi ce niveau
 
 
 
+
+
+fait moi un plan en anglais pour qu'une ia completement bete (raptor mini) puisse realiser l'implementation toute seule. détail toutes les etapes et tous les fichiers a modifier pour le besoin suivant : ajouter un nouveau mob au jeu, le mouton (sheep)
+
+implement it as is now fast
+
+
+augmente la profondeur du terrain a 60 bloc et les grottes ne doivent pas etre juste des trou de 3x3, elles doivent avoir leur génération sous terraine, ca doit etre comme une fourmilière sous terraine, des tunnels qui dessendent et qui remontent a l'horizontale
+
+On doit pouvoir récupérer les objets drops au sol a 1 bloc de distance et avec une petite animation d’aspiration et un bruitage comme quoi on a ramassé un objet
+
+On doit pouvoir jeter des objets grâce a la touche a
+
+Et doit pouvoir regler la vitesse de vol avec la commande /speedfly 
+Par exemple /speedfly x2
+
+Le personnage doit pouvoir s’accroupir vraiment quand on appuie sur maj en f5
+
+Les mots doivent être teinté en rouge pendant 1/4 de seconde quand on le tape
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- Océan rivièrere
+- Terrain plus profond
+- jaimerais que la barre d'inventaire soit un emplacement de stockage : 9 cases vides et qui se remplissent par les items récupérées AU SOL (quand on casse un bloc l'item tombe au sol et apres quand on le récupere ca va dans l'inventaire) (système de drop au sol)
+- La hache doit être tenue DANS la main et le bloc aussi.
+- meilleur cycle jour/nuit
+- meilleure animation de cassage de bloc
+- meilleure texture de l’eau
+- l’eau doit couler
+- Multijoueur
+- Grotte parfaite
+- Nous mob : sleep
+- Barre de bouffe
+- Regler le problème d’fps 
+- Les monstres m’attaquent a travers les blocs
+
+
+
+
+
+
+
+Fps après 60
+Champ de vue augmente un tout petit peu quand on court
+Soleil jaune
+
+
+
+les items qui se droppent au sol de sont pas visibles quand je les regarde et aussi quand je casse un bloc les blocs a coté du bloc cassé deviennent completement noir tu peux me régler ca
+
