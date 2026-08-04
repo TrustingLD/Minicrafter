@@ -88,7 +88,7 @@ scene.add(sun.target);
 /* ---------- Audio ---------- */
 const sfx = createSfx();
 const musicHintEl = document.getElementById('musicHint');
-const music = createMusic(['./luft-mini.mp3', './minicrafter_theme_final.mp3', './nightpersonas.mp3'], musicHintEl);
+const music = createMusic(['./luft-mini.mp3', './minicrafter_theme_final.mp3', './nightpersonas.mp3', './mini-hands.mp3'], musicHintEl);
 document.getElementById('musicHint').addEventListener('click', music.toggleBgmMute);
 
 /* ---------- Monde ---------- */
