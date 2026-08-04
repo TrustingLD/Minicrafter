@@ -3,586 +3,741 @@
 > Goal: grow the game **and** turn it into a teaching vehicle for the building blocks of
 > programming. Every phase is one weekend session, ships something playable, and names the
 > concept it teaches.
+>
+> **Status of this document:** rewritten on **3 August** against the real state of the repo
+> (branch `vibe`, commit `d6ac24d`). Phases 0–6 are **done**. Phase 7 is partial. Everything
+> still open is detailed in **§6, Phases 10–21**.
+>
+> **Update — 4 August:** Phases 10, 11, 12, 13, 14, 15, 18, 19, 22, 16, 17, 20, and 7bis are
+> **done**, tested (`node --test` — 90 passing), type-checked (`npm run typecheck`, clean),
+> and verified live in-browser (chat commands, inventory, torches, furnace, sheep, water flow,
+> biomes — no console errors across an extended session). Phase 21 (multiplayer) was excluded
+> per instruction and remains open. Two deliberate, documented scope cuts inside the phases
+> above:
+>
+> - **Phase 17.1 (deeper terrain, `CHUNK_Y` 64→128, `SEA_LEVEL` 4→40) was NOT done.** It is a
+>   constants-retuning exercise (caves, ore bands, snow level, tree limits all need
+>   rebalancing for a 2x-taller world) that needs iterative playtesting to get right, not a
+>   mechanical code change — too risky to rush blind this late in the session. Biomes, oceans,
+>   and rivers (17.2/17.3) **are** done, layered on the existing `CHUNK_Y=64`/`SEA_LEVEL=4`
+>   budget.
+> - **Phase 20 (chunk worker) is built and verified correct** (`src/worker/chunk-worker.js`,
+>   `test/chunk-worker.test.js`) but **not wired into `world/world.js`**, exactly per this
+>   plan's own instruction: "Do not do this before the FPS counter shows the problem." FPS
+>   stayed at 60 through the entire session, including after 16/17. Wiring it in requires
+>   making the chunk lifecycle in `world.js` asynchronous — a separate, scoped task for
+>   whenever the FPS counter actually asks for it.
+>
+> See `docs/ARCHITECTURE.md` and `docs/LESSONS.md` for what was built and why.
 
 ---
 
-## 0. Where we are today
+## 0. Where we are today (measured, not remembered)
 
-| Fact | Value |
-|---|---|
-| Files | `index.html` (1564 lines, 65 KB), `luft-mini.mp3` (6.5 MB), `README.md`, `LICENSE` |
-| Code layout | One `<script>` tag, all globals, no modules |
-| Engine | Three.js **r128** from CDN (2021, pre-ESM) |
-| World | `150 × 150` columns, `WORLD_HEIGHT 60`, fully generated at boot |
-| World storage | `world = {}` plain object, key `"x,y,z"` string |
-| Rendering | One `InstancedMesh` per block type, `MAX_INSTANCES = 55000` |
-| Build step | None. Deployed as static files (GitHub Pages, `.nojekyll`) |
-| Tests | None |
+| Fact        | Value                                                                                |
+| ----------- | ------------------------------------------------------------------------------------ |
+| Code layout | 28 ES modules under `src/`, `index.html` is a 56-line shell                          |
+| Total JS    | ~4 500 lines (biggest file: `main.js`, 787 — wiring only)                            |
+| Engine      | Three.js, vendored in `vendor/` (no CDN)                                             |
+| World       | Chunked. `CHUNK_X/Z = 16`, `CHUNK_Y = 64`, `Uint8Array` (1 byte/block)               |
+| World size  | `WORLD_SIZE = 1000`, streamed around the player, `renderDistance` 6 (4 on touch)     |
+| Rendering   | Texture atlas + per-chunk `BufferGeometry` mesher (`render/mesher.js`)               |
+| Persistence | Player edits saved to `localStorage` as per-chunk diffs                              |
+| Build step  | None. Native ES modules + import map. Deploy = `git push`                            |
+| Tests       | `node --test` — **12 passing** (`chunk`, `generator`, `mesher`, `smoke`)             |
+| Perf        | `PERF_PLAN.md` phases 1–3 applied (the 60→7 FPS bug is fixed); phase 4 (worker) open |
 
-### What is actually good and must be kept
+### What is good and must be kept
 
 - Procedural canvas textures — zero asset pipeline, fully hackable, very teachable.
-- `InstancedMesh` + swap-remove in `removeBlockMesh` — genuinely the right idea.
-- `shouldRender()` interior-culling — correct instinct.
+- The pure/impure split actually held: `chunk.js`, `generator.js`, `mesher.js`, `math.js` are
+  testable without a browser, and they _are_ tested.
+- Data registries are real: `data/blocks.js`, `data/items.js`, `data/mobs.js`. Adding a mob is
+  ~20 lines of data (that is how `chicken` was added).
+- `voxelRaycast` (DDA) instead of `Raycaster.intersectObjects` on chunk meshes — O(reach),
+  not O(loaded chunks). This was the single biggest FPS fix.
+- Event bus (`core/events.js`) — UI subscribes, game logic never calls `render()` directly.
 - Web Audio synthesised SFX — no files, no loading, no CORS.
-- Data-ish registries already exist: `BLOCK_TYPES`, `RECIPES`, `HOTBAR`, `ITEM_NAMES`.
 
-### The three walls we will hit
+### The walls still ahead
 
-1. **55 000 instance cap.** A `1000 × 1000` world (TODO line 9) has ~1 000 000 surface
-   columns. It is ~20× over the cap and ~450× over the current world's memory. Not a tuning
-   problem — an architecture problem.
-2. **Everything is a global in one scope.** Two people cannot edit this file without
-   conflicts, and nothing can be tested in isolation.
-3. **No server.** Multiplayer (TODO line 20) is not a client feature.
+1. **Inventory is a flat `{ item: count }` dictionary**, not slots. Ground-item drops (TODO)
+   need an entity system that does not exist yet. This is the biggest single piece of open work.
+2. **Water and lava are not blocks.** They live in side-lists (`waterCells`, `lavaCells`) and
+   are drawn as separate `InstancedMesh`es. Flowing water, oceans, and water/solid face culling
+   all require moving fluids **into** the chunk `Uint8Array`.
+3. **No lighting model.** Torches need block-light propagation (a BFS over the chunk grid) —
+   an entire subsystem, not a new block.
+4. **No server.** Multiplayer is not a client feature.
 
 ---
 
-## 1. Principles
+## 1. Principles (unchanged — they held up)
 
-1. **The game is never broken.** Every step ends with a working `index.html`. No "big rewrite"
-   branch that lives for three weeks.
-2. **No build step.** Native ES modules + an import map. `npx serve` and go. A bundler is a
-   whole extra topic and it buys us nothing here.
-3. **Data over code.** Adding a chicken should mean adding an object to a data file, not a new
-   `if (type === 'chicken')` branch. This is the single biggest maintainability lever.
-4. **Pure logic separated from Three.js.** Anything that does not touch the GPU (noise,
-   inventory, crafting, chunk math, physics) lives in a file that imports nothing. Those files
-   get tests.
-5. **One concept per phase.** The refactor *is* the curriculum.
+1. **The game is never broken.** Every step ends with a working `index.html`.
+2. **No build step.** Native ES modules + an import map. `npm run dev` and go.
+3. **Data over code.** Adding a sheep should mean adding an object to `data/mobs.js`.
+4. **Pure logic separated from Three.js.** Anything that does not touch the GPU lives in a file
+   that imports nothing and gets tests.
+5. **One concept per phase.** The refactor _is_ the curriculum.
 
 ---
 
 ## 1bis. Deployment constraint: GitHub Pages
 
-The site ships from `TrustingLD/Minicrafter` → **`https://trustingld.github.io/Minicrafter/`**.
-That is a *project* page, so the site lives under a **sub-path**, not at the domain root.
+The site ships from `TrustingLD/Minicrafter` → **`https://trustingld.github.io/Minicrafter/`** —
+a _project_ page, so it lives under a **sub-path**, not at the domain root.
 
-Nothing in this plan is blocked by Pages. But five constraints follow, and three of them start
-biting the moment Phase 1 turns one file into thirty.
+### 1bis.1 🔴 All paths relative — never root-absolute
 
-### 1bis.1 🔴 All paths must be relative — never root-absolute
-
-Because of the `/Minicrafter/` sub-path, `/src/main.js` resolves to
-`trustingld.github.io/src/main.js` → **404**. Every path must be `./` or `../`.
-
-```html
-<!-- ✅ works locally AND on Pages -->
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.js" } }
-</script>
-<script type="module" src="./src/main.js"></script>
-
-<!-- ❌ 404 on Pages, works locally -->
-<script type="module" src="/src/main.js"></script>
-```
-
-Same for `new Worker(...)` (Phase 5) and `new Audio('luft-mini.mp3')`. Safest form for
-anything resolved at runtime: `new URL('./worker.js', import.meta.url)` — resolves against the
-module's own location, correct at any sub-path.
-
-**Guard:** serve locally under a sub-path too, so dev matches prod:
-`"dev": "npx serve -l 3000 .."` from inside the folder, then open
-`localhost:3000/Minicrafter/`. Cheap, catches this class of bug on day one.
+`/src/main.js` resolves to `trustingld.github.io/src/main.js` → **404**. Every path is `./` or
+`../`. For anything resolved at runtime (workers, audio): `new URL('./w.js', import.meta.url)`.
+**Guard:** `npm run dev` serves from the parent (`serve -l 3000 ..`) so the local URL is
+`localhost:3000/Minicrafter/` — dev matches prod. Already configured in `package.json`.
 
 ### 1bis.2 🔴 Pages is case-sensitive, Windows is not
 
-Pages runs on Linux. `import { BLOCKS } from './data/Blocks.js'` with a file actually named
-`blocks.js` **works on his Windows machine and 404s in production**. With ~30 new files this
-is the single most likely way to ship a white screen.
-
-**Rule:** every file and folder is `lowercase-with-dashes.js`. No exceptions, no capitals.
-Phase 7's CI adds a check for it.
+`import './data/Blocks.js'` with a file named `blocks.js` works locally and 404s in production.
+**Rule:** every file and folder is `lowercase-with-dashes.js`. No exceptions. Currently
+respected across all 28 modules — Phase 7's CI must lock it in.
 
 ### 1bis.3 🟡 No custom HTTP headers — ever
 
-Pages serves what it wants; we cannot set headers. Consequences:
+- **No `SharedArrayBuffer`** (needs COOP/COEP headers). Phase 20's worker **must** use
+  transferable `ArrayBuffer`s (`postMessage(buf, [buf])`). Zero-copy anyway, so no loss.
+- **No cache-control tuning.** Pages caches ~10 min. Stale module mid-demo → hard reload, or
+  bump `./src/main.js?v=N`.
 
-- **No `SharedArrayBuffer`.** It requires `Cross-Origin-Opener-Policy` +
-  `Cross-Origin-Embedder-Policy` headers. So Phase 5's worker **must** use transferable
-  `ArrayBuffer`s (`postMessage(buf, [buf])`). The plan already said transferables — now it is
-  forced, not preferred. Fine: transferables are zero-copy anyway.
-- **No cache-control tuning.** Pages caches aggressively (~10 min CDN). If a stale module
-  bites during a demo, hard-reload, or bump a query string: `./src/main.js?v=3`.
+### 1bis.4 🟢 No build step is a _requirement_, not a preference
 
-### 1bis.4 🟢 No build step is now a *requirement*, not just a preference
+A bundler means an Actions workflow between "commit" and "it's live". With plain ES modules,
+**deploy = `git push`**. Keep `.nojekyll` (present) or Jekyll drops `_`-prefixed paths.
 
-A bundler on Pages means a GitHub Actions workflow, a build artifact, and a deploy step
-between "commit" and "it's live". With plain ES modules, **deploy = `git push`**. For a kid
-learning the loop, that immediacy is worth a lot. Principle #2 was already right; Pages makes
-it structural.
+### 1bis.5 🔴 Phase 21: Pages cannot host the multiplayer server
 
-Keep `.nojekyll` (already present). Without it Jekyll silently drops any file or folder
-starting with `_`.
+Static host, no Node process. Client stays on Pages, server goes to Fly.io / Render free tier.
+The page is HTTPS so the socket **must be `wss://`** (mixed content is blocked outright).
+Single-player must keep working with the server down.
 
-### 1bis.5 🔴 Phase 8: Pages cannot host the multiplayer server
+### 1bis.6 Fine, no action needed
 
-Static host. No Node process. So:
-
-- **Client** stays on Pages. **Server** goes to Fly.io / Render free tier.
-- The page is HTTPS, so the socket **must be `wss://`, not `ws://`** — browsers block mixed
-  content outright. Free tiers give TLS, so this is configuration, not cost.
-- Server needs permissive CORS / origin allow-list for `https://trustingld.github.io`.
-- Single-player must keep working with the server down. Network is an add-on, never a
-  dependency.
-
-This is a genuinely good lesson: *static hosting vs. dynamic hosting*, discovered by hitting
-the wall rather than being told.
-
-### 1bis.6 Also fine, no action needed
-
-HTTPS is automatic → Pointer Lock, Fullscreen, and Phase 6's Wake Lock all work. Module
-workers are same-origin once Three.js is vendored (another reason to vendor rather than CDN).
-Repo limits: 1 GB site, 100 GB/month bandwidth — `luft-mini.mp3` at 6.5 MB is a non-issue.
+HTTPS is automatic → Pointer Lock, Fullscreen, Wake Lock all work (all three already in use).
+Repo limits: 1 GB site, 100 GB/month. Audio is ~16 MB across two tracks — fine, but see §8.
 
 ---
 
-## 2. Target architecture
+## 2. Architecture as it actually exists
 
 ```
 Minicrafter/
-├── index.html              # ~40 lines: DOM shell + import map. No logic.
-├── package.json            # scripts only: dev, test, format
-├── vendor/
-│   └── three.module.js     # pinned, vendored (offline-safe, no CDN outage)
+├── index.html              # 56 lines: DOM shell + import map. No logic. ✅
+├── package.json            # dev, test, format, format:check ✅
+├── vendor/three.module.js  # pinned, vendored ✅
 ├── src/
-│   ├── main.js             # wiring only: build systems, start loop
+│   ├── main.js             # wiring + main loop (787 l — see Phase 22, it is drifting)
 │   ├── core/
-│   │   ├── loop.js         # fixed-timestep update + interpolated render
-│   │   ├── events.js       # tiny pub/sub bus (~25 lines)
-│   │   ├── input.js        # keyboard/mouse/touch -> named actions
-│   │   └── math.js         # rng, noise, clamp, lerp        [PURE]
-│   ├── data/               # ← ALL game content lives here
-│   │   ├── blocks.js       # id, hardness, tool, drops, texture, solid, liquid
-│   │   ├── items.js        # tools, food, materials
-│   │   ├── recipes.js
-│   │   └── mobs.js         # speed, hp, hitbox, ai, body model, drops
+│   │   ├── events.js       # pub/sub bus ✅
+│   │   ├── math.js         # noise 2D/3D, hash2/hash3, rng          [PURE] ✅
+│   │   └── raycast.js      # voxel DDA                              [PURE] ✅
+│   ├── data/
+│   │   ├── blocks.js       # id, hardness, tool, textures, veins ✅
+│   │   ├── items.js        # ITEM_NAMES, TOOL_CATEGORY, RECIPES ✅
+│   │   └── mobs.js         # pig, cow, zombie, chicken ✅
 │   ├── world/
-│   │   ├── chunk.js        # Uint8Array storage + index math   [PURE]
-│   │   ├── world.js        # chunk map, get/set block, streaming
-│   │   ├── generator.js    # terrain, caves, ores, trees       [PURE]
-│   │   └── physics.js      # AABB collision, gravity, swim     [PURE]
+│   │   ├── chunk.js        # Uint8Array + index math                [PURE] ✅ tested
+│   │   ├── world.js        # chunk map, streaming, diffs, collision ✅
+│   │   ├── generator.js    # terrain, lakes, caves, ores, trees, lava [PURE] ✅ tested
+│   │   ├── clouds.js       # tiled voxel clouds ✅
+│   │   └── sky.js          # day/night, sun, moon, stars ✅
 │   ├── render/
-│   │   ├── textures.js     # the existing procedural canvases
-│   │   ├── atlas.js        # bake textures into one atlas + UV table
-│   │   ├── mesher.js       # chunk voxels -> BufferGeometry    [PURE-ish]
-│   │   ├── scene.js        # camera, lights, sun, sky, fog
-│   │   └── effects.js      # break animation, particles
+│   │   ├── textures.js     # procedural canvases ✅
+│   │   ├── block-assets.js # materials + hotbar icons ✅
+│   │   ├── atlas.js        # texture atlas + UV table ✅
+│   │   └── mesher.js       # chunk → BufferGeometry            [PURE] ✅ tested
 │   ├── entities/
-│   │   ├── entity.js       # shared base: pos, vel, hitbox, tick
-│   │   ├── mob.js          # generic, driven by data/mobs.js
-│   │   ├── player.js
-│   │   └── model.js        # box-model builder from data
+│   │   ├── model.js, limb.js  # box-model builder from data ✅
+│   │   ├── mob.js          # generic mob, data-driven ✅
+│   │   └── player.js       # camera, hand, held item, 1st/3rd person ✅
 │   ├── ui/
-│   │   ├── hud.js          # fps, position, target
-│   │   ├── hotbar.js
-│   │   ├── health.js
-│   │   ├── craft.js
-│   │   ├── chat.js
-│   │   └── touch.js        # mobile controls
-│   ├── audio/
-│   │   ├── sfx.js
-│   │   └── music.js
-│   └── net/                # phase 8 only
-│       ├── client.js
-│       └── protocol.js     # shared with server               [PURE]
-├── server/                 # phase 8 only
-│   ├── server.js
-│   └── package.json
-├── test/
-│   └── *.test.js           # node --test, zero dependencies
-├── docs/
-│   ├── ARCHITECTURE.md
-│   └── LESSONS.md          # one page per concept, written by lil bro
+│   │   ├── hotbar.js, health.js, craft.js, chat.js, touch.js, style.css ✅
+│   └── audio/sfx.js, music.js ✅
+├── test/chunk|generator|mesher|smoke.test.js   # 12 passing ✅
+├── PERF_PLAN.md            # FPS diagnosis + fix plan (1–3 done, 4 open)
 └── PLAN.md                 # this file
 ```
 
-**Rule of thumb for him:** if a file needs `import * as THREE`, it cannot be unit-tested — so
-keep those files thin and push the thinking into the pure ones.
+**Still missing from the target tree** (each is created by a phase below):
+
+| Missing                                                               | Created by          |
+| --------------------------------------------------------------------- | ------------------- |
+| `world/physics.js` (pure AABB, extracted from `world.js` + `main.js`) | Phase 22            |
+| `entities/entity.js` + `entities/item-entity.js` (ground drops)       | Phase 10            |
+| `world/light.js` (block-light BFS)                                    | Phase 13            |
+| `world/fluid.js` (water propagation)                                  | Phase 16            |
+| `world/biomes.js`                                                     | Phase 17            |
+| `data/commands.js` + chat command parser                              | Phase 15            |
+| `ui/hud.js` (FPS/pos/target, currently inline in `main.js`)           | Phase 22            |
+| `worker/chunk-worker.js`                                              | Phase 20            |
+| `net/` + `server/`                                                    | Phase 21            |
+| `docs/ARCHITECTURE.md`, `docs/LESSONS.md`                             | Phase 7 (remainder) |
 
 ---
 
-## 3. Bugs found while reading the code (root causes, not guesses)
+## 3. What is DONE ✅
 
-### 3.1 Blocks are rendered half a block off — TODO line 18
+Phases 0–6 of the original plan shipped. Concretely, verifiable in the code today:
 
-`addBlockMesh()` sets `dummyObj.position.set(x, y, z)`. A `BoxGeometry(1,1,1)` is centred on
-its origin, so the block visually occupies `[x-0.5, x+0.5]`.
-But `collidesAtBox()` and `isSolid()` use `Math.floor(...)`, i.e. they treat the block as
-occupying `[x, x+1]`.
-
-**Every block is drawn 0.5 off from its own collision box, on all three axes.** This is also
-why breaking/placing feels misaligned.
-
-Fix: `dummyObj.position.set(x + 0.5, y + 0.5, z + 0.5)` (and the same for the water mesh and
-the raycast hit → block conversion). One-line class of fix, huge feel improvement. Do it
-first, in isolation, so the change is obvious.
-
-### 3.2 Zombie face is on the back of the head — TODO line 1
-
-`buildMobMesh()` puts the face texture at material index 5 = the **−Z** face.
-`Mob.update()` does `moveAngle = Math.atan2(dx, dz)` then `group.rotation.y = moveAngle`.
-With that convention, local forward is **+Z**. So the face is on the back.
-
-Fix: put the face on index 4 (+Z), or keep index 5 and use
-`Math.atan2(dx, dz) + Math.PI`. Prefer fixing the material index — the rotation convention is
-used by the walk animation too.
-
-### 3.3 Mobs sink into the ground — TODO line 19
-
-`this.pos` is the mob's **feet**, and the group origin is the feet, but the spawn uses
-`getGroundHeight(x,z)` which returns the *block* height — combined with 3.1's half-block
-offset, mobs float or sink by 0.5. Fixing 3.1 fixes most of this; the rest is the vertical
-collision resolution snapping `velY = 0` without correcting `pos.y` to the surface.
+| Area                                                                                                              | Evidence                                  |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Tooling, Prettier, `.editorconfig`, `CONTRIBUTING.md`                                                             | repo root                                 |
+| File split into 28 modules, no globals                                                                            | `src/**`                                  |
+| Three.js vendored, import map                                                                                     | `index.html`, `vendor/`                   |
+| Data-driven blocks / items / mobs                                                                                 | `data/*.js`                               |
+| Event bus                                                                                                         | `core/events.js`, used by hotbar + health |
+| Chunked world, `Uint8Array`, streaming, unload, localStorage diffs                                                | `world/world.js`                          |
+| Caves (3D noise, 2 octaves), ore veins by depth band, bedrock floor                                               | `world/generator.js`                      |
+| Lakes (dedicated low-freq carve mask), animated water                                                             | `generator.js`, `world.js`                |
+| **Lava** — pools in deep caves only, unlit material, damage tick                                                  | `generator.js:76`, `main.js:646`          |
+| **Day/night cycle** — sky colour ramp, dusk, sun **and** moon sprites, **stars**, moving lights                   | `world/sky.js`                            |
+| **Clouds** — voxel slabs, infinite tiling pattern, slow drift                                                     | `world/clouds.js`                         |
+| Texture atlas + chunk mesher (interior faces culled)                                                              | `render/atlas.js`, `render/mesher.js`     |
+| **Held item in the hand** — axe/block parented to the hand pivot, swings                                          | `entities/player.js:77-111`               |
+| Break animation — 10-stage crack overlay on the targeted block, driven by `hardness`                              | `main.js:87`, `main.js:748`               |
+| Hearts health bar, hotbar, craft panel, FPS/pos/target HUD                                                        | `ui/*`                                    |
+| Zoom (C), sprint (double-tap W), crouch (Shift), 3rd person (F5), chat box (T)                                    | `main.js`                                 |
+| Mobile: touch joystick, look-drag, break/place/jump/inventory buttons, adaptive quality                           | `ui/touch.js`                             |
+| Music (2 tracks) + synthesised SFX                                                                                | `audio/*`                                 |
+| **FPS fix** — `getBlock` never generates, mobs frozen far away, DDA raycast, per-chunk mesh disposal, load budget | `PERF_PLAN.md` §1–3, all applied          |
+| Tests + `npm test` green                                                                                          | `test/`, 12 passing                       |
 
 ---
 
-## 4. Phases
+## 4. Partially done ⚠️ — finish these, do not restart them
 
-Difficulty for lil bro: 🟢 he can do it alone · 🟡 pair on it · 🔴 you drive, he watches & asks
-
----
-
-### Phase 0 — Toolbelt (½ weekend)
-**Concept: a project is more than a file.**
-
-- `git` branch-per-feature workflow; commit messages that say *why*.
-- `package.json` with `"dev": "npx serve -l 3000 .."` (served from the parent so the URL is
-  `localhost:3000/Minicrafter/` — matches the Pages sub-path, see §1bis.1) and
-  `"test": "node --test test/"`.
-- Why `file://` breaks ES modules (CORS + module resolution) → what a static server is.
-- Agree the **lowercase-only filename rule** (§1bis.2) *before* Phase 1 creates 30 files.
-- Move `TODO` → GitHub Issues, one issue per line, labelled `bug` / `feature` / `hard`.
-  Teaches issue tracking and makes "what do we do today" a 5-second decision.
-- Add `.editorconfig` + Prettier. Formatting is not a debate.
-
-**Ships:** nothing visible. That is the lesson — infrastructure day.
+| Item                     | What exists                                                              | What is missing                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Perfect caves**        | 3D noise + detail octave, surface threshold ramp so entrances can appear | No lighting inside (pitch black without torches → Phase 13), no cave-specific structures, no ravines. Re-tune **after** torches exist, not before. |
+| **Break animation**      | 10 crack stages                                                          | No particles, no block "shake", no pitch-shifted progress sound. → Phase 19                                                                        |
+| **Chat**                 | Input box on T, 6 messages, auto-fade                                    | No scrollback history, no ↑/↓ recall, no `/` commands. → Phase 15                                                                                  |
+| **Mob spawning**         | 58 mobs spawned once in a ±40 block box, frozen beyond 56 blocks         | No spawning around the player as he explores, no despawn, no day/night rules. → Phase 12                                                           |
+| **Tests / CI** (Phase 7) | `node --test`, 12 tests, Prettier scripts                                | No GitHub Actions, no `@ts-check`/`checkJs`, no filename-case guard, no `docs/`. → Phase 7bis                                                      |
 
 ---
 
-### Phase 1 — Split the file (1 weekend) 🔴
-**Concept: modules, imports/exports, dependency direction.**
+## 5. What is NOT done ❌ (the current TODO, verbatim → phase)
 
-Pure mechanical extraction. **No behaviour changes at all** — this is the rule.
-
-1. `index.html` → shell + import map + `<script type="module" src="src/main.js">`.
-2. Vendor Three.js: download `three.module.js` (r160+) into `vendor/`, add import map:
-   ```html
-   <script type="importmap">
-   { "imports": { "three": "./vendor/three.module.js" } }
-   </script>
-   ```
-   Upgrading r128 → r160 costs: `Geometry` is gone (already unused), `outputEncoding` →
-   `outputColorSpace`, `THREE.sRGBEncoding` → `THREE.SRGBColorSpace`. Small.
-3. Cut in this order (leaves first, so nothing is ever broken for long):
-   `textures.js` → `math.js` → `blocks.js` → `generator.js` → `sfx.js` → `ui/*` →
-   `entities/*` → `world.js` → `main.js`.
-4. Make the dependency graph a **DAG**. `data/` imports nothing. `world/` imports `data/` and
-   `core/math`. `ui/` never imports `world/` directly — it listens on the event bus.
-
-**Teach:** draw the import graph on paper before touching code. Circular imports are the
-first real design constraint he will meet.
-
-**Acceptance:** game plays identically; `index.html` under 60 lines.
+| TODO line                                          | Item                            | Status              | Phase |
+| -------------------------------------------------- | ------------------------------- | ------------------- | ----- |
+| Océan / rivière                                    | ❌ only lakes exist             | 17                  |
+| Terrain plus profond                               | ❌ `CHUNK_Y = 64`               | 17                  |
+| Inventaire = 9 slots + drop au sol + ramassage     | ❌ inventory is `{item: count}` | **10**              |
+| Hache/bloc tenu dans la main                       | ✅ **done**                     | —                   |
+| Meilleur cycle jour/nuit (étoiles, lune/soleil)    | ✅ **done**                     | —                   |
+| Meilleure animation de cassage                     | ⚠️ cracks only                  | 19                  |
+| Multijoueur                                        | ❌                              | 21                  |
+| Grotte parfaite                                    | ⚠️ needs light first            | 13 → re-tune        |
+| Nouveau mob : sheep                                | ❌                              | 18                  |
+| Barre de bouffe                                    | ❌                              | 11                  |
+| Problème de FPS                                    | ✅ **fixed** (PERF_PLAN 1–3)    | 20 for extra margin |
+| Monstres attaquent à travers les blocs             | ❌ no line-of-sight test        | 12                  |
+| Torches                                            | ❌                              | 13                  |
+| Biomes                                             | ❌                              | 17                  |
+| Four                                               | ❌                              | 14                  |
+| Spawn des mobs hors zone initiale                  | ❌ one-shot spawn only          | 12                  |
+| Historique de chat + commandes `/`                 | ❌                              | **15**              |
+| L'eau doit couler + pas de face entre eau et terre | ❌ water is not a block         | **16**              |
+| Noyade : 15 s sous l'eau → ½ cœur/s                | ❌                              | 11                  |
+| Nuages en blocs entiers, avec la génération        | ✅ **done**                     | —                   |
+| Lave                                               | ✅ **done**                     | —                   |
 
 ---
 
-### Phase 2 — Data-driven content (1 weekend) 🟡
-**Concept: data vs. code. The most valuable idea in the whole plan.**
+## 6. Remaining phases — detailed
 
-Today, adding a mob means editing `buildMobMesh`, the `Mob` constructor's three ternaries,
-and `spawnMobs`. After this phase it means one object literal.
+Difficulty: 🟢 he can do it alone · 🟡 pair on it · 🔴 you drive, he watches & asks
+
+Order matters. **10 → 11 → 12 → 15** are independent and cheap-ish. **13 → 14** unlock content.
+**16 → 17** are the deep world rework and should come after the inventory system is stable.
+
+---
+
+### Phase 10 — Slot inventory + ground item drops 🔴 (1–2 weekends)
+
+**Concept: entities. A thing in the world that is not a block.**
+
+The single most requested TODO item, and the one that unblocks Phases 11, 14, 18.
+
+**10.1 — Slots instead of a dictionary.** `inventory` becomes an array of 9 (hotbar) + 27
+(backpack) slots:
 
 ```js
-// src/data/mobs.js
-export const MOBS = {
-  chicken: {
-    name: 'Poulet',
-    speed: 1.3, health: 3,
-    hitbox: { radius: 0.28, height: 0.6 },
-    ai: 'wander',                    // 'wander' | 'hostile'
-    drops: [{ item: 'meat', min: 1, max: 2 }],
-    model: {                         // box model, replaces buildMobMesh branches
-      body: { size: [0.4, 0.4, 0.5], at: [0, 0.42, 0],   tex: 'chickenBody' },
-      head: { size: [0.3, 0.3, 0.3], at: [0, 0.75, 0.28], tex: 'chickenHead', face: '+z' },
-      beak: { size: [0.1, 0.1, 0.15], at: [0, 0.72, 0.48], tex: 'beak' },
-      legs: { count: 2, size: [0.08, 0.3, 0.08], at: [[-0.1,0.3,0],[0.1,0.3,0]], tex: 'beak' },
-    },
-  },
-};
+// src/entities/inventory.js — PURE, unit-tested
+// slot = null | { item: 'stone', count: 34 }
+export const HOTBAR_SLOTS = 9, BACKPACK_SLOTS = 27, MAX_STACK = 64;
+export function addItem(slots, item, count)   // fills partial stacks first, then empties;
+                                              // returns the leftover that did not fit
+export function removeItem(slots, item, count)
+export function countOf(slots, item)
+export function moveSlot(slots, from, to)     // for drag & drop later
 ```
 
-Same treatment for:
-- `data/blocks.js` — `{ id, textures, solid, liquid, hardness, tool, drops, opaque }`.
-  `hardness` + `tool` replaces the hardcoded `TOOL_FOR_BLOCK` map and gives us real break
-  timings (needed for the break animation in Phase 3).
-- `data/items.js`, `data/recipes.js` — `HOTBAR` and `NON_PLACEABLE` become derived, not
-  hand-maintained.
+Tests: fill 9 stacks of 64, assert the 65th `addItem` returns leftover 1; assert partial-stack
+merge before empty-slot use. **Write the tests first** — this is a perfect first TDD exercise.
 
-**Payoff, delivered same weekend:**
-- ✅ TODO 8 — chicken (now ~20 lines of data)
-- ✅ TODO 1 — faces via the model's `face: '+z'` field, fixed once for every mob
-- ✅ Fix 3.1 (half-block offset) and 3.3 (mobs on the ground)
+**10.2 — The item entity.** New `src/entities/entity.js` (shared base: `pos`, `vel`, `onGround`,
+`tick(dt)`, gravity + `collidesAtBox`, reusing the exact code the mob already has — extract it,
+do not copy it) and `src/entities/item-entity.js`:
 
-**Teach:** "when you find yourself writing the same `if` in three places, you wanted a table."
+- visual: a small cube (0.25 scale) using the existing block atlas material, or the tool sprite
+  for items; spin on Y, bob on a sine.
+- physics: spawn with a small random `vel`, gravity, land on the ground.
+- pickup: within 1.2 blocks of the player and older than 0.5 s → `addItem`, play `pickup` sound,
+  `bus.emit('inventory:changed')`. Merge with a nearby identical entity to avoid 200 cubes.
+- despawn after 5 minutes.
+- **All item entities share ONE `InstancedMesh`**, like the mobs' hitboxes — not one `Mesh`
+  each. This is the perf lesson of the phase.
 
----
+**10.3 — Wire the drops.** `breakBlockAt()` stops doing `inventory[type]++` and instead calls
+`itemSystem.spawn(x + 0.5, y + 0.5, z + 0.5, drops)`. `Mob.hit()` death drops likewise. Add
+`drops: [{ item, min, max }]` to `data/blocks.js` (grass → dirt, stone → stone, leaves → nothing
+usually + rare sapling), so the drop table is **data**, not an `if`.
 
-### Phase 3 — Easy wins & game feel (1 weekend) 🟢
-**Concept: the event bus. UI reacts, it does not poll.**
+**10.4 — UI.** `ui/hotbar.js` renders slots (icon + count) instead of the fixed `HOTBAR` array.
+`ui/craft.js`'s inventory grid renders the 27 backpack slots. Slot 0–8 selection by digit keys
+and wheel stays exactly as-is.
 
-Add `core/events.js` (~25 lines: `on`, `off`, `emit`). Game logic emits
-`player:damaged`, `block:broken`, `item:crafted`. UI subscribes. Now UI files never import
-world state, and the whole `updateHealthUI()`-called-from-`Mob.update()` tangle dies.
+**Risk:** this touches `main.js`, `hotbar.js`, `craft.js`, `mob.js` at once. Do 10.1 + its tests
+in one commit (nothing else changes — keep a thin adapter so the old dictionary API still works),
+then 10.2 alone (spawn drops that nobody picks up yet — visible progress), then 10.3, then 10.4.
 
-Then knock out the small TODOs — perfect solo tasks for him, each one PR-sized:
-
-| TODO | Task | Diff |
-|---|---|---|
-| 6 | FPS counter top-left (rolling average, not instantaneous) | 🟢 |
-| 5 | Hearts instead of squares (`clip-path` on the existing `.heart`) | 🟢 |
-| 10 | Visible sun billboard + move `DirectionalLight` with it | 🟢 |
-| 4 | Zoom on `C` — animate `camera.fov` 75 → 25, `updateProjectionMatrix()` | 🟢 |
-| 13 | Crouch on `Shift` — lower eye height, no fall off edges | 🟡 |
-| 11 | Sprint on double-tap `Z` — input layer tracks tap timing | 🟡 |
-| 7 | Chat on `T` — DOM input, release pointer lock, `chat:message` event | 🟡 |
-| 2 | World border — invisible wall + red fog/particle plane at the edge | 🟢 |
-| 15 | Held item **in** the hand — parent `heldItemMesh` to the hand bone | 🟡 |
-| 16 | Break animation — 10-stage crack overlay, driven by `hardness` | 🟡 |
-| 17 | 6-block reach in 1st **and** 3rd person — raycast from the *camera*, but clamp the range from the *player*, not the camera | 🟡 |
-| 12 | Water: slower movement + animated UV scroll on the water material | 🟡 |
-
-**Teach:** each of these is a branch, a commit, a "does it still work?", a merge. Repetition
-of the git loop is the point.
+**Teach:** the difference between _state_ (inventory data, pure, testable) and _representation_
+(the mesh). And that "extract the shared base class" beats "copy the mob's gravity code".
 
 ---
 
-### Phase 4a — Chunks (1–2 weekends) 🔴
-**Concept: data structures determine what is possible. This is computer science.**
+### Phase 11 — Hunger, food, and drowning 🟡 (1 weekend)
 
-The headline change. Replace `world = {}` (string keys, one JS object entry per block —
-roughly 100 bytes/block) with:
+**Concept: timers and resources over time.**
+
+Depends on Phase 10 (eating consumes an item from a slot).
+
+- `ui/hunger.js` — 10 drumsticks, same shape as `ui/health.js`, listening on `player:hunger`.
+- `player.hunger` 0–20. Drains on a budget: sprinting −0.05/s, jumping −0.1, mining −0.005/block,
+  idle −0.005/s. At 0 → −½ heart every 4 s. Above 18 → regenerate ½ heart every 4 s (costs hunger).
+- Eating: right-click while holding `meat` / `cooked_meat` / `milk` → consume one, `+N` hunger,
+  1.6 s eating animation on the hand (reuse `triggerHandSwing`'s pivot). Data-driven:
+  `data/items.js` gets `food: { hunger: 3, saturationTime: 1.6 }`.
+- **Drowning (TODO):** `player.breath` = 15 s, refilled instantly out of water. Head submerged →
+  drain; at 0, −½ heart every second, `hurt` sound, bubble icons over the hotbar.
+  `isUnderwater()` already exists in `main.js:568` — but it is an _analytic_ check against
+  `getHeight` and `SEA_LEVEL`, so it will be wrong the moment Phase 16 makes water a real block.
+  Implement it now on the current check, and re-point it at `getBlock(...) === 'water'` in
+  Phase 16. Note this in a comment so the coupling is not a surprise.
+
+**Ships:** hunger bar, eating, drowning damage.
+**Teach:** rates vs. events. Hunger is `-= rate * dt`, damage is a tick with a cooldown — the
+same two shapes appear in the lava damage code already written.
+
+---
+
+### Phase 12 — Mob AI: line of sight, spawning, despawning 🟡 (1 weekend)
+
+**Concept: reusing an algorithm you already wrote (the DDA raycast).**
+
+**12.1 — Stop attacking through walls (TODO).** `entities/mob.js:113` chases and hits whenever
+`distToPlayer < 9` / `< 1.1`, with no visibility test. Add, in `mob.js`:
 
 ```js
-// src/world/chunk.js — PURE, fully unit-tested
-export const CHUNK_X = 16, CHUNK_Y = 128, CHUNK_Z = 16;
-export const idx = (x, y, z) => (y * CHUNK_Z + z) * CHUNK_X + x;  // 1 byte per block
+// voxelRaycast already exists (core/raycast.js) and costs O(distance) — reuse it.
+function canSee(getBlock, from, to) {
+  const dir = to.clone().sub(from);
+  const dist = dir.length();
+  dir.normalize();
+  const hit = voxelRaycast(getBlock, from, dir, dist);
+  return !hit; // no solid block between the mob's eyes and the player's chest
+}
 ```
 
-- `Uint8Array(16 * 128 * 16)` = 32 KB per chunk, flat, cache-friendly.
-- `world.js` holds `Map<"cx,cz", Chunk>`; generates chunks on demand around the player,
-  unloads beyond render distance, keeps a small LRU of player-modified chunks.
-- Rendering: keep the existing `InstancedMesh` approach but **one set per chunk**, sized to
-  the chunk's actual visible-block count. The 55 000 global cap disappears.
-- Player edits saved to `localStorage` as a diff (`chunkKey -> {index: blockId}`), not the
-  whole world.
+Call it **only** when the mob is within aggro range and at most every 0.25 s (cache the result on
+the mob) — not every frame for every mob. Eyes = `pos.y + height * 0.9`, target = player chest.
+Lose aggro after 3 s without line of sight.
 
-**Numbers to show him** (this is the lesson — make him compute it before coding):
+**12.2 — Spawn around the player (TODO).** Replace the one-shot `spawnMobs()` (±40 blocks at
+boot) with a periodic pass, every 4 s:
 
-| | Today | After |
-|---|---|---|
-| Bytes per block | ~100 (object entry + string key) | 1 |
-| 1000×1000 world in RAM | ~10 GB → impossible | 32 KB × loaded chunks only |
-| Chunks loaded at distance 8 | — | 17×17 = 289 → ~9 MB |
+- pick a random loaded chunk within `renderDistance`, at least 24 blocks from the player;
+- find a surface `y` via `getGroundHeight`, require air above and a solid, non-liquid floor;
+- passive mobs (pig/cow/chicken/sheep) only in daylight; hostile (zombie) only when
+  `skyApi.isNight()` (expose that from `world/sky.js` — the cycle already computes it) or below
+  y=12 in a cave with no sky access;
+- **caps**: max 40 mobs total, max 6 per chunk, refuse to spawn if the cap is hit;
+- despawn any mob further than 80 blocks (instant) or further than 56 for over 60 s.
+  This also fixes the current boot cost — 58 mobs are created before the first frame.
 
-**Ships:** ✅ TODO 9 — the 1000×1000 world, actually infinite if we want it.
+**12.3 — Keep the freeze.** `MOB_ACTIVE_RADIUS` freezing (from `PERF_PLAN` §1.5) stays. Spawning
+must never un-freeze more than the cap allows: measure with the FPS counter before and after.
 
-**Teach:** flat arrays vs. hash maps, index math, memory as a real budget, the idea that you
-can *predict* whether something will work before writing it.
+**Teach:** an algorithm written for one purpose (block picking) solving a completely different
+problem (mob vision) for free. That is what "pure function in its own file" buys.
 
 ---
 
-### Phase 4b — Caves, ores, and a real generator (1 weekend) 🟡
-**Concept: 3D noise, and why the pure/impure split just paid off.**
+### Phase 13 — Torches and block light 🔴 (1–2 weekends)
 
-Chunks make this natural — the generator is now `(cx, cz) -> Uint8Array`, a pure function.
+**Concept: BFS, a real algorithm, with a real payoff you can see in the dark.**
 
-- 3D noise for caves: carve where `noise3D(x, y, z) > threshold`, with the threshold rising
-  near the surface so caves stay underground.
-- Ore veins by depth band, from `data/blocks.js`:
+The most valuable computer-science lesson left in the plan. Do it after Phase 12, before caves
+are re-tuned.
+
+- `data/blocks.js`: `torch` block — `emitsLight: 14`, `solid: false`, `hardness: 0.1`. Recipe in
+  `data/items.js`: `stick 1 + coal_ore 1 → torch 4`.
+- `src/world/light.js` — **PURE**, unit-tested:
   ```js
-  coal:    { minY: 5,  maxY: 60, rarity: 0.020, veinSize: 8 },
-  iron:    { minY: 3,  maxY: 40, rarity: 0.010, veinSize: 5 },
-  gold:    { minY: 2,  maxY: 22, rarity: 0.004, veinSize: 4 },
-  diamond: { minY: 1,  maxY: 14, rarity: 0.002, veinSize: 3 },
+  // lightmap: a second Uint8Array(CHUNK_VOLUME) per chunk, 0..15
+  export function propagate(chunkData, lightData, sources)  // BFS queue, −1 per block travelled
+  export function removeLight(chunkData, lightData, x, y, z) // the harder half: re-flood after
+                                                             // a torch is broken
   ```
-- Bedrock floor at y=0 so caves have a bottom.
-- New recipes: stone tools, iron tools, torches. Torches need block-light propagation — a
-  flood-fill BFS. **Excellent** algorithms lesson, but it is its own weekend; defer if tired.
+  Tests: one torch in an empty 3×3×3 → centre 14, neighbours 13; a wall blocks propagation;
+  removing the torch returns the map to 0. **Cross-chunk light** is the trap — v1 stops at chunk
+  borders (light stops at the seam, visibly), v2 re-meshes the 4 neighbours after propagation.
+  Ship v1 first and let him _see_ the seam; that makes v2 obvious rather than abstract.
+- Rendering: the mesher already writes a `uv` attribute per face — add a per-vertex `color`
+  attribute (`vertexColors: true` on the atlas material) set from the light value. Zero extra
+  draw calls, one extra buffer. Ambient light drops in caves so the effect is visible.
+- Torch itself: a small cross-quad or thin box + a flickering `PointLight` **only for the nearest
+  ~8 torches** (a `PointLight` per torch will kill the frame rate — that limit is the lesson).
+- Sunlight: v1 = "any block with open sky above is light 15", computed in the generator per
+  column. Good enough, and cheap.
 
-**Ships:** ✅ TODO 3 — caves + ores.
-
-**Teach:** unit tests on the generator. Same seed → same chunk, every time. He will *feel*
-why pure functions matter when he can test terrain without opening a browser.
-
----
-
-### Phase 5 — Performance: atlas, mesher, worker (1–2 weekends) 🔴
-**Concept: profiling. Measure, then fix. Never guess.**
-
-Do this **only** after Phase 4 makes the game slow — the whole point is that he sees the
-problem first, in the FPS counter he built in Phase 3.
-
-1. **Texture atlas** (`render/atlas.js`): bake all block textures into one 512×512 canvas,
-   keep a `{ blockId: [u0,v0,u1,v1] }` table. Enables one material for all opaque terrain.
-2. **Chunk mesher** (`render/mesher.js`): chunk `Uint8Array` → one `BufferGeometry` of only
-   the visible faces. ~289 draw calls instead of ~1200. Pure function, testable: feed it a
-   3×3×3 array, assert the face count.
-3. **Web Worker**: run generation + meshing off the main thread, post back a transferable
-   `ArrayBuffer`. No more stutter when new chunks load.
-4. Frustum culling per chunk (re-enable it — it is currently disabled globally), plus fog to
-   hide the load boundary.
-
-**Teach:** Chrome DevTools performance tab, `stats.js`, the difference between CPU-bound and
-GPU-bound, why `postMessage` copies and how transferables avoid it.
+**Then re-tune the caves** (the "grotte parfaite" TODO): with light, dark = dangerous = readable,
+and the cave threshold can be loosened without turning the world into a black maze.
 
 ---
 
-### Phase 6 — Mobile (1 weekend) 🟡
-**Concept: your program runs on hardware you do not control.**
+### Phase 14 — Furnace and smelting 🟡 (1 weekend)
 
-- `ui/touch.js`: left virtual joystick = move, right half drag = look, tap = break,
-  long-press = place. Buttons for jump / inventory.
-- `input.js` was already action-based since Phase 1 — touch just becomes another producer of
-  the same actions. **Nothing else in the game changes.** Show him that. That is what a good
-  abstraction buys.
-- Adaptive quality: `devicePixelRatio` clamp, shorter render distance, disable shadows,
-  smaller atlas on low-memory devices.
-- Viewport meta, fullscreen API, `touch-action: none`, wake lock.
+**Concept: block entities — a block with state and a clock.**
 
-**Ships:** ✅ TODO 21 — playable on a phone.
+Depends on Phase 10 (slots) and Phase 13 (coal is worth something).
 
----
+- `furnace` block in `data/blocks.js` (recipe: 8 stone). Two textures: idle and lit
+  (`textures.js` gets a `furnaceFrontLit`), swapped by the block-entity state.
+- `src/world/block-entities.js`: a `Map<"x,y,z", state>` per world, ticked at 4 Hz (not 60), and
+  **persisted in the same `localStorage` diff structure** already used for blocks — otherwise a
+  furnace loses its contents on chunk unload, which is a genuinely confusing bug for a player.
+- `data/recipes.js` gains `SMELTING = { iron_ore: 'iron_ingot', meat: 'cooked_meat', sand: 'glass' }`
+  and `FUELS = { coal_ore: 8, planks: 1.5, stick: 0.5 }` (seconds of burn).
+- UI: right-click a furnace opens a 3-slot panel (input / fuel / output) + a progress arrow and a
+  flame gauge. Reuse `ui/craft.js`'s panel shell; drag & drop can wait, click-to-move is fine.
+- New items: `iron_ingot`, `cooked_meat` (more hunger than raw — ties into Phase 11), and the
+  stone/iron tool recipes that already exist in `ITEM_NAMES` but have no path to being crafted.
 
-### Phase 7 — Tests, types, CI (1 weekend) 🟡
-**Concept: making sure it still works, without playing it.**
-
-- `node --test` on the pure modules: `chunk.js` index math, `generator.js` determinism,
-  `physics.js` AABB, recipes, inventory. Target the *logic*, never the rendering.
-- `// @ts-check` + JSDoc types + a `tsconfig.json` with `checkJs: true`, **`noEmit`**. Full
-  editor type-checking, zero build step. This is the sweet spot for this project.
-- GitHub Actions: run tests + Prettier check on every PR. Seeing a red ❌ on his own PR is a
-  better teacher than any lecture.
-- Add two Pages-specific CI guards (cheap, catch the white-screen bugs from §1bis):
-  - **filename case** — fail if any path under `src/` contains an uppercase letter;
-  - **absolute paths** — fail on any `from '/` or `src="/` in `src/` or `index.html`.
-- `docs/ARCHITECTURE.md` — he writes it. If he cannot explain the structure, it is too complex.
+**Teach:** state that lives in the world and advances on its own, even when you are not looking
+at it. First encounter with "the simulation has a tick rate different from the frame rate".
 
 ---
 
-### Phase 8 — Multiplayer (2–3 weekends) 🔴
+### Phase 15 — Chat history and `/` commands 🟢 (1 weekend, he can drive)
+
+**Concept: parsing text, and a command table instead of a chain of `if`s.**
+
+`ui/chat.js` today keeps 6 messages, fades them out, and forgets everything.
+
+- **History:** keep a `messages[]` array (cap 100). Open (T) → show the last 20 in a scrollable
+  panel; closed → only the last 6, fading, as today. `↑`/`↓` in the input recall previously sent
+  lines (a second array, `sentHistory`, cap 50, index reset on send).
+- **Commands** — `src/data/commands.js`, a table, not a switch:
+  ```js
+  export const COMMANDS = {
+    fly: { args: [], help: '/fly — bascule le mode vol' },
+    give: { args: ['item', 'count?'], help: '/give <item> [n] — ajoute un item' },
+    tp: { args: ['x', 'y', 'z'], help: '/tp <x> <y> <z>' },
+    time: { args: ['value'], help: '/time <day|night|0-1>' },
+    heal: { args: [], help: '/heal — remplit la vie' },
+    help: { args: [], help: '/help — liste les commandes' },
+  };
+  ```
+  A parser in `src/core/commands.js` (**PURE**, tested): splits the line, validates arity,
+  returns `{ name, args }` or `{ error }`. `main.js` holds the _handlers_ (the only part that
+  touches game state) in one object keyed by the same names — so an unknown command is caught by
+  the table, never by a missing `else`.
+- `/give` autocompletes against `ITEM_NAMES` keys and reports `Item inconnu : xyz` with the
+  closest match (Levenshtein is overkill — a `startsWith` filter is plenty and teachable).
+- `/fly`: `player.flying` — gravity off, Space up, Shift down, no fall damage. Confine the change
+  to the movement block in `main.js`; it must survive Phase 22's HUD/loop extraction.
+- Every command echoes a confirmation line into the chat log. Errors in red.
+
+**Teach:** a lookup table beats a switch; validation is separate from execution; and pure parsing
+means he can test `/give stone 64` without opening the browser.
+
+---
+
+### Phase 16 — Water as a real block: face culling + flow 🔴 (2 weekends)
+
+**Concept: the data structure decides what is possible — again.**
+
+Two TODO items ("l'eau doit couler", "pas de texture sur les côtés quand elle est dans la terre")
+are both symptoms of the same cause: **water is not stored in the chunk array**, it is a side-list
+of `waterCells` drawn as scaled cubes (`world.js:113`). A cube does not know its neighbours, so
+every lake face is drawn, including the ones buried in dirt.
+
+**16.1 — Move water into `data`.** `water` becomes block id 14 in `data/blocks.js` with
+`liquid: true, solid: false, opaque: false, levels: 8`. `generateChunk` writes it into
+`data[idx(...)]` instead of pushing to `waterCells`. Same for lava (id 15) — do both, the code is
+identical and lava currently has the same buried-face problem.
+
+**16.2 — Teach the mesher about liquids.** `render/mesher.js` gets a second pass:
+
+- opaque geometry as today, but a face is now culled if the neighbour is opaque **or**… careful:
+  a solid block facing water must still draw its face.
+- a **separate** liquid geometry (own material: transparent, animated UV offset — the existing
+  `waterTexture` scroll keeps working) where a water face is emitted **only** if the neighbour is
+  air or a different liquid. Water↔water: culled. Water↔dirt: culled. **This is exactly the TODO
+  item**, and it falls out for free once water is a block.
+- surface water is rendered at `y + 0.875` (not a full cube) so the shoreline reads correctly.
+  Add a mesher test: a 3×3×3 of water inside stone emits **zero** liquid faces.
+
+**16.3 — Flow.** `src/world/fluid.js`, **PURE**, tested. Cellular automaton, ticked at 5 Hz over
+a queue of _active_ cells only (never a full-world scan):
+
+- a water block with level `L > 1` spreads to air neighbours at level `L−1`;
+- straight down always spreads at full level (falling water);
+- level 1 does not spread; source blocks (level 8) never deplete;
+- breaking a block adjacent to water enqueues that cell → the water flows into the hole. That
+  moment is the payoff of the whole phase — make sure it is the first thing he tests.
+- cap the queue per tick (e.g. 256 cells) so a broken dam cannot freeze the frame.
+- Cross-chunk flow: enqueue into the neighbour chunk's queue; if it is unloaded, drop it (water
+  stops at the world edge of loaded terrain — acceptable, and worth saying out loud).
+
+**16.4 — Consequences to fix in the same phase:** `isUnderwater()` in `main.js` becomes
+`getBlock(...) === 'water'` (Phase 11's drowning starts working properly), swimming physics
+(buoyancy, slower fall, jump = swim up), and `collidesAtBox` must keep treating liquids as
+non-solid.
+
+**Teach:** cellular automata; why an "active set" beats scanning everything; and the payoff of a
+good data structure showing up as _two features at once_.
+
+---
+
+### Phase 17 — Oceans, rivers, biomes, deeper terrain 🔴 (2–3 weekends)
+
+**Concept: composing noise fields. The generator is a pure function of (x, z) — prove it.**
+
+Do this **after** Phase 16: oceans made of the old fake water would just be very large versions
+of the wrong thing.
+
+**17.1 — Deeper terrain first (it is the enabler).** `CHUNK_Y` 64 → 128, `SEA_LEVEL` 4 → 40,
+mountains up to ~110, bedrock at 0, caves through the whole column. Memory per chunk goes 16 KB →
+32 KB (still nothing), but generation cost roughly doubles — **measure it with the FPS counter
+before and after**, and expect this to be the phase that finally forces Phase 20 (the worker).
+Everything that hardcodes a height must be found and fixed: `CLOUD_Y`, `SNOW_LEVEL`, spawn
+height, `getHeight`'s `Math.min(58, …)` clamp, the mob spawn floor, and the generator tests.
+
+**17.2 — Biomes.** `src/world/biomes.js`, **PURE**:
+
+```js
+// two extra low-frequency noise fields, sampled per column
+temperature(x, z) ∈ [0,1] ; humidity(x, z) ∈ [0,1]
+→ biome = { plains, forest, desert, snowy, mountains, swamp, ocean }
+// each biome is DATA: { surface, subsurface, treeChance, treeType, mobs, grassTint, fogColor }
+```
+
+Blending is the hard part: pick the biome per column, but **interpolate the height contribution**
+between neighbouring biomes over ~16 blocks, or every border becomes a cliff. New blocks needed:
+`sand`, `sandstone`, `cactus`, `dead_bush`, `ice`. Biome also drives the Phase 12 spawn table —
+sheep in plains, nothing in the ocean.
+
+**17.3 — Oceans and rivers.** Continentalness is a _third_ low-frequency noise field: below a
+threshold the terrain floor is pushed under `SEA_LEVEL` over a wide area → ocean, with a sand
+shelf near the coast. Rivers are a separate trick: take a _ridged_ noise field
+(`1 - |noise|`), and where it is within ε of its maximum, carve a narrow channel down to
+`SEA_LEVEL − 2`. That gives connected, winding rivers that cross chunk borders correctly **for
+free**, because it is still a pure function of `(x, z)` — no cross-chunk coordination.
+
+**Test:** determinism per chunk is already tested; add a test that a river column is under sea
+level in **both** chunks that share it (this is the bug this design avoids — make it visible).
+
+**Teach:** layered noise as composition of simple functions; why "pure function of world
+coordinates" makes infinite, seamless, restartable worlds possible at all.
+
+---
+
+### Phase 18 — Sheep (and the payoff of data-driven mobs) 🟢 (half weekend)
+
+**Concept: proof that Phase 2 worked.**
+
+Should be ~30 lines of data in `data/mobs.js` plus two textures:
+
+```js
+sheep: {
+  name: 'Mouton', speed: 1.0, health: 4, hitbox: { radius: 0.42, height: 1.2 },
+  ai: 'wander', drops: [{ item: 'wool', min: 1, max: 1 }, { item: 'meat', min: 1, max: 2 }],
+  model: { parts: [ /* body woolSkin, head sheepFace */ ], limbs: [ /* 4 legs */ ] },
+}
+```
+
+Plus: `wool` item + block (`data/blocks.js`, dyeable later), shearing (right-click with any
+sword/shears → drops 1–3 wool, mob turns to a "sheared" texture and regrows after 60 s — the
+first mob with _state_), and wool → bed later if he wants a spawn point.
+
+**If it takes more than one afternoon, the data-driven design has a leak — find it and fix the
+leak instead of special-casing the sheep.** That is the actual lesson of this phase.
+
+---
+
+### Phase 19 — Break animation, polish pass 🟢 (half weekend)
+
+**Concept: game feel is made of small, cheap things.**
+
+The crack overlay exists. Add, each one a separate commit:
+
+- **Particles:** 8–12 tiny cubes with the broken block's texture, spawned at the block, random
+  velocity, gravity, 0.6 s life. One shared `InstancedMesh` for all particles (same lesson as
+  Phase 10's item entities).
+- **Block wobble:** scale the targeted block's crack overlay by `1 + 0.02 * sin(progress * 40)`.
+- **Progress sound:** the `break` SFX pitched up with `breakProgress / total` — a repeated soft
+  tick while mining, then the full sound on break.
+- **Placement feedback:** brief scale-up on the newly placed block.
+- Hurt: red screen vignette flash on `player:health` decrease.
+
+**Teach:** the difference between "it works" and "it feels good" is usually about 40 lines.
+
+---
+
+### Phase 20 — Perf margin: the chunk worker 🟡 (1 weekend)
+
+**Concept: the main thread is not the only thread. Measure first.**
+
+`PERF_PLAN.md` phase 4, still open — and Phase 17.1 (deeper terrain) is what will make it
+necessary. **Do not do this before the FPS counter shows the problem.**
+
+- `src/worker/chunk-worker.js` imports `generator.js` + `mesher.js` (both pure — that is why this
+  is even possible) and returns transferable `ArrayBuffer`s.
+- Instantiate with `new Worker(new URL('./worker/chunk-worker.js', import.meta.url), { type: 'module' })`
+  — relative to the module, correct under the Pages sub-path (§1bis.1).
+- **Transferables, not `SharedArrayBuffer`** (§1bis.3): `postMessage(buf, [buf])`.
+- The main thread only uploads the geometry to the GPU. Keep a fallback path that generates
+  synchronously if `Worker` construction fails, so the game never depends on it.
+- Also re-enable per-chunk frustum culling and verify with `renderer.info.render.calls`.
+
+**Teach:** DevTools performance tab, CPU-bound vs GPU-bound, why `postMessage` copies by default.
+
+---
+
+### Phase 21 — Multiplayer 🔴 (2–3 weekends)
+
 **Concept: there is another computer, and it lies to you.**
 
-The biggest jump. First real distributed system.
+Unchanged from the original plan, and still last. Now that the world is chunked and edits are
+already stored as diffs, the server's job is much clearer than it was.
 
-**Server** (`server/`, Node + `ws`, ~250 lines):
-- Owns the world seed and the block-diff map. Authoritative on blocks, trusting on movement
-  (anti-cheat is out of scope — say so explicitly, it is a good scoping lesson).
-- 20 Hz tick, broadcasts player snapshots.
-- Deploy free on Fly.io / Render. **GitHub Pages cannot host it** — that alone teaches static
-  vs. dynamic hosting.
+**Server** (`server/`, Node + `ws`, ~250 lines): owns the seed and the block-diff map,
+authoritative on blocks, trusting on movement (anti-cheat explicitly out of scope). 20 Hz tick.
+Deployed on Fly.io / Render — **Pages cannot host it** (§1bis.5).
 
-**Protocol** (`src/net/protocol.js`, shared by client and server):
+**Protocol** (`src/net/protocol.js`, shared, **PURE**, tested):
+
 ```
 C→S: join{name} · move{x,y,z,yaw,pitch} · setBlock{x,y,z,id} · chat{text} · hit{entityId}
 S→C: welcome{id,seed,players} · state{[{id,x,y,z,yaw}]} · blockChanged{...} · chat{...}
      · playerJoined/playerLeft
 ```
-Start with JSON (readable in DevTools = debuggable by a kid). Move to binary only if it
-actually lags — and then it is a *measured* decision.
 
-**Client:** remote players reuse the existing `entities/model.js` box model. Interpolate
-remote positions ~100 ms in the past — that is what makes it feel smooth. Local player is
-predicted, never interpolated.
+JSON first (readable in DevTools = debuggable by a kid). Binary only if measurements demand it.
 
-**Ships:** ✅ TODO 20 — play together.
-
-**Teach:** client/server, serialisation, latency, why "just send everything every frame" does
-not work, and why the server must not trust the client.
+**Client:** remote players reuse `entities/model.js`. Interpolate remote positions ~100 ms in the
+past. The local player is predicted, never interpolated. The chat from Phase 15 becomes the
+network chat almost for free — `bus.emit('chat:message')` already exists as the seam.
 
 ---
 
-### Phase 9 — Backlog / stretch
-Only when everything above is stable.
+### Phase 22 — Keeping `main.js` honest 🟡 (half weekend, do it between other phases)
 
-- Day/night cycle (the Phase 3 sun already moves — just add colour ramps + night mobs).
-- Torches + light propagation, if deferred from 4b.
-- Inventory drag & drop, 3×3 crafting grid with shaped recipes.
-- Furnace + smelting (iron ore → ingot). Needs a tick-based block-entity system.
-- Biomes: temperature/humidity noise selects a biome, biome selects blocks + mob spawns.
-- Structures: villages, dungeons.
-- Save/load to a file the player can share.
+**Concept: a file that grows without limit is a design smell.**
 
----
+`main.js` is 787 lines and is now doing input, HUD, break logic, movement physics, and the loop.
+It was supposed to be wiring only. Before Phase 16 lands, extract:
 
-## 5. TODO coverage map
+- `src/core/loop.js` — the `animate()` skeleton, fixed-timestep update + render.
+- `src/core/input.js` — keys/mouse/touch → named actions (`move`, `jump`, `primary`, `sprint`…).
+  Touch is already a second producer of the same actions; make that structural instead of a
+  convention.
+- `src/ui/hud.js` — FPS, position, target, hint.
+- `src/world/physics.js` — the player's move/gravity/collision resolution, **PURE** given a
+  `collidesAtBox` function. Then it gets tests: does the player stop at a wall, does crouch
+  prevent walking off an edge.
+- `src/game/break.js` — the progressive-break state machine.
 
-| TODO line | Item | Phase |
-|---|---|---|
-| 1 | Zombie/cow/pig faces | 2 (root cause §3.2) |
-| 2 | World border | 3 |
-| 3 | Caves + ores | 4b |
-| 4 | Zoom on `C` | 3 |
-| 5 | Heart-shaped health bar | 3 |
-| 6 | FPS display | 3 |
-| 7 | Chat on `T` | 3 |
-| 8 | Chicken | 2 |
-| 9 | 1000×1000 world | 4a |
-| 10 | Sun | 3 |
-| 11 | Sprint (double-tap `Z`) | 3 |
-| 12 | Water: slow + flowing | 3 |
-| 13 | Crouch on `Shift` | 3 |
-| 15 | Item held in the hand | 3 |
-| 16 | Block-breaking animation | 3 |
-| 17 | 6-block reach, 1st & 3rd person | 3 |
-| 18 | Block visual offset | 2 (root cause §3.1) |
-| 19 | Mobs touching the ground | 2 (root cause §3.3) |
-| 20 | Multiplayer | 8 |
-| 21 | Mobile browser | 6 |
+Target: `main.js` back under 250 lines, and every extraction is behaviour-preserving with the
+game working after each commit.
 
 ---
 
-## 6. Explicitly NOT doing
+### Phase 7bis — The rest of Phase 7 (tests, types, CI) 🟡 (1 weekend)
 
-Saying no is part of design. Each of these costs more than it returns here:
+Started but unfinished:
 
-- **Bundler** (Vite/webpack/Rollup) — native ES modules are enough; a build step is a whole
-  topic that hides the code from him.
-- **TypeScript with a compile step** — JSDoc + `checkJs` gives ~90% of the benefit at 0% of
-  the friction.
-- **A framework for the UI** (React/Vue) — the HUD is ~10 DOM elements.
-- **An ECS** — tempting, but overkill at 4 entity types, and it obscures the plain
-  object-oriented modelling he should learn first.
-- **Anti-cheat / netcode rollback** — scope creep on a weekend project.
-- **Git LFS for `luft-mini.mp3`** — 6.5 MB is annoying but fine; revisit only if more audio
-  lands. Worth *mentioning* to him as a thing that exists.
+- `@ts-check` + JSDoc types + `tsconfig.json` with `checkJs: true`, `noEmit: true`. Editor-level
+  type checking, zero build step.
+- GitHub Actions on every push: `npm test` + `npm run format:check` + the two Pages guards —
+  **fail on any uppercase letter in a path under `src/`**, and **fail on any `from '/` or `src="/`**
+  (§1bis.1–2). These two catch the white-screen-in-production class of bug.
+- `docs/ARCHITECTURE.md` — _he_ writes it. If he cannot explain the structure, it is too complex.
+- `docs/LESSONS.md` — one page per concept, also his.
 
 ---
 
-## 7. Risks
+## 7. Suggested order
 
-| Risk | Mitigation |
-|---|---|
-| Phase 1 refactor drags and the game stays broken for weeks | Extract leaf modules first, commit after each one, never more than one file in flight |
-| Phase 4a (chunks) is genuinely hard and demoralising | Do it *after* Phase 3's easy wins so momentum is high; you drive, he narrates |
-| Three.js r128 → r160 breaks something subtle | Do the upgrade alone in its own commit, before splitting files, so `git bisect` has one suspect |
-| Multiplayer server costs money / dies | Free tier + it is optional; single-player must never depend on the network |
-| Interest fades | Every phase ships something *visible* except Phase 0 and 1 — keep those two short |
-| Works locally, white screen on Pages (path case / absolute paths) | Lowercase-only filenames, relative paths only, dev server on a sub-path, CI guards — §1bis.1–2 |
-| Stale module cached by the Pages CDN mid-demo | Hard reload, or bump `?v=N` on the entry script — §1bis.3 |
+Grouped so that each block ships something visible and unblocks the next:
 
----
-
-## 8. Suggested order of the first three sessions
-
-1. **Session 1** — Phase 0 (tooling, issues) + fix §3.1 the half-block offset. Small, and the
-   game immediately feels better. Momentum.
-2. **Session 2** — Phase 1 (split into modules). Hard, unglamorous; frame it as "we are
-   building the workbench".
-3. **Session 3** — Phase 2 (data-driven) → chicken + faces ship the same day. This is where he
-   sees the payoff of session 2 and gets it.
+1. **Phase 10** (slots + ground drops) — biggest single win, unblocks 11/14/18.
+2. **Phase 15** (chat history + `/` commands) — 🟢, he can drive it, and `/give` + `/tp` make
+   testing every later phase far faster. Arguably do this _first_, as a tooling investment.
+3. **Phase 11** (hunger + drowning) and **Phase 12** (line of sight + spawning) — independent.
+4. **Phase 13** (torches + light BFS) → then re-tune the caves.
+5. **Phase 14** (furnace) and **Phase 18** (sheep) — content, cheap now.
+6. **Phase 19** (break polish) — a rest-day phase between two hard ones.
+7. **Phase 22** (re-split `main.js`) — before the world rework, not after.
+8. **Phase 16** (water as a block: culling + flow) → **Phase 17** (deep terrain, biomes, oceans,
+   rivers) → **Phase 20** (worker, when 17 makes it necessary).
+9. **Phase 7bis** (CI/types) — slot it in whenever a phase ends early.
+10. **Phase 21** (multiplayer) — last.
 
 ---
 
-*Plan written in English; happy to produce a French version for lil bro — the code comments
-and the TODO are already in French.*
+## 8. Explicitly NOT doing
+
+Saying no is part of design.
+
+- **Bundler** (Vite/webpack) — native ES modules are enough; a build step hides the code.
+- **TypeScript with a compile step** — JSDoc + `checkJs` gives ~90% of the benefit at 0% friction.
+- **A UI framework** — the HUD is ~12 DOM elements.
+- **An ECS** — tempting at Phase 10, but overkill at ~6 entity types, and it obscures the plain
+  object modelling he should learn first. A shared `Entity` base is the right size.
+- **Anti-cheat / rollback netcode** — scope creep.
+- **Infinite world in Y** — `CHUNK_Y = 128` after Phase 17 is plenty; sub-chunks (16³ sections)
+  are the "real" answer and are not worth the complexity here.
+- **Git LFS for the audio** — ~16 MB across two mp3s is annoying but fine. Worth _mentioning_ as
+  a thing that exists. If a third track lands, revisit.
+
+---
+
+## 9. Risks
+
+| Risk                                                                                | Mitigation                                                                                      |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Phase 10 touches inventory, hotbar, craft, mobs at once and stays broken for a week | Four separate commits (10.1 pure + adapter → 10.2 → 10.3 → 10.4); the game runs after each      |
+| Phase 16 (water as a block) breaks lakes, swimming, and drowning simultaneously     | Do it right after Phase 22's `physics.js` extraction, so swimming has tests before it changes   |
+| Phase 17.1 (`CHUNK_Y` 64→128) tanks the FPS                                         | Expected. Measure, then do Phase 20. Do not pre-optimise                                        |
+| Phase 13's light BFS is a big algorithm to hold in your head                        | Ship v1 that stops at chunk borders, _see_ the seam, then fix it. Two commits, two lessons      |
+| Works locally, white screen on Pages (path case, absolute path)                     | Lowercase-only filenames, relative paths only, dev server on the sub-path, Phase 7bis CI guards |
+| Stale module cached by the Pages CDN mid-demo                                       | Hard reload, or bump `?v=N` on the entry script                                                 |
+| Interest fades during the two 🔴 world phases (16/17)                               | Sandwich them between 🟢 phases (19 before, 18 after), and keep `/give` + `/tp` handy           |
+| `main.js` keeps growing and becomes the new single-file problem                     | Phase 22, scheduled _before_ the world rework rather than "someday"                             |
+
+---
+
+_Plan written in English; the code comments and the TODO are in French. A French version for
+lil bro is easy to produce on request._

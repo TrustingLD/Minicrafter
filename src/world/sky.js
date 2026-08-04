@@ -10,6 +10,9 @@
 import * as THREE from 'three';
 
 const DAY_LENGTH_SECONDS = 720; // durée d'un cycle complet jour+nuit, en secondes (12 min)
+// instant du cycle au démarrage : 0 = minuit, 0.5 = midi. 0.35 = milieu de matinée —
+// pleine lumière, et il reste ~2 minutes de jour avant la première nuit.
+const START_CYCLE_T = 0.35;
 const SUN_MOON_DIST = 300; // distance du disque soleil/lune (assez loin pour rester net dans la brume)
 const LIGHT_DIST = 100; // distance de la position des lumières directionnelles
 
@@ -102,7 +105,15 @@ export function createSky({ scene, ambientLight, sunLight }) {
   scene.add(stars);
 
   const skyColor = new THREE.Color();
-  let elapsed = 0;
+  // fix : `elapsed = 0` correspond à cycleT = 0, c'est-à-dire MINUIT (cf. setTime plus
+  // bas). La partie démarrait donc en pleine nuit — écran noir et zombies dès la
+  // première seconde. On démarre en milieu de matinée, soleil déjà bien haut.
+  let elapsed = DAY_LENGTH_SECONDS * START_CYCLE_T;
+  // même valeur que celle que `update()` calculera à la première frame : sans ça,
+  // isNight() répondrait « nuit » (0 < -0.05 est faux, mais l'ancien 0 mentait sur
+  // l'état réel du ciel) avant le tout premier update.
+  // (même formule que dans update() : sunDir = (cos a, sin a, 0.2).normalize())
+  let lastSunHeight = Math.sin(START_CYCLE_T * Math.PI * 2 - Math.PI / 2) / Math.hypot(1, 0.2);
 
   function update(dt, playerPos) {
     elapsed += dt;
@@ -110,11 +121,15 @@ export function createSky({ scene, ambientLight, sunLight }) {
     const angle = cycleT * Math.PI * 2 - Math.PI / 2;
     const sunDir = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0.2).normalize();
     const sunHeight = sunDir.y;
+    lastSunHeight = sunHeight;
 
     const dayAmount = smoothstep(-0.2, 0.15, sunHeight);
     const duskAmount = Math.max(0, 1 - Math.abs(sunHeight) / 0.28);
 
-    skyColor.copy(SKY_NIGHT).lerp(SKY_DAY, dayAmount).lerp(SKY_DUSK, duskAmount * 0.5);
+    skyColor
+      .copy(SKY_NIGHT)
+      .lerp(SKY_DAY, dayAmount)
+      .lerp(SKY_DUSK, duskAmount * 0.5);
     scene.background = skyColor;
     scene.fog.color.copy(skyColor);
 
@@ -143,5 +158,16 @@ export function createSky({ scene, ambientLight, sunLight }) {
     starMat.opacity = (1 - dayAmount) * 0.85;
   }
 
-  return { update };
+  // /time (Phase 15) : cycleT 0.5 = midi (plein jour), 0 = minuit (nuit complète) —
+  // cf. le calcul de sunDir ci-dessus (sin(angle), angle = cycleT*2π - π/2).
+  function setTime(cycleT) {
+    elapsed = (((cycleT % 1) + 1) % 1) * DAY_LENGTH_SECONDS;
+  }
+  // seuil sunHeight < -0.05 : mobs hostiles + spawn nocturne (Phase 12) veulent un
+  // "vraiment nuit", pas juste "un peu après le coucher du soleil".
+  function isNight() {
+    return lastSunHeight < -0.05;
+  }
+
+  return { update, setTime, isNight };
 }

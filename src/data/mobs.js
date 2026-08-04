@@ -109,6 +109,45 @@ export const MOBS = {
       ],
     },
   },
+  // Mouton (Phase 18) : preuve que le design data-driven marche -- ~30 lignes de
+  // donnée, zéro nouvelle logique dans entities/mob.js à part la tonte (état, pas
+  // un nouveau système). `wool: true` sur la partie "corps" marque QUELLE boîte
+  // change de texture quand on tond (cf. shear()/regrow() dans entities/mob.js) ;
+  // la tête garde son visage, seul le corps redevient "nu".
+  sheep: {
+    name: 'Mouton',
+    speed: 1.0,
+    health: 4,
+    hitbox: { radius: 0.42, height: 1.2 },
+    ai: 'wander',
+    drops: [
+      { item: 'wool', min: 1, max: 1 },
+      { item: 'meat', min: 1, max: 2 },
+    ],
+    model: {
+      parts: [
+        { size: [1.0, 0.7, 1.3], at: [0, 0.6, 0], tex: 'sheepWool', wool: true },
+        // `faceTex` (et non `tex: 'sheepFace'`) : sans lui, la tête n'a qu'UN matériau,
+        // donc le visage était plaqué sur les six faces du cube — un mouton avec des
+        // yeux devant, derrière et sur les côtés. `tex` habille les 5 autres faces.
+        { size: [0.5, 0.5, 0.5], at: [0, 0.9, 0.75], tex: 'sheepWool', faceTex: 'sheepFace' },
+      ],
+      limbs: [
+        {
+          group: 'legs',
+          size: [0.2, 0.4, 0.2],
+          jointY: 0.4,
+          positions: [
+            [-0.32, -0.5],
+            [0.32, -0.5],
+            [-0.32, 0.5],
+            [0.32, 0.5],
+          ],
+          tex: 'sheepSkin',
+        },
+      ],
+    },
+  },
   chicken: {
     name: 'Poulet',
     speed: 1.3,

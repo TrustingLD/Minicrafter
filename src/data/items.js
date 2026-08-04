@@ -26,8 +26,25 @@ export const ITEM_NAMES = {
   gold_ore: "Minerai d'or",
   diamond_ore: 'Minerai de diamant',
   meat: 'Viande',
+  cooked_meat: 'Viande cuite',
   milk: 'Lait',
   snow: 'Neige',
+  torch: 'Torche',
+  furnace: 'Fourneau',
+  iron_ingot: 'Lingot de fer',
+  wool: 'Laine',
+  sand: 'Sable',
+  sandstone: 'Grès',
+  cactus: 'Cactus',
+};
+
+// nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
+// faim (sur 20) rendus en une bouchée ; saturationTime = durée de l'animation de
+// consommation en secondes. Un item sans entrée ici n'est simplement pas mangeable.
+export const FOOD = {
+  meat: { hunger: 3, saturationTime: 1.6 },
+  cooked_meat: { hunger: 6, saturationTime: 1.6 },
+  milk: { hunger: 4, saturationTime: 1.2 },
 };
 
 // item d'outil -> catégorie ('pickaxe' | 'axe' | 'sword'). blocks.js référence la
@@ -76,9 +93,9 @@ export const RECIPES = [
     give: { wood_sword: 1 },
     needsTable: true,
   },
-  // Tiers pierre/fer (Phase 4b). Le fer se craft directement depuis le minerai brut :
-  // pas de fourneau/fusion pour l'instant, c'est un sujet à part entière (backlog,
-  // PLAN.md Phase 9 "Furnace + smelting").
+  // Tiers pierre/fer (Phase 4b). Le fer a besoin d'un lingot (Phase 14 : fourneau +
+  // fonte), le minerai brut seul ne suffit pas -- c'est ce qui rend le fourneau
+  // réellement nécessaire, pas juste une option.
   {
     id: 'stone_pickaxe',
     name: 'Pioche en pierre',
@@ -103,40 +120,40 @@ export const RECIPES = [
   {
     id: 'iron_pickaxe',
     name: 'Pioche en fer',
-    need: { iron_ore: 3, stick: 2 },
+    need: { iron_ingot: 3, stick: 2 },
     give: { iron_pickaxe: 1 },
     needsTable: true,
   },
   {
     id: 'iron_axe',
     name: 'Hache en fer',
-    need: { iron_ore: 3, stick: 2 },
+    need: { iron_ingot: 3, stick: 2 },
     give: { iron_axe: 1 },
     needsTable: true,
   },
   {
     id: 'iron_sword',
     name: 'Épée en fer',
-    need: { iron_ore: 2, stick: 1 },
+    need: { iron_ingot: 2, stick: 1 },
     give: { iron_sword: 1 },
     needsTable: true,
   },
-];
-
-// barre fixe (10 emplacements, comme avant) : seulement les objets de base. Les
-// tiers pierre/fer et les minerais bruts se sélectionnent depuis l'inventaire (E),
-// pas depuis la hotbar — sinon elle grossit à chaque nouvel objet ajouté au jeu.
-export const HOTBAR = [
-  'grass',
-  'dirt',
-  'stone',
-  'wood',
-  'leaves',
-  'planks',
-  'crafting_table',
-  'wood_sword',
-  'wood_pickaxe',
-  'wood_axe',
+  // Torche (Phase 13) : simple à obtenir dès le début, pas de table nécessaire —
+  // c'est ce qui rend les grottes praticables avant même d'avoir posé une table de craft.
+  {
+    id: 'torch',
+    name: 'Torche',
+    need: { stick: 1, coal_ore: 1 },
+    give: { torch: 4 },
+    needsTable: false,
+  },
+  {
+    id: 'furnace',
+    name: 'Fourneau',
+    need: { stone: 8 },
+    give: { furnace: 1 },
+    needsTable: false,
+  },
 ];
 
 // dérivé : tout objet qui n'est pas un bloc n'est pas posable (outils, nourriture,

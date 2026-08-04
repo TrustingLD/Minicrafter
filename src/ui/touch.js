@@ -41,9 +41,9 @@ export function createTouchUI({
   `;
   document.body.appendChild(root);
 
-  const joyBase = root.querySelector('#tcJoystickBase');
-  const joyStick = root.querySelector('#tcJoystickStick');
-  const lookZone = root.querySelector('#tcLookZone');
+  const joyBase = /** @type {HTMLElement} */ (root.querySelector('#tcJoystickBase'));
+  const joyStick = /** @type {HTMLElement} */ (root.querySelector('#tcJoystickStick'));
+  const lookZone = /** @type {HTMLElement} */ (root.querySelector('#tcLookZone'));
 
   let joyTouchId = null;
   let joyCenter = { x: 0, y: 0 };
@@ -75,7 +75,7 @@ export function createTouchUI({
 
   joyBase.addEventListener(
     'touchstart',
-    (e) => {
+    /** @param {TouchEvent} e */ (e) => {
       e.preventDefault();
       const t = e.changedTouches[0];
       joyStart(t.identifier, t.clientX, t.clientY);
@@ -85,7 +85,7 @@ export function createTouchUI({
 
   lookZone.addEventListener(
     'touchstart',
-    (e) => {
+    /** @param {TouchEvent} e */ (e) => {
       e.preventDefault();
       const t = e.changedTouches[0];
       lookTouchId = t.identifier;

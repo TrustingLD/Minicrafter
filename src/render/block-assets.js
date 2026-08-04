@@ -32,11 +32,23 @@ export function createBlockAssets() {
     tIronAxe = tex.texIronAxe(),
     tSnow = tex.texSnow(),
     tMeat = tex.texMeat(),
+    tCookedMeat = tex.texCookedMeat(),
     tMilk = tex.texMilk(),
     tCoalOre = tex.texCoalOre(),
     tIronOre = tex.texIronOre(),
     tGoldOre = tex.texGoldOre(),
-    tDiamondOre = tex.texDiamondOre();
+    tDiamondOre = tex.texDiamondOre(),
+    // le côté du bâtonnet (manche + flamme) : c'est la face qui identifie la torche,
+    // donc c'est elle qu'on montre dans la hotbar et sur le cube tenu en main
+    tTorch = tex.texTorchStick(),
+    tFurnace = tex.texFurnace(),
+    tIronIngot = tex.texIronIngot(),
+    tWool = tex.texWool(),
+    tSand = tex.texSand(),
+    tSandstone = tex.texSandstone(),
+    tCactus = tex.texCactus(),
+    tDeadBush = tex.texDeadBush(),
+    tIce = tex.texIce();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -69,6 +81,35 @@ export function createBlockAssets() {
       mat(tCraftSide),
     ],
     snow: [mat(tSnow), mat(tSnow), mat(tSnow), mat(tSnow), mat(tSnow), mat(tSnow)],
+    torch: [mat(tTorch), mat(tTorch), mat(tTorch), mat(tTorch), mat(tTorch), mat(tTorch)],
+    furnace: [
+      mat(tFurnace),
+      mat(tFurnace),
+      mat(tFurnace),
+      mat(tFurnace),
+      mat(tFurnace),
+      mat(tFurnace),
+    ],
+    wool: [mat(tWool), mat(tWool), mat(tWool), mat(tWool), mat(tWool), mat(tWool)],
+    sand: [mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand)],
+    sandstone: [
+      mat(tSandstone),
+      mat(tSandstone),
+      mat(tSandstone),
+      mat(tSandstone),
+      mat(tSandstone),
+      mat(tSandstone),
+    ],
+    cactus: [mat(tCactus), mat(tCactus), mat(tCactus), mat(tCactus), mat(tCactus), mat(tCactus)],
+    dead_bush: [
+      mat(tDeadBush),
+      mat(tDeadBush),
+      mat(tDeadBush),
+      mat(tDeadBush),
+      mat(tDeadBush),
+      mat(tDeadBush),
+    ],
+    ice: [mat(tIce), mat(tIce), mat(tIce), mat(tIce), mat(tIce), mat(tIce)],
   };
 
   const toolTextures = {
@@ -102,6 +143,24 @@ export function createBlockAssets() {
         return tCraftTop.image;
       case 'snow':
         return tSnow.image;
+      case 'torch':
+        return tTorch.image;
+      case 'furnace':
+        return tFurnace.image;
+      case 'iron_ingot':
+        return tIronIngot.image;
+      case 'wool':
+        return tWool.image;
+      case 'sand':
+        return tSand.image;
+      case 'sandstone':
+        return tSandstone.image;
+      case 'cactus':
+        return tCactus.image;
+      case 'dead_bush':
+        return tDeadBush.image;
+      case 'ice':
+        return tIce.image;
       case 'wood_sword':
         return tWoodSword.image;
       case 'wood_pickaxe':
@@ -130,6 +189,8 @@ export function createBlockAssets() {
         return tDiamondOre.image;
       case 'meat':
         return tMeat.image;
+      case 'cooked_meat':
+        return tCookedMeat.image;
       case 'milk':
         return tMilk.image;
       case 'stick':

@@ -106,6 +106,26 @@ canvas {
   height: 2px;
 }
 
+/* Vignette de dégâts (Phase 19) : flash rouge sur les bords à chaque perte de vie,
+   pas à chaque event player:health (la régénération de faim en émet aussi). */
+#hurtVignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(200, 0, 0, 0) 55%,
+    rgba(200, 0, 0, 0.55) 100%
+  );
+  transition: opacity 0.6s ease-out;
+}
+#hurtVignette.flash {
+  opacity: 1;
+  transition: opacity 0.1s ease-in;
+}
+
 #fps {
   position: fixed;
   top: 10px;
@@ -142,6 +162,34 @@ canvas {
   width: fit-content;
   transition: opacity 0.5s;
 }
+.msg.err {
+  color: #ff8080;
+}
+
+/* panneau plein (T maintenu ouvert) : historique scrollable, pas de fondu — cf.
+   ui/chat.js. Recouvre la même zone que #chatLog (masqué pendant ce temps). */
+#chatHistory {
+  position: fixed;
+  bottom: 200px;
+  left: 16px;
+  width: 420px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 14;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 13px;
+}
+#chatHistory .msg {
+  color: #fff;
+  padding: 2px 8px;
+  text-shadow: 1px 1px 2px #000;
+}
+
 #chatInputBox {
   position: fixed;
   bottom: 160px;
@@ -161,13 +209,29 @@ canvas {
   color: #fff;
 }
 
+/* Géométrie du HUD du bas, en un seul endroit — les jauges se plaçaient chacune avec
+   un `bottom` en dur, et hungerbar (64px) tombait EN PLEIN DANS la hotbar, qui occupe
+   20px à 78px : les cuisses de poulet se dessinaient par-dessus les cases. Tout est
+   maintenant dérivé de ces variables, donc les rangées ne peuvent plus se croiser. */
+:root {
+  --hotbar-bottom: 20px;
+  --slot-size: 54px;
+  --slot-border: 2px;
+  --slot-gap: 6px;
+  --hotbar-height: calc(var(--slot-size) + 2 * var(--slot-border)); /* 58px */
+  --hotbar-width: calc(9 * var(--hotbar-height) + 8 * var(--slot-gap)); /* 9 cases */
+  /* première rangée de jauges : juste au-dessus de la hotbar, plus une marge */
+  --gauge-row: calc(var(--hotbar-bottom) + var(--hotbar-height) + 6px);
+  --gauge-row-height: 20px;
+}
+
 #hotbar {
   position: fixed;
-  bottom: 20px;
+  bottom: var(--hotbar-bottom);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 6px;
+  gap: var(--slot-gap);
   z-index: 10;
 }
 .slot {
@@ -232,11 +296,14 @@ canvas {
   line-height: 1.5;
 }
 
+/* Vie à GAUCHE, faim à DROITE, sur une même rangée calée sur la largeur de la hotbar
+   (comme dans le jeu dont ça s'inspire). Toutes deux étaient centrées auparavant,
+   donc empilées l'une sur l'autre au milieu — et la faim débordait sur la hotbar. */
 #healthbar {
   position: fixed;
-  bottom: 82px;
+  bottom: var(--gauge-row);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(calc(var(--hotbar-width) / -2));
   display: flex;
   gap: 3px;
   z-index: 10;
@@ -253,6 +320,51 @@ canvas {
 .heart.empty {
   background: #333;
   filter: drop-shadow(0 0 1px #111) drop-shadow(0 0 1px #111);
+}
+
+#hungerbar {
+  position: fixed;
+  bottom: var(--gauge-row);
+  left: 50%;
+  /* bord DROIT aligné sur le bord droit de la hotbar : on va au bord, puis on recule
+     de sa propre largeur (translateX(-100%)), qui dépend du nombre de cuisses. */
+  transform: translateX(calc(var(--hotbar-width) / 2)) translateX(-100%);
+  display: flex;
+  gap: 3px;
+  z-index: 10;
+}
+.drumstick {
+  width: 16px;
+  height: 14px;
+  background: #c98a4b;
+  border-radius: 3px 8px 3px 8px;
+  filter: drop-shadow(0 0 1px #6b4620);
+}
+.drumstick.empty {
+  background: #333;
+  filter: drop-shadow(0 0 1px #111);
+}
+
+/* rangée du dessus : les bulles ne doivent pas écraser la ligne vie/faim */
+#breathbar {
+  position: fixed;
+  bottom: calc(var(--gauge-row) + var(--gauge-row-height));
+  left: 50%;
+  transform: translateX(calc(var(--hotbar-width) / 2)) translateX(-100%);
+  display: none;
+  gap: 3px;
+  z-index: 10;
+}
+.bubble {
+  width: 12px;
+  height: 12px;
+  background: #7ec8e3;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 1px #1c5878);
+}
+.bubble.empty {
+  background: #333;
+  filter: drop-shadow(0 0 1px #111);
 }
 
 #blocker {
@@ -336,6 +448,10 @@ canvas {
   border-color: #fff;
   box-shadow: 0 0 8px #fff;
 }
+.invItem.empty {
+  opacity: 0.35;
+  cursor: default;
+}
 .invItem img,
 .invItem .ic {
   width: 28px;
@@ -379,6 +495,106 @@ canvas {
 .recipe.locked {
   opacity: 0.5;
 }
+#furnacePanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#furnaceBox {
+  background: #3a3a3a;
+  border: 4px solid #202020;
+  border-radius: 8px;
+  padding: 18px;
+  width: 260px;
+  color: #f0e6d2;
+  font-size: 14px;
+  text-align: center;
+}
+#furnaceBox h2 {
+  margin-top: 0;
+}
+#furnaceRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.fSlot {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #6b6b6b;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  position: relative;
+}
+.fSlot.empty {
+  opacity: 0.4;
+}
+.fSlot img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.fSlot .fCount {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 11px;
+  font-weight: bold;
+  text-shadow: 1px 1px 1px #000;
+}
+#furnaceProgress {
+  width: 40px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+#furnaceProgressFill {
+  height: 100%;
+  width: 0%;
+  background: #e0b64a;
+  transition: width 0.1s linear;
+}
+#furnaceFuelRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+#furnaceFlame {
+  width: 12px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+#furnaceFlameFill {
+  width: 100%;
+  height: 0%;
+  background: #ff7b25;
+  transition: height 0.2s linear;
+}
+#closeFurnace {
+  background: #a33;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  width: 100%;
+}
+
 #closeCraft {
   margin-top: 8px;
   background: #a33;

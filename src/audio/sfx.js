@@ -1,7 +1,9 @@
 // Sons générés en Web Audio, aucun fichier externe nécessaire.
 
 export function createSfx() {
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // webkitAudioContext : préfixe Safari historique, absent des types DOM standard
+  const AudioContextCtor = window.AudioContext || /** @type {any} */ (window).webkitAudioContext;
+  const audioCtx = new AudioContextCtor();
   const masterGain = audioCtx.createGain();
   masterGain.gain.value = 0.35;
   masterGain.connect(audioCtx.destination);
@@ -82,8 +84,26 @@ export function createSfx() {
       case 'equip':
         playTone(500, 0.06, 'square', 0.12, 700);
         break;
+      case 'pickup':
+        playTone(650, 0.09, 'sine', 0.16, 950);
+        break;
+      case 'eat':
+        playNoiseBurst(0.1, 600, 0.18, 'lowpass');
+        break;
+      case 'drown':
+        playTone(150, 0.3, 'sawtooth', 0.2, 60);
+        break;
     }
   }
 
-  return { resumeAudio, playSound };
+  // tic de minage (Phase 19) : le même son que 'break' mais bref et dont la hauteur
+  // monte avec la progression (ratio 0..1) -- retour continu pendant qu'on maintient
+  // le clic, pas juste un bruit sec au moment où le bloc casse pour de vrai.
+  function playBreakTick(ratio) {
+    if (audioCtx.state !== 'running') return;
+    const freq = 500 + ratio * 700;
+    playTone(freq, 0.05, 'square', 0.05, freq * 0.8);
+  }
+
+  return { resumeAudio, playSound, playBreakTick };
 }

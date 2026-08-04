@@ -6,11 +6,15 @@ import * as THREE from 'three';
 
 import { createEventBus } from './core/events.js';
 import { voxelRaycast } from './core/raycast.js';
+import { parseCommand } from './core/commands.js';
+import { COMMANDS } from './data/commands.js';
 import { createBlockAssets } from './render/block-assets.js';
 import { texCrackStage } from './render/textures.js';
 import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
-import { ITEM_NAMES, RECIPES, HOTBAR, NON_PLACEABLE, TOOL_CATEGORY } from './data/items.js';
-import { SEA_LEVEL, getHeight } from './world/generator.js';
+import { ITEM_NAMES, RECIPES, NON_PLACEABLE, TOOL_CATEGORY, FOOD } from './data/items.js';
+import { SMELTING, FUELS } from './data/recipes.js';
+import { createBlockEntitySystem } from './world/block-entities.js';
+import { SEA_LEVEL, getHeight, findSpawnColumn } from './world/generator.js';
 import { createWorld } from './world/world.js';
 import { createClouds } from './world/clouds.js';
 import { createSky } from './world/sky.js';
@@ -18,9 +22,28 @@ import { createSfx } from './audio/sfx.js';
 import { createMusic } from './audio/music.js';
 import { createMobTextures, createMobSystem } from './entities/mob.js';
 import { createPlayer } from './entities/player.js';
+import { createParticleSystem } from './entities/particles.js';
+import {
+  resolveHorizontalMove,
+  resolveVerticalPhysics,
+  tryJump,
+  resolveFlyingVertical,
+} from './world/physics.js';
+import { createHud } from './ui/hud.js';
+import {
+  createSlots,
+  addItem,
+  removeItem,
+  countOf,
+  moveSlot,
+  HOTBAR_SLOTS,
+} from './entities/inventory.js';
+import { createItemEntitySystem } from './entities/item-entity.js';
 import { createHotbarUI } from './ui/hotbar.js';
 import { createHealthUI } from './ui/health.js';
+import { createHungerUI, createBreathUI } from './ui/hunger.js';
 import { createCraftUI } from './ui/craft.js';
+import { createFurnaceUI } from './ui/furnace.js';
 import { createChatUI } from './ui/chat.js';
 import { isTouchDevice, createTouchUI } from './ui/touch.js';
 
@@ -62,7 +85,6 @@ sun.shadow.mapSize.set(512, 512); // réduit : moins coûteux à calculer
 scene.add(sun);
 scene.add(sun.target);
 
-
 /* ---------- Audio ---------- */
 const sfx = createSfx();
 const musicHintEl = document.getElementById('musicHint');
@@ -70,11 +92,30 @@ const music = createMusic(['./luft-mini.mp3', './minicrafter_theme_final.mp3', '
 document.getElementById('musicHint').addEventListener('click', music.toggleBgmMute);
 
 /* ---------- Monde ---------- */
+// Colonne d'apparition : calculée AVANT createWorld, parce que c'est autour d'ELLE
+// que le disque initial de chunks doit être préchargé — pas autour de (0,0), qui
+// n'est plus forcément l'endroit où le joueur apparaît (cf. findSpawnColumn).
+// Un chunk non chargé compte comme plein dans isSolid() : apparaître hors du disque
+// préchargé enfermerait le joueur dans un mur invisible.
+const SPAWN_COLUMN = findSpawnColumn();
+
 // Monde en chunks (Phase 4a) : createWorld précharge un petit disque de chunks
-// autour de (0,0) de façon synchrone (le joueur n'apparaît jamais dans le vide),
-// le reste se charge à la volée via worldApi.update(player.pos) dans animate().
+// autour du point d'apparition de façon synchrone (le joueur n'apparaît jamais dans
+// le vide), le reste se charge à la volée via worldApi.update(player.pos) dans animate().
 const blockAssets = createBlockAssets();
-const worldApi = createWorld({ scene, renderDistance: touchMode ? 4 : 6 });
+const particleSystem = createParticleSystem({ scene, blockAssets });
+const renderDistance = touchMode ? 4 : 6;
+const torchPositions = new Map(); // "x,y,z" -> {x,y,z} — alimenté par worldApi, cf. plus bas
+const worldApi = createWorld({
+  scene,
+  renderDistance,
+  preloadAt: { x: SPAWN_COLUMN.x, z: SPAWN_COLUMN.z },
+  onTorchesChanged: (x, y, z, present) => {
+    const key = `${x},${y},${z}`;
+    if (present) torchPositions.set(key, { x, y, z });
+    else torchPositions.delete(key);
+  },
+});
 const cloudsApi = createClouds({ scene });
 const skyApi = createSky({ scene, ambientLight: ambient, sunLight: sun });
 
@@ -97,45 +138,68 @@ const crackMesh = new THREE.Mesh(new THREE.BoxGeometry(1.01, 1.01, 1.01), crackM
 crackMesh.visible = false;
 scene.add(crackMesh);
 
-/* ---------- Inventaire ---------- */
-// Vide au départ (Phase X) : avant, le joueur démarrait avec 5 bois gratuits. Casser
-// un bloc (breakBlockAt, plus bas) incrémente déjà `inventory[type]` tout seul, donc
-// l'inventaire se remplit naturellement au fil du jeu sans rien avoir à changer là-bas.
-const inventory = {
-  wood: 0,
-  planks: 0,
-  stick: 0,
-  dirt: 0,
-  stone: 0,
-  grass: 0,
-  leaves: 0,
-  crafting_table: 0,
-  wood_pickaxe: 0,
-  wood_axe: 0,
-  wood_sword: 0,
-  meat: 0,
-  milk: 0,
-};
+// Pose : léger "pop" (Phase 19) -- un cube blanc translucide qui rétrécit de 1.35x
+// à rien sur 0.15s au-dessus du bloc fraîchement posé. Purement décoratif, un seul
+// mesh réutilisé (jamais plus d'une pose active à la fois, contrairement aux
+// particules de cassage qui peuvent se chevaucher).
+const placeFeedbackMat = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.5,
+  depthWrite: false,
+});
+const placeFeedbackMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), placeFeedbackMat);
+placeFeedbackMesh.visible = false;
+scene.add(placeFeedbackMesh);
+let placeFeedbackTimer = 0;
+const PLACE_FEEDBACK_DURATION = 0.15;
+function triggerPlaceFeedback(x, y, z) {
+  placeFeedbackMesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+  placeFeedbackMesh.visible = true;
+  placeFeedbackTimer = PLACE_FEEDBACK_DURATION;
+}
 
-let selectedIndex = HOTBAR.findIndex((t) => (inventory[t] || 0) > 0);
-if (selectedIndex < 0) selectedIndex = 0;
-let selectedBlock = HOTBAR[selectedIndex];
+/* ---------- Inventaire ---------- */
+// Slots (Phase 10) : plus un dictionnaire { item: count } mais un tableau de 36
+// emplacements (9 hotbar + 27 sac à dos), cf. entities/inventory.js. Vide au départ —
+// casser un bloc ou ramasser un drop au sol (item-entity.js) le remplit.
+const slots = createSlots();
+
+let selectedIndex = 0;
+let selectedBlock = slots[selectedIndex]?.item ?? null;
 
 /* ---------- UI ---------- */
 const hotbarUI = createHotbarUI({
   hotbarEl: document.getElementById('hotbar'),
-  HOTBAR,
   blockTypes: BLOCK_TYPES,
   itemNames: ITEM_NAMES,
   iconCanvas: blockAssets.iconCanvas,
   onSelect: selectSlot,
 });
 hotbarUI.setSelectedIndex(selectedIndex);
-hotbarUI.render(inventory);
-bus.on('inventory:changed', () => hotbarUI.render(inventory));
+hotbarUI.render(slots);
+bus.on('inventory:changed', () => hotbarUI.render(slots));
 
 const healthUI = createHealthUI(document.getElementById('healthbar'));
 bus.on('player:health', () => healthUI.render(player));
+
+// Vignette de dégâts (Phase 19) : ne flashe que sur une VRAIE perte de vie, pas sur
+// chaque event player:health (la régénération de faim > 18 en émet un aussi).
+const hurtVignetteEl = document.getElementById('hurtVignette');
+let lastHealth = 20; // vie de départ (cf. entities/player.js) -- `player` n'existe pas encore ici
+bus.on('player:health', () => {
+  if (player.health < lastHealth) {
+    hurtVignetteEl.classList.add('flash');
+    setTimeout(() => hurtVignetteEl.classList.remove('flash'), 80);
+  }
+  lastHealth = player.health;
+});
+
+const hungerUI = createHungerUI(document.getElementById('hungerbar'));
+bus.on('player:hunger', () => hungerUI.render(player));
+
+const breathUI = createBreathUI(document.getElementById('breathbar'));
+bus.on('player:breath', () => breathUI.render(player));
 
 const craftUI = createCraftUI({
   elements: {
@@ -149,14 +213,23 @@ const craftUI = createCraftUI({
   iconCanvas: blockAssets.iconCanvas,
   playSound: sfx.playSound,
   onCrafted: () => bus.emit('inventory:changed'),
-  onSelectItem: selectItem,
+  // cliquer une case du sac à dos l'échange avec le slot hotbar sélectionné —
+  // "équiper depuis l'inventaire" (E) devient un moveSlot plutôt qu'une sélection
+  // par nom, cohérent avec le reste du système à slots.
+  onSlotClick: (backpackIndex) => {
+    moveSlot(slots, backpackIndex, selectedIndex);
+    selectedBlock = slots[selectedIndex]?.item ?? null;
+    refreshHeldItem(selectedBlock);
+    bus.emit('inventory:changed');
+    craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex);
+  },
 });
 let craftOpen = false;
 function openCraft() {
   craftOpen = true;
   craftUI.show();
   document.exitPointerLock();
-  craftUI.render(inventory, worldApi.getBlock, player.pos, selectedBlock);
+  craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex);
 }
 function closeCraft() {
   craftOpen = false;
@@ -169,47 +242,173 @@ function closeCraft() {
 }
 document.getElementById('closeCraft').addEventListener('click', closeCraft);
 
-/* ---------- Joueur ---------- */
-const {
-  player,
-  updateVisuals,
-  refreshHeldItem,
-  toggleThirdPerson,
-  triggerHandSwing,
-  collidesAt,
-  respawn,
-} = createPlayer({
-  scene,
-  camera,
-  materials: blockAssets.materials,
-  blockTypes: blockAssets.blockTypes,
-  toolTextures: blockAssets.toolTextures,
-  collidesAtBox: worldApi.collidesAtBox,
-  getBlock: worldApi.getBlock,
-  spawnPos: new THREE.Vector3(0, getHeight(0, 0) + 3, 0),
+/* ---------- Fourneau (Phase 14) ---------- */
+// État + horloge (world/block-entities.js) séparés du rendu (ui/furnace.js) — le
+// même découpage "state pur / representation" que Phase 10 (inventaire) et 13 (lumière).
+const blockEntities = createBlockEntitySystem();
+const furnaceUI = createFurnaceUI({
+  elements: {
+    panel: document.getElementById('furnacePanel'),
+    inputSlot: document.getElementById('fInput'),
+    fuelSlot: document.getElementById('fFuel'),
+    outputSlot: document.getElementById('fOutput'),
+    progressFill: document.getElementById('furnaceProgressFill'),
+    flameFill: document.getElementById('furnaceFlameFill'),
+    closeBtn: document.getElementById('closeFurnace'),
+  },
+  iconCanvas: blockAssets.iconCanvas,
+  onClose: () => {
+    if (!touchMode && document.pointerLockElement !== renderer.domElement)
+      blocker.style.display = 'flex';
+  },
 });
+let furnaceOpen = false;
+function furnaceStateAt() {
+  const p = furnaceUI.currentPos;
+  return p ? blockEntities.ensure(p.x, p.y, p.z) : null;
+}
+function renderFurnace() {
+  const state = furnaceStateAt();
+  if (!state) return;
+  const burnBudget = state.fuel ? FUELS[state.fuel.item] || 1 : FUELS[state.input?.item] || 8;
+  furnaceUI.render(state, Math.max(1, burnBudget));
+}
+// clic sur une case entrée/combustible = "charge l'objet actuellement en main"
+// (jusqu'à un plein slot) ; clic sur la sortie = "récupère tout ce qu'il y a".
+// Pas de glisser-déposer (cf. PLAN.md Phase 14) : click-to-move suffit.
+function loadFromHotbar(field, predicate) {
+  const state = furnaceStateAt();
+  if (!state || !selectedBlock || !predicate(selectedBlock)) return;
+  const have = countOf(slots, selectedBlock);
+  if (have <= 0) return;
+  const existing = state[field];
+  if (existing && existing.item !== selectedBlock) return; // case déjà occupée par autre chose
+  const room = 64 - (existing?.count || 0);
+  const move = Math.min(room, have);
+  if (move <= 0) return;
+  removeItem(slots, selectedBlock, move);
+  state[field] = { item: selectedBlock, count: (existing?.count || 0) + move };
+  bus.emit('inventory:changed');
+  renderFurnace();
+}
+furnaceUI.setHandlers({
+  onInputClick: () => loadFromHotbar('input', (item) => !!SMELTING[item]),
+  onFuelClick: () => loadFromHotbar('fuel', (item) => !!FUELS[item]),
+  onOutputClick: () => {
+    const state = furnaceStateAt();
+    if (!state || !state.output) return;
+    const leftover = addItem(slots, state.output.item, state.output.count);
+    state.output.count = leftover;
+    if (leftover <= 0) state.output = null;
+    bus.emit('inventory:changed');
+    renderFurnace();
+  },
+});
+function openFurnace(x, y, z) {
+  furnaceOpen = true;
+  furnaceUI.open(x, y, z);
+  document.exitPointerLock();
+  renderFurnace();
+}
+function closeFurnace() {
+  furnaceOpen = false;
+  furnaceUI.close();
+}
+// E ferme le panneau ouvert (fourneau prioritaire sur craft), ou ouvre craft sinon —
+// jamais les deux en même temps. Partagé par la touche E et le bouton tactile inventaire.
+function toggleCraftOrClose() {
+  if (furnaceOpen) closeFurnace();
+  else if (craftOpen) closeCraft();
+  else openCraft();
+}
+
+/* ---------- Joueur ---------- */
+// Apparition ET réapparition passent par la MÊME colonne sûre (SPAWN_COLUMN, calculée
+// plus haut avec le monde) : le point d'origine en dur ne l'était pas — il pouvait
+// tomber au fond d'une rivière, sous l'eau. `+ 1` : les pieds se posent juste
+// au-dessus du bloc de surface, pas dedans.
+function spawnPoint() {
+  return new THREE.Vector3(SPAWN_COLUMN.x + 0.5, SPAWN_COLUMN.y + 1, SPAWN_COLUMN.z + 0.5);
+}
+
+const { player, updateVisuals, refreshHeldItem, toggleThirdPerson, triggerHandSwing, respawn } =
+  createPlayer({
+    scene,
+    camera,
+    materials: blockAssets.materials,
+    blockTypes: blockAssets.blockTypes,
+    toolTextures: blockAssets.toolTextures,
+    collidesAtBox: worldApi.collidesAtBox,
+    getBlock: worldApi.getBlock,
+    spawnPos: spawnPoint(),
+  });
 healthUI.render(player);
+hungerUI.render(player);
+breathUI.render(player);
 refreshHeldItem(selectedBlock);
 
 function selectSlot(i) {
   if (i !== selectedIndex) sfx.playSound('equip');
   selectedIndex = i;
-  selectedBlock = HOTBAR[i];
+  selectedBlock = slots[i]?.item ?? null;
   hotbarUI.setSelectedIndex(i);
-  hotbarUI.render(inventory);
+  hotbarUI.render(slots);
   refreshHeldItem(selectedBlock);
 }
 
-// équiper un objet qui n'a pas d'emplacement dans la hotbar fixe (minerais bruts,
-// tiers pierre/fer) : cliqué depuis l'inventaire (E), pas depuis la hotbar.
-function selectItem(key) {
-  if (key !== selectedBlock) sfx.playSound('equip');
-  selectedBlock = key;
-  const hotbarIdx = HOTBAR.indexOf(key);
-  selectedIndex = hotbarIdx; // -1 si hors hotbar : aucun slot ne s'affiche sélectionné
-  hotbarUI.setSelectedIndex(hotbarIdx);
-  hotbarUI.render(inventory);
-  refreshHeldItem(selectedBlock);
+/* ---------- Items au sol (Phase 10) ---------- */
+const itemSystem = createItemEntitySystem({
+  scene,
+  blockAssets,
+  collidesAtBox: worldApi.collidesAtBox,
+  playSound: sfx.playSound,
+});
+// appelé par itemSystem.update() quand une entité au sol est à portée de ramassage ;
+// retourne la quantité réellement absorbée (l'inventaire peut être plein).
+function pickupItem(item, count) {
+  const leftover = addItem(slots, item, count);
+  const taken = count - leftover;
+  if (taken > 0) {
+    bus.emit('inventory:changed');
+    if (item === selectedBlock) refreshHeldItem(selectedBlock); // 1er pickup d'un slot vide tenu en main
+  }
+  return taken;
+}
+
+/* ---------- Lumière des torches (Phase 13) ---------- */
+// Un PointLight par torche tuerait le framerate (c'est la leçon de la phase) : un
+// petit pool de PointLight (8) réaffecté aux torches les plus proches du joueur,
+// recalculé 2x/s (pas à chaque frame). Le vertex-color du mesher (world/light.js +
+// render/mesher.js) reste la SEULE source de lumière pour tout le reste des torches.
+const MAX_TORCH_LIGHTS = 8;
+// Portée voulue : la lumière de la torche doit se voir jusqu'à ~5 blocs (demande
+// explicite). `decay: 2` est l'atténuation physique en 1/d² — à 5 blocs il ne reste
+// que 4 % de l'intensité, autant dire rien, c'est pourquoi les torches semblaient
+// n'éclairer qu'elles-mêmes. `decay: 1` (linéaire) tient la distance, et `distance`
+// fixe l'extinction complète nettement au-delà des 5 blocs utiles.
+const TORCH_LIGHT_RANGE = 14;
+const torchLightPool = Array.from({ length: MAX_TORCH_LIGHTS }, () => {
+  const light = new THREE.PointLight(0xffb066, 2.6, TORCH_LIGHT_RANGE, 1);
+  light.visible = false;
+  scene.add(light);
+  return light;
+});
+let torchLightTimer = 0;
+function updateTorchLights(playerPos) {
+  const nearest = [...torchPositions.values()]
+    .map((p) => ({
+      p,
+      d2: (p.x - playerPos.x) ** 2 + (p.y - playerPos.y) ** 2 + (p.z - playerPos.z) ** 2,
+    }))
+    .sort((a, b) => a.d2 - b.d2)
+    .slice(0, MAX_TORCH_LIGHTS);
+  torchLightPool.forEach((light, i) => {
+    const entry = nearest[i];
+    light.visible = !!entry;
+    // +0.55 en Y : la flamme est en HAUT du bâtonnet (cf. `shape` de la torche dans
+    // data/blocks.js), pas au centre d'un cube — la lumière part donc d'où elle brûle.
+    if (entry) light.position.set(entry.p.x + 0.5, entry.p.y + 0.55, entry.p.z + 0.5);
+  });
 }
 
 /* ---------- Mobs ---------- */
@@ -225,7 +424,10 @@ const mobSystem = createMobSystem({
   collidesAtBox: worldApi.collidesAtBox,
   getGroundHeight: worldApi.getGroundHeight,
   getHeight,
-  inventory,
+  getBlock: worldApi.getBlock,
+  isNight: skyApi.isNight,
+  renderDistance,
+  itemSystem,
   playSound: sfx.playSound,
   onPlayerHurt: (dmg) => {
     player.health = Math.max(0, player.health - dmg);
@@ -237,9 +439,10 @@ const mobSystem = createMobSystem({
 });
 mobSystem.spawnMobs();
 
-/* ---------- Chat (T) ---------- */
+/* ---------- Chat (T) + commandes / (Phase 15) ---------- */
 const chatUI = createChatUI({
   logEl: document.getElementById('chatLog'),
+  historyEl: document.getElementById('chatHistory'),
   inputBoxEl: document.getElementById('chatInputBox'),
   inputEl: document.getElementById('chatInput'),
   onSend: (text) => bus.emit('chat:message', text),
@@ -247,6 +450,75 @@ const chatUI = createChatUI({
     if (!touchMode && document.pointerLockElement !== renderer.domElement)
       blocker.style.display = 'flex';
   },
+});
+
+// Une commande = un nom (table COMMANDS, data/commands.js) -> un handler ici. Le
+// parseur (core/commands.js) valide juste la forme (nom connu, bon nombre
+// d'arguments) ; c'est ici, et seulement ici, qu'on touche l'état du jeu. Chaque
+// handler renvoie le texte de confirmation à afficher dans le chat.
+const commandHandlers = {
+  help() {
+    return Object.values(COMMANDS)
+      .map((c) => c.help)
+      .join('  |  ');
+  },
+  heal() {
+    player.health = 20;
+    bus.emit('player:health');
+    return 'Vie remplie.';
+  },
+  fly() {
+    player.flying = !player.flying;
+    return player.flying ? 'Vol activé.' : 'Vol désactivé.';
+  },
+  time([value]) {
+    let t;
+    if (value === 'day') t = 0.5;
+    else if (value === 'night') t = 0;
+    else t = parseFloat(value);
+    if (Number.isNaN(t)) return `Valeur invalide : ${value} (attendu day, night ou 0-1).`;
+    skyApi.setTime(t);
+    return `Heure réglée sur ${value}.`;
+  },
+  tp([xs, ys, zs]) {
+    const x = parseFloat(xs),
+      y = parseFloat(ys),
+      z = parseFloat(zs);
+    if ([x, y, z].some(Number.isNaN)) return 'Coordonnées invalides.';
+    player.pos.set(x, y, z);
+    player.velY = 0;
+    return `Téléporté à ${x}, ${y}, ${z}.`;
+  },
+  give([item, countStr]) {
+    if (!ITEM_NAMES[item]) {
+      const suggestion = Object.keys(ITEM_NAMES).find((k) => k.startsWith(item));
+      return suggestion
+        ? `Item inconnu : ${item}. Tu voulais dire /give ${suggestion} ?`
+        : `Item inconnu : ${item}.`;
+    }
+    const count = countStr ? parseInt(countStr, 10) : 1;
+    if (!Number.isInteger(count) || count <= 0) return 'Quantité invalide.';
+    const leftover = addItem(slots, item, count);
+    bus.emit('inventory:changed');
+    const given = count - leftover;
+    return leftover > 0
+      ? `${given}x ${ITEM_NAMES[item]} ajouté (inventaire plein pour le reste).`
+      : `${given}x ${ITEM_NAMES[item]} ajouté.`;
+  },
+};
+
+bus.on('chat:message', (text) => {
+  const parsed = parseCommand(text, COMMANDS);
+  if (parsed === null) {
+    chatUI.addMessage(text); // chat normal : pas de réseau encore (Phase 21), juste local
+    return;
+  }
+  if (parsed.error) {
+    chatUI.addMessage(parsed.error, true);
+    return;
+  }
+  const result = commandHandlers[parsed.name](parsed.args);
+  chatUI.addMessage(result);
 });
 
 /* ---------- Entrées clavier / souris ---------- */
@@ -278,7 +550,7 @@ const SPRINT_TAP_WINDOW = 300; // ms
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') {
-    craftOpen ? closeCraft() : openCraft();
+    toggleCraftOrClose();
     e.preventDefault();
     return;
   }
@@ -287,14 +559,14 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'KeyT') {
-    if (!craftOpen && !chatUI.isOpen) {
+    if (!craftOpen && !furnaceOpen && !chatUI.isOpen) {
       chatUI.open();
       document.exitPointerLock();
     }
     e.preventDefault();
     return;
   }
-  if (craftOpen || chatUI.isOpen) return;
+  if (craftOpen || furnaceOpen || chatUI.isOpen) return;
   if (e.code === 'KeyC') {
     zoomed = !zoomed;
     return;
@@ -308,11 +580,10 @@ document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
   // e.code = position physique de la touche : fonctionne en QWERTY comme en AZERTY
   // (pas besoin de Shift pour les chiffres sur clavier français)
-  const digitMatch = e.code.match(/^Digit([0-9])$/);
+  const digitMatch = e.code.match(/^Digit([1-9])$/);
   if (digitMatch) {
-    const n = parseInt(digitMatch[1], 10);
-    const idx = n === 0 ? 9 : n - 1; // touche 0 -> 10e emplacement
-    if (idx < HOTBAR.length) selectSlot(idx);
+    const idx = parseInt(digitMatch[1], 10) - 1; // 1..9 -> slots hotbar 0..8
+    if (idx < HOTBAR_SLOTS) selectSlot(idx);
   }
 });
 document.addEventListener('keyup', (e) => {
@@ -327,12 +598,12 @@ window.addEventListener('blur', () => {
 document.addEventListener(
   'wheel',
   (e) => {
-    if (craftOpen) return;
+    if (craftOpen || furnaceOpen) return;
     e.preventDefault();
-    selectedIndex = (selectedIndex + (e.deltaY > 0 ? 1 : -1) + HOTBAR.length) % HOTBAR.length;
-    selectedBlock = HOTBAR[selectedIndex];
+    selectedIndex = (selectedIndex + (e.deltaY > 0 ? 1 : -1) + HOTBAR_SLOTS) % HOTBAR_SLOTS;
+    selectedBlock = slots[selectedIndex]?.item ?? null;
     hotbarUI.setSelectedIndex(selectedIndex);
-    hotbarUI.render(inventory);
+    hotbarUI.render(slots);
     refreshHeldItem(selectedBlock);
   },
   { passive: false },
@@ -344,7 +615,7 @@ const blocker = document.getElementById('blocker');
 renderer.domElement.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
-  if (!craftOpen) renderer.domElement.requestPointerLock();
+  if (!craftOpen && !furnaceOpen) renderer.domElement.requestPointerLock();
 });
 blocker.addEventListener('click', () => {
   sfx.resumeAudio();
@@ -353,7 +624,11 @@ blocker.addEventListener('click', () => {
 });
 document.addEventListener('pointerlockchange', () => {
   blocker.style.display =
-    document.pointerLockElement === renderer.domElement ? 'none' : craftOpen ? 'none' : 'flex';
+    document.pointerLockElement === renderer.domElement
+      ? 'none'
+      : craftOpen || furnaceOpen
+        ? 'none'
+        : 'flex';
 });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== renderer.domElement) return;
@@ -419,24 +694,49 @@ function refreshAimCache() {
 function hasRightToolFor(type) {
   const category = TOOL_FOR_BLOCK[type];
   return (
-    !!category && TOOL_CATEGORY[selectedBlock] === category && (inventory[selectedBlock] || 0) > 0
+    !!category && TOOL_CATEGORY[selectedBlock] === category && countOf(slots, selectedBlock) > 0
   );
 }
 function breakTimeFor(type) {
   const hardness = BLOCK_TYPES[type]?.hardness ?? 1;
   return hasRightToolFor(type) ? hardness / 2 : hardness;
 }
+// Phase 10 : casser un bloc ne remplit plus l'inventaire directement — il fait
+// apparaître ses `drops` (data/blocks.js) au sol, à ramasser comme n'importe quel
+// autre item. Le bonus d'outil double la quantité de chaque drop, comme avant.
 function breakBlockAt(x, y, z, type) {
-  inventory[type] = (inventory[type] || 0) + (hasRightToolFor(type) ? 2 : 1);
+  const multiplier = hasRightToolFor(type) ? 2 : 1;
+  const drops = BLOCK_TYPES[type]?.drops || [];
+  drops.forEach(({ item, min, max }) => {
+    const count = (min + Math.floor(Math.random() * (max - min + 1))) * multiplier;
+    if (count > 0) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, item, count);
+  });
   worldApi.setBlock(x, y, z, null);
-  bus.emit('inventory:changed');
+  particleSystem.burst(x + 0.5, y + 0.5, z + 0.5, type, 10);
+  if (type === 'furnace') {
+    const state = blockEntities.remove(x, y, z);
+    if (
+      furnaceOpen &&
+      furnaceUI.currentPos?.x === x &&
+      furnaceUI.currentPos?.y === y &&
+      furnaceUI.currentPos?.z === z
+    )
+      closeFurnace();
+    // rend au joueur ce qui restait dedans plutôt que de le perdre en silence
+    [state?.input, state?.fuel, state?.output].forEach((cell) => {
+      if (cell) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, cell.item, cell.count);
+    });
+  }
   bus.emit('block:broken', { x, y, z, type });
+  player.hunger = Math.max(0, player.hunger - 0.005); // coût ponctuel (Phase 11)
+  bus.emit('player:hunger');
   sfx.playSound('break');
 }
 
 let leftMouseDown = false;
 let breakKey = null;
 let breakProgress = 0;
+let breakTickTimer = 0; // Phase 19 : throttle du tic sonore de minage
 
 // Casser/attaquer (clic gauche desktop, ⛏ maintenu sur tactile) : factorisé pour que
 // les deux entrées appellent exactement la même logique (cf. Phase 6 : le tactile est
@@ -448,8 +748,7 @@ function performPrimaryAction() {
   leftMouseDown = true;
   // priorité au mob si plus proche que le bloc
   if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
-    const hasSword =
-      TOOL_CATEGORY[selectedBlock] === 'sword' && (inventory[selectedBlock] || 0) > 0;
+    const hasSword = TOOL_CATEGORY[selectedBlock] === 'sword' && countOf(slots, selectedBlock) > 0;
     mobHit.mob.hit(hasSword ? 5 : 1);
     return;
   }
@@ -457,20 +756,52 @@ function performPrimaryAction() {
   // pointée sur le même bloc pendant breakTimeFor(type) secondes
 }
 
+// Manger (Phase 11) : clic droit avec un item de data/items.js FOOD sélectionné,
+// que le viseur pointe un bloc ou non — contrairement à poser, manger n'a pas besoin
+// d'une case adjacente. Retourne true si un item a bien été consommé.
+function tryEat() {
+  const food = FOOD[selectedBlock];
+  if (!food || countOf(slots, selectedBlock) <= 0 || player.hunger >= 20) return false;
+  removeItem(slots, selectedBlock, 1);
+  player.hunger = Math.min(20, player.hunger + food.hunger);
+  bus.emit('player:hunger');
+  bus.emit('inventory:changed');
+  sfx.playSound('eat');
+  triggerHandSwing();
+  return true;
+}
+
+// Tondre (Phase 18) : clic droit sur un mouton avec une épée équipée, prioritaire
+// sur manger/poser (comme l'attaque au clic gauche est prioritaire sur casser).
+function tryShear() {
+  const mobHit = cachedMobHit;
+  if (!mobHit || mobHit.mob.type !== 'sheep') return false;
+  const hasSword = TOOL_CATEGORY[selectedBlock] === 'sword' && countOf(slots, selectedBlock) > 0;
+  if (!hasSword) return false;
+  return mobHit.mob.shear();
+}
+
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
 function performSecondaryAction() {
+  if (tryShear()) return;
+  if (tryEat()) return;
   const blockHit = cachedBlockHit;
   if (!blockHit) return;
   const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
-  if (worldApi.getBlock(tx, ty, tz) === 'crafting_table') {
+  const targetedType = worldApi.getBlock(tx, ty, tz);
+  if (targetedType === 'crafting_table') {
     openCraft();
+    return;
+  }
+  if (targetedType === 'furnace') {
+    openFurnace(tx, ty, tz);
     return;
   }
   if (NON_PLACEABLE.has(selectedBlock)) {
     hotbarUI.flashEmptySlot(selectedIndex);
     return;
   }
-  if ((inventory[selectedBlock] || 0) <= 0) {
+  if (countOf(slots, selectedBlock) <= 0) {
     hotbarUI.flashEmptySlot(selectedIndex);
     return;
   }
@@ -481,14 +812,15 @@ function performSecondaryAction() {
     pz = Math.floor(player.pos.z);
   if (!(x === px && z === pz && (y === py0 || y === py1)) && !worldApi.getBlock(x, y, z)) {
     worldApi.setBlock(x, y, z, selectedBlock);
-    inventory[selectedBlock]--;
+    triggerPlaceFeedback(x, y, z);
+    removeItem(slots, selectedBlock, 1);
     bus.emit('inventory:changed');
     sfx.playSound('place');
   }
 }
 
 renderer.domElement.addEventListener('mousedown', (e) => {
-  if (document.pointerLockElement !== renderer.domElement || craftOpen) return;
+  if (document.pointerLockElement !== renderer.domElement || craftOpen || furnaceOpen) return;
   if (e.button === 0) performPrimaryAction();
   else if (e.button === 2) performSecondaryAction();
 });
@@ -497,6 +829,7 @@ function stopBreaking() {
   leftMouseDown = false;
   breakKey = null;
   breakProgress = 0;
+  breakTickTimer = 0;
   crackMesh.visible = false;
 }
 renderer.domElement.addEventListener('mouseup', (e) => {
@@ -521,16 +854,16 @@ if (touchMode) {
       pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
     },
     onBreakStart: () => {
-      if (!craftOpen && !chatUI.isOpen) performPrimaryAction();
+      if (!craftOpen && !furnaceOpen && !chatUI.isOpen) performPrimaryAction();
     },
     onBreakEnd: stopBreaking,
     onPlace: () => {
-      if (!craftOpen && !chatUI.isOpen) performSecondaryAction();
+      if (!craftOpen && !furnaceOpen && !chatUI.isOpen) performSecondaryAction();
     },
     onJump: (down) => {
       keys['Space'] = down;
     },
-    onInventory: () => (craftOpen ? closeCraft() : openCraft()),
+    onInventory: toggleCraftOrClose,
   });
 
   // premier contact = geste utilisateur requis pour débloquer l'audio et tenter le
@@ -556,23 +889,23 @@ if (touchMode) {
 const clock = new THREE.Clock();
 let footstepTimer = 0;
 let lavaDamageTimer = 0; // cooldown entre deux tics de dégâts tant qu'on reste dans la lave
-const posEl = document.getElementById('pos');
-const targetEl = document.getElementById('target');
-const hintEl = document.getElementById('hint');
-const fpsEl = document.getElementById('fps');
-let fpsSmoothed = 60;
+let hungerTickTimer = 4; // Phase 11 : dégâts de faim / régénération, au tic (4s), pas à la frame
+let drownDamageTimer = 0; // même mécanique que lavaDamageTimer, une fois le souffle à 0
+const hud = createHud({
+  posEl: document.getElementById('pos'),
+  targetEl: document.getElementById('target'),
+  hintEl: document.getElementById('hint'),
+  fpsEl: document.getElementById('fps'),
+});
 
 const STAND_HEIGHT = player.height,
   CROUCH_HEIGHT = player.height * 0.8;
 
+// Phase 16 : l'eau est un vrai bloc, donc "être sous l'eau" = avoir la tête dans une
+// cellule d'eau. Avant Phase 16, c'était un check analytique (hauteur de terrain vs
+// SEA_LEVEL) car l'eau n'existait pas dans `data` -- remplacé maintenant que c'est le cas.
 function isUnderwater() {
-  // une colonne est un lac si sa hauteur de terrain (bruit, pas les chunks chargés)
-  // est sous le niveau de la mer — identique au critère utilisé pour poser les lacs
-  // dans world/generator.js, mais lisible sans avoir à charger le chunk.
-  return (
-    player.pos.y < SEA_LEVEL + 0.6 &&
-    getHeight(Math.round(player.pos.x), Math.round(player.pos.z)) < SEA_LEVEL
-  );
+  return worldApi.isInWater(player.pos.x, player.pos.y + player.height * 0.85, player.pos.z);
 }
 
 function isInLava() {
@@ -580,8 +913,10 @@ function isInLava() {
 }
 
 function respawnPlayer() {
-  respawn(new THREE.Vector3(0, getHeight(0, 0) + 3, 0));
+  respawn(spawnPoint());
   bus.emit('player:health');
+  bus.emit('player:hunger');
+  bus.emit('player:breath');
 }
 
 function animate() {
@@ -597,10 +932,7 @@ function animate() {
   // (précisément quand on a besoin de voir le vrai chiffre, ex. pendant le chargement
   // des chunks). Le tout premier rawDt (juste après la création du Clock) peut être ~0 :
   // on l'ignore pour ne pas injecter une division par zéro dans la moyenne.
-  if (rawDt > 0.001) {
-    fpsSmoothed += (1 / rawDt - fpsSmoothed) * 0.1;
-    fpsEl.textContent = `${Math.round(fpsSmoothed)} FPS`;
-  }
+  hud.updateFps(rawDt);
 
   // zoom (C) : interpolation douce du FOV, indépendante du reste (marche même en 3e personne)
   const targetFov = zoomed ? 25 : 75;
@@ -614,13 +946,30 @@ function animate() {
   worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;
   worldApi.lavaTexture.offset.x = (worldApi.lavaTexture.offset.x + dt * 0.012) % 1;
   worldApi.lavaTexture.offset.y = (worldApi.lavaTexture.offset.y + dt * 0.008) % 1;
-  worldApi.update(player.pos); // charge/décharge les chunks proches (Phase 4a)
+  worldApi.update(player.pos, dt); // charge/décharge les chunks proches (Phase 4a) + écoulement des liquides (Phase 16)
   cloudsApi.update(dt, player.pos);
 
-  // joystick/visée tactiles coupés pendant craft/chat, comme le reste des contrôles
-  if (touchUI) touchUI.setActive(!craftOpen && !chatUI.isOpen);
+  torchLightTimer -= dt;
+  if (torchLightTimer <= 0) {
+    torchLightTimer = 0.5;
+    updateTorchLights(player.pos);
+  }
 
-  if (!craftOpen && !chatUI.isOpen) {
+  particleSystem.update(dt);
+  if (placeFeedbackTimer > 0) {
+    placeFeedbackTimer -= dt;
+    if (placeFeedbackTimer <= 0) placeFeedbackMesh.visible = false;
+    else
+      placeFeedbackMesh.scale.setScalar(1 + 0.35 * (placeFeedbackTimer / PLACE_FEEDBACK_DURATION));
+  }
+
+  // joystick/visée tactiles coupés pendant craft/chat, comme le reste des contrôles
+  if (touchUI) touchUI.setActive(!craftOpen && !furnaceOpen && !chatUI.isOpen);
+
+  blockEntities.update(dt, SMELTING, FUELS);
+  if (furnaceOpen) renderFurnace();
+
+  if (!craftOpen && !furnaceOpen && !chatUI.isOpen) {
     let dx = touchMoveVec.x,
       dz = touchMoveVec.z;
     if (keys['KeyW'] || keys['ArrowUp']) dz -= 1;
@@ -655,24 +1004,55 @@ function animate() {
       lavaDamageTimer = 0;
     }
 
+    // Faim (Phase 11) : un taux continu (sprint > marche/idle) plus deux coûts
+    // ponctuels (saut, minage — ce dernier est débité directement dans breakBlockAt).
+    // La même forme "taux par seconde" que les dégâts de lave ci-dessus, mais lissée
+    // en continu plutôt qu'en tic, car il n'y a pas besoin d'à-coup visible ici.
     const isMoving = dx !== 0 || dz !== 0;
+    const hungerRate = sprinting && isMoving ? 0.05 : 0.005;
+    player.hunger = Math.max(0, player.hunger - hungerRate * dt);
+
+    // au tic (toutes les 4s, pas chaque frame) : famine si à 0, régénération si > 18
+    hungerTickTimer -= dt;
+    if (hungerTickTimer <= 0) {
+      hungerTickTimer = 4;
+      if (player.hunger <= 0) {
+        player.health = Math.max(0, player.health - 1);
+        bus.emit('player:health');
+      } else if (player.hunger > 18 && player.health < 20) {
+        player.health = Math.min(20, player.health + 1);
+        player.hunger = Math.max(0, player.hunger - 1); // la régénération coûte de la faim
+        bus.emit('player:health');
+      }
+      bus.emit('player:hunger');
+    }
+
+    // Noyade (Phase 11) : le souffle se vide sous l'eau, se remplit instantanément
+    // hors de l'eau. isUnderwater() est encore le check analytique (hauteur de
+    // terrain vs SEA_LEVEL) -- Phase 16 le repointera sur getBlock(...) === 'water'
+    // une fois l'eau stockée comme un vrai bloc (cf. commentaire sur isUnderwater plus haut).
+    if (underwater) {
+      player.breath = Math.max(0, player.breath - dt);
+      if (player.breath <= 0) {
+        drownDamageTimer -= dt;
+        if (drownDamageTimer <= 0) {
+          player.health = Math.max(0, player.health - 1);
+          bus.emit('player:health');
+          sfx.playSound('drown');
+          drownDamageTimer = 1;
+        }
+      } else {
+        drownDamageTimer = 0;
+      }
+      bus.emit('player:breath');
+    } else if (player.breath < player.maxBreath) {
+      player.breath = player.maxBreath;
+      drownDamageTimer = 0;
+      bus.emit('player:breath');
+    }
+
     if (isMoving) {
-      const len = Math.hypot(dx, dz);
-      dx /= len;
-      dz /= len;
-      // vecteur "avant" caméra = (sin(yaw), cos(yaw)) ; vecteur "droite" = (cos(yaw), -sin(yaw))
-      const moveX = (dz * Math.sin(yaw) + dx * Math.cos(yaw)) * speed * dt;
-      const moveZ = (dz * Math.cos(yaw) - dx * Math.sin(yaw)) * speed * dt;
-      const canStand = (x, z) =>
-        !crouching ||
-        !player.onGround ||
-        worldApi.collidesAtBox(x, player.pos.y - 0.1, z, player.radius, 0.15);
-      const nx = player.pos.x + moveX;
-      if (!collidesAt(nx, player.pos.y, player.pos.z) && canStand(nx, player.pos.z))
-        player.pos.x = nx;
-      const nz = player.pos.z + moveZ;
-      if (!collidesAt(player.pos.x, player.pos.y, nz) && canStand(player.pos.x, nz))
-        player.pos.z = nz;
+      resolveHorizontalMove(player, dx, dz, yaw, speed, dt, crouching, worldApi.collidesAtBox);
       if (player.onGround) {
         footstepTimer -= dt;
         if (footstepTimer <= 0) {
@@ -682,26 +1062,23 @@ function animate() {
       }
     }
 
-    const wasOnGround = player.onGround;
-    player.velY -= 20 * dt;
-    const newY = player.pos.y + player.velY * dt;
-    if (player.velY < 0) {
-      if (collidesAt(player.pos.x, newY, player.pos.z)) {
-        player.velY = 0;
-        player.onGround = true;
-      } else {
-        player.pos.y = newY;
-        player.onGround = false;
-      }
+    if (player.flying) {
+      const vertical = (keys['Space'] ? 1 : 0) - (crouching ? 1 : 0);
+      resolveFlyingVertical(player, dt, vertical, worldApi.collidesAtBox);
+    } else if (underwater) {
+      // Nage (Phase 16) : flottabilité (chute très ralentie, pas de "coulé comme une
+      // pierre") + Espace nage vers la surface au lieu d'un saut plein — la même
+      // résolution de collision que la gravité normale, juste une échelle différente.
+      resolveVerticalPhysics(player, dt, worldApi.collidesAtBox, 0.25);
+      if (keys['Space']) player.velY = Math.max(player.velY, 2.2);
     } else {
-      if (!collidesAt(player.pos.x, newY, player.pos.z)) player.pos.y = newY;
-      else player.velY = 0;
-    }
-    if (!wasOnGround && player.onGround) sfx.playSound('land');
-    if (keys['Space'] && player.onGround) {
-      player.velY = player.jumpForce;
-      player.onGround = false;
-      sfx.playSound('jump');
+      const { landed } = resolveVerticalPhysics(player, dt, worldApi.collidesAtBox);
+      if (landed) sfx.playSound('land');
+      if (keys['Space'] && tryJump(player)) {
+        player.hunger = Math.max(0, player.hunger - 0.1); // coût ponctuel (Phase 11)
+        bus.emit('player:hunger');
+        sfx.playSound('jump');
+      }
     }
 
     if (player.pos.y < -10) respawnPlayer();
@@ -713,23 +1090,14 @@ function animate() {
     updateVisuals(dt, isMoving, yaw, pitch); // positionne la caméra (1ère/3e personne) + anime main et avatar
 
     mobSystem.update(dt, player.pos);
+    itemSystem.update(dt, player.pos, pickupItem);
   }
 
-  posEl.textContent = `${player.pos.x.toFixed(1)}, ${player.pos.y.toFixed(1)}, ${player.pos.z.toFixed(1)}`;
+  hud.updatePos(player.pos);
   refreshAimCache();
   const mobHit = cachedMobHit;
   const blockHit = cachedBlockHit;
-  if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
-    targetEl.textContent = `${mobHit.mob.data.name} (${mobHit.mob.health}/${mobHit.mob.maxHealth} PV)`;
-    hintEl.style.display = 'none';
-  } else if (blockHit) {
-    const t = worldApi.getBlock(blockHit.block.x, blockHit.block.y, blockHit.block.z);
-    targetEl.textContent = `${BLOCK_TYPES[t]?.name || '?'} (${blockHit.block.x}, ${blockHit.block.y}, ${blockHit.block.z})`;
-    hintEl.style.display = t === 'crafting_table' ? 'block' : 'none';
-  } else {
-    targetEl.textContent = '-';
-    hintEl.style.display = 'none';
-  }
+  hud.updateTarget({ mobHit, blockHit, getBlock: worldApi.getBlock, blockTypes: BLOCK_TYPES });
 
   // Cassage progressif : maintenir le clic sur un bloc l'use au fil du temps. Le clic
   // relâché (ou craft/chat ouvert) arrête et remet à zéro pour de vrai. Mais un simple
@@ -739,11 +1107,13 @@ function animate() {
   const mustStopBreaking =
     !leftMouseDown ||
     craftOpen ||
+    furnaceOpen ||
     chatUI.isOpen ||
     (!touchMode && document.pointerLockElement !== renderer.domElement);
   if (mustStopBreaking) {
     breakKey = null;
     breakProgress = 0;
+    breakTickTimer = 0;
     crackMesh.visible = false;
   } else {
     const targetingBlock = blockHit && !(mobHit && mobHit.dist < blockHit.dist);
@@ -755,6 +1125,7 @@ function animate() {
         if (key !== breakKey) {
           breakKey = key;
           breakProgress = 0;
+          breakTickTimer = 0;
         }
         const total = breakTimeFor(type);
         breakProgress += dt;
@@ -764,10 +1135,21 @@ function animate() {
           breakProgress = 0;
           crackMesh.visible = false;
         } else {
-          const stage = Math.min(9, Math.floor((breakProgress / total) * 10));
+          const ratio = breakProgress / total;
+          const stage = Math.min(9, Math.floor(ratio * 10));
           crackMesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+          // wobble (Phase 19) : léger tremblement du bloc visé pendant le minage,
+          // proportionnel au temps écoulé (pas à breakProgress seul, sinon la
+          // fréquence ralentirait sur les blocs plus durs)
+          const wobble = 1 + 0.02 * Math.sin(breakProgress * 40);
+          crackMesh.scale.setScalar(wobble);
           crackMat.map = crackTextures[stage];
           crackMesh.visible = true;
+          breakTickTimer -= dt;
+          if (breakTickTimer <= 0) {
+            breakTickTimer = 0.15;
+            sfx.playBreakTick(ratio);
+          }
         }
       }
     } else {

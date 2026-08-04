@@ -8,10 +8,13 @@
     "dev": "serve -l 3000 ..",
     "test": "node --test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/three": "^0.185.3",
     "prettier": "^3.3.3",
-    "serve": "^14.2.6"
+    "serve": "^14.2.6",
+    "typescript": "^7.0.2"
   }
 }

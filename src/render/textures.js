@@ -291,13 +291,22 @@ export const texStoneSword = () => texWoodSword('#a3a3a3', '#cccccc');
 export const texIronPickaxe = () => texWoodPickaxe('#ffffff');
 export const texIronAxe = () => texWoodAxe('#ffffff');
 export const texIronSword = () => texWoodSword('#ffffff', '#ffffff');
+// Neige. L'ancienne version était du blanc pur specké de blanc pur sur des taches
+// blanches : strictement invisible, le bloc rendait comme un aplat. Une surface
+// enneigée se lit par son OMBRE, pas par son blanc — d'où des creux bleutés froids
+// (la neige diffuse la lumière du ciel) et quelques cristaux plus clairs par-dessus.
 export function texSnow() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = '#f4f7fb';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#ffffff', '#ffffff'], 60);
+  // congères : creux doux, à peine bleutés
+  blotches(ctx, ['#dfe7f2', '#e8eef7'], 10, 2, 4.5);
+  // bosses tassées, plus claires que le fond
   blotches(ctx, ['#ffffff'], 8, 1.5, 3);
+  // grain fin : ombre froide + éclats de cristal
+  speckle(ctx, ['#cdd8e8', '#e4ebf5'], 26);
+  speckle(ctx, ['#ffffff'], 34);
   return canvasToTexture(c);
 }
 export function texMeat() {
@@ -308,6 +317,17 @@ export function texMeat() {
   speckle(ctx, ['#b82020', '#fb6969'], 25);
   ctx.fillStyle = '#fffefd';
   ctx.fillRect(TEX_SIZE * 0.35, TEX_SIZE * 0.7, TEX_SIZE * 0.3, TEX_SIZE * 0.15);
+  return canvasToTexture(c);
+}
+export function texCookedMeat() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8a4a26';
+  ctx.fillRect(TEX_SIZE * 0.15, TEX_SIZE * 0.15, TEX_SIZE * 0.7, TEX_SIZE * 0.7);
+  speckle(ctx, ['#5c2f16', '#a5622f'], 25);
+  ctx.fillStyle = '#3a1c0c';
+  ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.25, TEX_SIZE * 0.6, TEX_SIZE * 0.08);
+  ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.55, TEX_SIZE * 0.6, TEX_SIZE * 0.08);
   return canvasToTexture(c);
 }
 export function texMilk() {
@@ -343,6 +363,184 @@ export function texGoldOre() {
 }
 export function texDiamondOre() {
   return texOre(['#71fafa', '#c4ffff']);
+}
+// Torche (Phase 13) : simplification assumée -- rendue comme un bloc plein via le
+// mesher de chunk (pas une croix/tige fine à géométrie dédiée, cf. commentaire dans
+// world/world.js), donc la texture doit rester lisible comme "torche" même en cube complet.
+// Torche. Ce n'est plus un cube plein (cf. `shape` dans data/blocks.js) mais un
+// bâtonnet fin et haut, donc ces tuiles habillent le BÂTON lui-même : elles
+// remplissent toute leur face au lieu de dessiner une petite torche perdue au milieu
+// d'un carré de fond noir. `torchStick` couvre les 4 côtés (manche en bas, flamme en
+// haut), `torchFlame` la face du dessus, `torchWood` celle du dessous.
+export function texTorchStick() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const flameTop = TEX_SIZE * 0.34; // hauteur occupée par la flamme, en haut de la tuile
+
+  // manche : bois avec quelques veines verticales
+  ctx.fillStyle = '#6b4423';
+  ctx.fillRect(0, flameTop, TEX_SIZE, TEX_SIZE - flameTop);
+  ctx.fillStyle = '#54341a';
+  for (let x = 2; x < TEX_SIZE; x += 7) ctx.fillRect(x, flameTop, 2, TEX_SIZE - flameTop);
+  ctx.fillStyle = '#82562e';
+  for (let x = 5; x < TEX_SIZE; x += 9) ctx.fillRect(x, flameTop, 1, TEX_SIZE - flameTop);
+  // charbon : transition sombre entre le bois et la flamme
+  ctx.fillStyle = '#2b1a0d';
+  ctx.fillRect(0, flameTop, TEX_SIZE, TEX_SIZE * 0.06);
+
+  // flamme : coeur clair au centre, dégradé vers l'orange sur les bords
+  const g = ctx.createLinearGradient(0, 0, 0, flameTop);
+  g.addColorStop(0, '#fff3b0');
+  g.addColorStop(0.45, '#ffc93c');
+  g.addColorStop(1, '#f07818');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, TEX_SIZE, flameTop);
+  ctx.fillStyle = '#fffbe0';
+  ctx.fillRect(TEX_SIZE * 0.3, 0, TEX_SIZE * 0.4, flameTop * 0.55);
+  return canvasToTexture(c);
+}
+export function texTorchFlame() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(
+    TEX_SIZE / 2,
+    TEX_SIZE / 2,
+    0,
+    TEX_SIZE / 2,
+    TEX_SIZE / 2,
+    TEX_SIZE / 2,
+  );
+  g.addColorStop(0, '#fffdf0');
+  g.addColorStop(0.5, '#ffd254');
+  g.addColorStop(1, '#ef7a16');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  return canvasToTexture(c);
+}
+export function texTorchWood() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#6b4423';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#54341a', '#82562e'], 18);
+  return canvasToTexture(c);
+}
+export function texWool() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e8e2d4';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#d9d1bc', '#f2eddf'], 14, 1.5, 3.5);
+  speckle(ctx, ['#cfc7b0'], 25);
+  return canvasToTexture(c);
+}
+// Sable. Avant : un aplat + du bruit uniforme, donc aucune structure — de loin ça
+// rendait comme une couleur plate. Le sable se lit à ses RIDES : des ondulations
+// douces laissées par le vent, plus quelques grains sombres épars.
+export function texSand() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e2cb8e';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  // Rides : ondulations horizontales, espacées et à faible contraste. Volontairement
+  // discrètes — poussées plus loin, les lignes se lisent comme des planches, pas
+  // comme du sable. Elles sont là pour casser l'aplat, pas pour faire motif.
+  const rand = mulberry32(21);
+  for (let y = 3; y < TEX_SIZE; y += 7) {
+    for (let x = 0; x < TEX_SIZE; x++) {
+      const wave = Math.round(Math.sin((x / TEX_SIZE) * Math.PI * 2 + y) * 2);
+      if (rand() < 0.25) continue; // ride interrompue par endroits
+      ctx.fillStyle = '#d6be7e';
+      ctx.fillRect(x, y + wave, 1, 1);
+      ctx.fillStyle = '#ecdaa6'; // crête à peine éclairée, juste au-dessus du creux
+      ctx.fillRect(x, y + wave - 1, 1, 1);
+    }
+    if (rand() < 0.5) y += 1; // espacement irrégulier : pas un motif de papier peint
+  }
+  speckle(ctx, ['#c9ae6c', '#efdda6'], 34);
+  return canvasToTexture(c);
+}
+export function texSandstone() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#d3bd83';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  for (let y = 0; y < TEX_SIZE; y += TEX_SIZE / 6) ctx.fillRect(0, y, TEX_SIZE, 1);
+  speckle(ctx, ['#c1aa70'], 20);
+  return canvasToTexture(c);
+}
+export function texCactus() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#3f7d32';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#356b2a', '#4c8f3d'], 20);
+  ctx.fillStyle = '#2c5722';
+  for (let x = TEX_SIZE * 0.15; x < TEX_SIZE; x += TEX_SIZE * 0.3)
+    ctx.fillRect(x, 0, 1.5, TEX_SIZE);
+  return canvasToTexture(c);
+}
+export function texDeadBush() {
+  // pas de transparence : rendu comme un cube plein (même simplification que torch/wool,
+  // cf. leurs commentaires) donc un fond opaque plutôt qu'un canvas alpha=0 qui
+  // ressortirait noir sur le matériau non-transparent partagé de l'atlas.
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e0c88a';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.strokeStyle = '#6b4a2a';
+  ctx.lineWidth = 1.2;
+  const rand = mulberry32(7);
+  for (let i = 0; i < 14; i++) {
+    let x = TEX_SIZE / 2,
+      y = TEX_SIZE * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    for (let s = 0; s < 4; s++) {
+      x += (rand() - 0.5) * TEX_SIZE * 0.3;
+      y -= rand() * TEX_SIZE * 0.2;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  return canvasToTexture(c);
+}
+export function texIce() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#a8d8f0';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1;
+  const rand = mulberry32(11);
+  for (let i = 0; i < 6; i++) {
+    ctx.beginPath();
+    ctx.moveTo(rand() * TEX_SIZE, rand() * TEX_SIZE);
+    ctx.lineTo(rand() * TEX_SIZE, rand() * TEX_SIZE);
+    ctx.stroke();
+  }
+  return canvasToTexture(c);
+}
+export function texFurnace() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#5a5a5a';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#4a4a4a', '#6c6c6c'], 30);
+  ctx.fillStyle = '#232323';
+  ctx.fillRect(TEX_SIZE * 0.28, TEX_SIZE * 0.32, TEX_SIZE * 0.44, TEX_SIZE * 0.4);
+  ctx.fillStyle = '#ff7b25';
+  ctx.fillRect(TEX_SIZE * 0.34, TEX_SIZE * 0.5, TEX_SIZE * 0.32, TEX_SIZE * 0.14);
+  return canvasToTexture(c);
+}
+export function texIronIngot() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#d9d3c8';
+  ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.35, TEX_SIZE * 0.6, TEX_SIZE * 0.3);
+  ctx.fillStyle = '#efe9de';
+  ctx.fillRect(TEX_SIZE * 0.25, TEX_SIZE * 0.38, TEX_SIZE * 0.5, TEX_SIZE * 0.1);
+  return canvasToTexture(c);
 }
 export function texBedrock() {
   const c = newCanvas();
@@ -495,6 +693,19 @@ export function texPigFace() {
   return canvasToTexture(c);
 }
 // tête de vache vue de face : taches + yeux + museau
+export function texSheepFace() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e8dfd0';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#d5c9b3'], 20);
+  ctx.fillStyle = '#111111';
+  ctx.fillRect(TEX_SIZE * 0.22, TEX_SIZE * 0.32, TEX_SIZE * 0.14, TEX_SIZE * 0.12);
+  ctx.fillRect(TEX_SIZE * 0.64, TEX_SIZE * 0.32, TEX_SIZE * 0.14, TEX_SIZE * 0.12);
+  ctx.fillStyle = '#5a5044';
+  ctx.fillRect(TEX_SIZE * 0.4, TEX_SIZE * 0.62, TEX_SIZE * 0.2, TEX_SIZE * 0.1);
+  return canvasToTexture(c);
+}
 export function texCowFace() {
   const c = newCanvas();
   const ctx = c.getContext('2d');

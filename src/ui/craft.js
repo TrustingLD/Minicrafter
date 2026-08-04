@@ -1,4 +1,12 @@
-// Table de craft : inventaire + recettes (panneau modal).
+// Table de craft : inventaire (slots) + recettes (panneau modal).
+
+import {
+  HOTBAR_SLOTS,
+  TOTAL_SLOTS,
+  hasAtLeast,
+  removeItem,
+  addItem,
+} from '../entities/inventory.js';
 
 export function isNearCraftingTable(getBlock, playerPos) {
   const px = Math.round(playerPos.x),
@@ -11,9 +19,8 @@ export function isNearCraftingTable(getBlock, playerPos) {
   return false;
 }
 
-export function canCraft(inventory, recipe) {
-  for (const k in recipe.need) if ((inventory[k] || 0) < recipe.need[k]) return false;
-  return true;
+export function canCraft(slots, recipe) {
+  return hasAtLeast(slots, recipe.need);
 }
 
 export function createCraftUI({
@@ -23,47 +30,47 @@ export function createCraftUI({
   iconCanvas,
   playSound,
   onCrafted,
-  onSelectItem,
+  onSlotClick,
 }) {
   const { craftPanel, invGrid, recipeList, craftTitle } = elements;
 
-  function craft(inventory, recipe, getBlock, playerPos) {
-    if (!canCraft(inventory, recipe)) return;
+  function craft(slots, recipe, getBlock, playerPos) {
+    if (!canCraft(slots, recipe)) return;
     if (recipe.needsTable && !isNearCraftingTable(getBlock, playerPos)) return;
-    for (const k in recipe.need) inventory[k] -= recipe.need[k];
-    for (const k in recipe.give) inventory[k] = (inventory[k] || 0) + recipe.give[k];
+    for (const k in recipe.need) removeItem(slots, k, recipe.need[k]);
+    for (const k in recipe.give) addItem(slots, k, recipe.give[k]);
     playSound('craft');
     onCrafted();
   }
 
-  // items sans emplacement dans la hotbar fixe (minerais bruts, tiers pierre/fer) se
-  // sélectionnent en cliquant leur case ici — c'est ce que "E : inventaire" veut dire.
-  function render(inventory, getBlock, playerPos, selectedItem) {
+  // sac à dos (Phase 10) : les 27 emplacements après la hotbar. Cliquer une case
+  // l'échange avec le slot hotbar actuellement sélectionné (moveSlot) — c'est ce
+  // que "équiper depuis l'inventaire" veut dire avec des slots plutôt qu'un dictionnaire.
+  function render(slots, getBlock, playerPos, selectedIndex) {
     invGrid.innerHTML = '';
-    Object.keys(inventory).forEach((key) => {
-      if (!inventory[key]) return;
+    for (let i = HOTBAR_SLOTS; i < TOTAL_SLOTS; i++) {
+      const cell = slots[i];
       const div = document.createElement('div');
-      div.className = 'invItem' + (key === selectedItem ? ' selected' : '');
-      const img = iconCanvas(key);
-      if (img) {
-        const image = document.createElement('img');
-        image.src = img.toDataURL();
-        div.appendChild(image);
-      } else {
-        const ic = document.createElement('div');
-        ic.className = 'ic';
-        ic.style.background = '#dfc27b';
-        div.appendChild(ic);
+      div.className = 'invItem' + (!cell ? ' empty' : '');
+      if (cell) {
+        const img = iconCanvas(cell.item);
+        if (img) {
+          const image = document.createElement('img');
+          image.src = img.toDataURL();
+          div.appendChild(image);
+        } else {
+          const ic = document.createElement('div');
+          ic.className = 'ic';
+          ic.style.background = '#dfc27b';
+          div.appendChild(ic);
+        }
+        const label = document.createElement('div');
+        label.textContent = `${itemNames[cell.item] || cell.item} x${cell.count}`;
+        div.appendChild(label);
+        div.addEventListener('click', () => onSlotClick(i));
       }
-      const label = document.createElement('div');
-      label.textContent = `${itemNames[key] || key} x${inventory[key]}`;
-      div.appendChild(label);
-      div.addEventListener('click', () => {
-        onSelectItem(key);
-        render(inventory, getBlock, playerPos, key);
-      });
       invGrid.appendChild(div);
-    });
+    }
 
     const nearTable = isNearCraftingTable(getBlock, playerPos);
     craftTitle.textContent = nearTable ? 'Table de craft' : 'Inventaire (craft de base)';
@@ -79,10 +86,10 @@ export function createCraftUI({
       row.innerHTML = `<div><div class="rname">${r.name}</div><div class="rneed">Besoin: ${needText}</div></div>`;
       const btn = document.createElement('button');
       btn.textContent = 'Fabriquer';
-      btn.disabled = !canCraft(inventory, r);
+      btn.disabled = !canCraft(slots, r);
       btn.addEventListener('click', () => {
-        craft(inventory, r, getBlock, playerPos);
-        render(inventory, getBlock, playerPos, selectedItem);
+        craft(slots, r, getBlock, playerPos);
+        render(slots, getBlock, playerPos, selectedIndex);
       });
       row.appendChild(btn);
       recipeList.appendChild(row);

@@ -34,16 +34,16 @@ total           : ~11.3 ms / chunk (hors BufferGeometry + upload GPU)
 Coût réel par frame, en régime établi, en fonction de la distance au spawn
 (58 mobs vivants, `renderDistance = 6`) :
 
-| Position joueur | ms / frame | FPS | **générations de chunk / frame** |
-|---:|---:|---:|---:|
-| (0, 0) | 4.2 | ~240 | **0** |
-| (48, 48) | 17.5 | 57 | 4.0 |
-| (72, 72) | 34.5 | 29 | 9.0 |
-| (88, 88) | 71.6 | 14 | 19.2 |
-| (104, 104) | 103.9 | **9.6** | 28.3 |
-| (130, 130) | 103.8 | 9.6 | 30.2 |
-| (180, 180) | 116.6 | 8.6 | 33.0 |
-| (260, 260) | 126.4 | **7.9** | 35.7 |
+| Position joueur | ms / frame |     FPS | **générations de chunk / frame** |
+| --------------: | ---------: | ------: | -------------------------------: |
+|          (0, 0) |        4.2 |    ~240 |                            **0** |
+|        (48, 48) |       17.5 |      57 |                              4.0 |
+|        (72, 72) |       34.5 |      29 |                              9.0 |
+|        (88, 88) |       71.6 |      14 |                             19.2 |
+|      (104, 104) |      103.9 | **9.6** |                             28.3 |
+|      (130, 130) |      103.8 |     9.6 |                             30.2 |
+|      (180, 180) |      116.6 |     8.6 |                             33.0 |
+|      (260, 260) |      126.4 | **7.9** |                             35.7 |
 
 Le nombre de générations sature à ~35 — soit **exactement** le nombre de chunks
 distincts occupés par les 58 mobs (mesuré : 33 chunks, tous dans l'intervalle
@@ -55,10 +55,10 @@ au chiffre rapporté par le joueur (« 10 fps ou même 7 »).
 Au **même endroit** (100, 100), même monde, même seed, en retirant puis en remettant
 **les mêmes** objets mob dans la boucle `update` :
 
-| | ms / frame | FPS | générations / frame |
-|---|---:|---:|---:|
-| mobs retirés de la boucle `update` | **2.4** | 420 | **0** |
-| les mêmes mobs remis | **89.4** | **11.2** | **24.3** |
+|                                    | ms / frame |      FPS | générations / frame |
+| ---------------------------------- | ---------: | -------: | ------------------: |
+| mobs retirés de la boucle `update` |    **2.4** |      420 |               **0** |
+| les mêmes mobs remis               |   **89.4** | **11.2** |            **24.3** |
 
 **×37 de ralentissement, imputable à 100 % à la boucle de mise à jour des mobs.**
 Les générations tombent à zéro dès que les mobs ne sont plus simulés : les nouveaux
@@ -85,12 +85,12 @@ Chaîne exacte :
 
 Ordre des opérations dans `animate()` :
 
-| Ligne `src/main.js` | Effet |
-|---|---|
+| Ligne `src/main.js`               | Effet                                          |
+| --------------------------------- | ---------------------------------------------- |
 | 661 `worldApi.update(player.pos)` | **décharge** les ~35 chunks contenant des mobs |
-| 759 `mobSystem.update(...)` | les mobs les **régénèrent tous**, un par un |
-| 824 `renderer.render(...)` | ils sont rendus (ils sont dans la scène !) |
-| frame suivante | rebelote |
+| 759 `mobSystem.update(...)`       | les mobs les **régénèrent tous**, un par un    |
+| 824 `renderer.render(...)`        | ils sont rendus (ils sont dans la scène !)     |
+| frame suivante                    | rebelote                                       |
 
 Compteurs relevés en jeu après ~630 frames à (100, 100) : **8 400 générations de chunk
 pour 8 249 déchargements**. Un monde sain en produit quelques centaines au total.
@@ -140,20 +140,20 @@ Fichier : `src/world/world.js`
 Remplacer `getBlock` (lignes 212-219) par :
 
 ```js
-  // Lecture PURE : ne génère jamais de chunk (c'était la cause de la chute de FPS
-  // en exploration — cf. PERF_PLAN.md §0). Trois retours distincts :
-  //   - une string  : le nom du bloc
-  //   - null        : de l'air (ou hors du monde en Y), chunk connu
-  //   - undefined   : chunk NON CHARGÉ, contenu inconnu
-  function getBlock(x, y, z) {
-    if (y < 0 || y >= CHUNK_Y) return null;
-    const [cx, cz] = worldToChunk(x, z);
-    const record = chunks.get(chunkKey(cx, cz));
-    if (!record) return undefined; // inconnu != air
-    const [lx, lz] = worldToLocal(x, z);
-    const id = record.data[idx(lx, y, lz)];
-    return id ? BLOCK_BY_ID[id] : null;
-  }
+// Lecture PURE : ne génère jamais de chunk (c'était la cause de la chute de FPS
+// en exploration — cf. PERF_PLAN.md §0). Trois retours distincts :
+//   - une string  : le nom du bloc
+//   - null        : de l'air (ou hors du monde en Y), chunk connu
+//   - undefined   : chunk NON CHARGÉ, contenu inconnu
+function getBlock(x, y, z) {
+  if (y < 0 || y >= CHUNK_Y) return null;
+  const [cx, cz] = worldToChunk(x, z);
+  const record = chunks.get(chunkKey(cx, cz));
+  if (!record) return undefined; // inconnu != air
+  const [lx, lz] = worldToLocal(x, z);
+  const id = record.data[idx(lx, y, lz)];
+  return id ? BLOCK_BY_ID[id] : null;
+}
 ```
 
 > `undefined` est falsy comme `null`, donc **tous** les appelants existants
@@ -165,15 +165,15 @@ Remplacer `getBlock` (lignes 212-219) par :
 Remplacer `isSolid` (lignes 236-238) par :
 
 ```js
-  // Un chunk non chargé est traité comme PLEIN, pas comme de l'air : sinon toute
-  // entité située hors de la zone chargée tomberait à travers le monde. Le joueur
-  // n'atteint jamais ces coordonnées (les chunks se chargent bien avant lui), et un
-  // mob gelé loin du joueur n'a pas besoin d'une collision exacte.
-  function isSolid(x, y, z) {
-    const t = getBlock(x, y, z);
-    if (t === undefined) return true;
-    return !!t;
-  }
+// Un chunk non chargé est traité comme PLEIN, pas comme de l'air : sinon toute
+// entité située hors de la zone chargée tomberait à travers le monde. Le joueur
+// n'atteint jamais ces coordonnées (les chunks se chargent bien avant lui), et un
+// mob gelé loin du joueur n'a pas besoin d'une collision exacte.
+function isSolid(x, y, z) {
+  const t = getBlock(x, y, z);
+  if (t === undefined) return true;
+  return !!t;
+}
 ```
 
 ### 1.3 — `setBlock` garde le droit de charger
@@ -187,14 +187,14 @@ est un simple `Map.get` en pratique.
 Remplacer `getGroundHeight` (lignes 269-271) par :
 
 ```js
-  // Si le chunk n'est pas chargé, getBlock renvoie `undefined` partout et le scan
-  // retournerait 1 (= le joueur/mob apparaîtrait sous terre). On retombe alors sur
-  // la hauteur de terrain analytique du bruit, qui ne demande aucun chunk.
-  function getGroundHeight(x, z) {
-    const [cx, cz] = worldToChunk(x, z);
-    if (!chunks.has(chunkKey(cx, cz))) return getHeight(Math.round(x), Math.round(z)) + 1;
-    return computeGroundHeight(getBlock, x, z);
-  }
+// Si le chunk n'est pas chargé, getBlock renvoie `undefined` partout et le scan
+// retournerait 1 (= le joueur/mob apparaîtrait sous terre). On retombe alors sur
+// la hauteur de terrain analytique du bruit, qui ne demande aucun chunk.
+function getGroundHeight(x, z) {
+  const [cx, cz] = worldToChunk(x, z);
+  if (!chunks.has(chunkKey(cx, cz))) return getHeight(Math.round(x), Math.round(z)) + 1;
+  return computeGroundHeight(getBlock, x, z);
+}
 ```
 
 Ajouter `getHeight` à l'import depuis `./generator.js` en haut du fichier (ligne 15-20) :
@@ -227,17 +227,17 @@ const MOB_ACTIVE_RADIUS_SQ = MOB_ACTIVE_RADIUS * MOB_ACTIVE_RADIUS;
 Remplacer `update` dans `createMobSystem` (lignes 235-237) par :
 
 ```js
-  function update(dt, playerPos) {
-    for (const m of mobs) {
-      const dx = m.pos.x - playerPos.x;
-      const dz = m.pos.z - playerPos.z;
-      const far = dx * dx + dz * dz > MOB_ACTIVE_RADIUS_SQ;
-      // masqué aussi côté rendu : un mob gelé à 150 blocs n'a rien à coûter au GPU
-      if (m.group.visible === far) m.group.visible = !far;
-      if (far) continue;
-      m.update(dt, playerPos);
-    }
+function update(dt, playerPos) {
+  for (const m of mobs) {
+    const dx = m.pos.x - playerPos.x;
+    const dz = m.pos.z - playerPos.z;
+    const far = dx * dx + dz * dz > MOB_ACTIVE_RADIUS_SQ;
+    // masqué aussi côté rendu : un mob gelé à 150 blocs n'a rien à coûter au GPU
+    if (m.group.visible === far) m.group.visible = !far;
+    if (far) continue;
+    m.update(dt, playerPos);
   }
+}
 ```
 
 ### 1.6 — Ne pas raycaster les mobs lointains
@@ -286,16 +286,16 @@ function getTargetedMob() {
 Fichier : `src/world/world.js`, `unloadChunk` (lignes 198-210).
 
 ```js
-    if (record.waterMesh) {
-      scene.remove(record.waterMesh);
-      record.waterMesh.dispose(); // libère le buffer instanceMatrix côté GPU
-      record.waterMesh = null;
-    }
-    if (record.lavaMesh) {
-      scene.remove(record.lavaMesh);
-      record.lavaMesh.dispose();
-      record.lavaMesh = null;
-    }
+if (record.waterMesh) {
+  scene.remove(record.waterMesh);
+  record.waterMesh.dispose(); // libère le buffer instanceMatrix côté GPU
+  record.waterMesh = null;
+}
+if (record.lavaMesh) {
+  scene.remove(record.lavaMesh);
+  record.lavaMesh.dispose();
+  record.lavaMesh = null;
+}
 ```
 
 > `InstancedMesh.dispose()` ne touche NI la géométrie NI le matériau (tous deux
@@ -307,18 +307,18 @@ Fichier : `src/world/world.js`, `unloadChunk` (lignes 198-210).
 Fichier : `src/world/world.js`. Remplacer la boucle de chargement (lignes 302-308) par :
 
 ```js
-    const start = performance.now();
-    let loaded = 0;
-    for (const c of candidates) {
-      if (loaded >= MAX_CHUNKS_PER_FRAME) break;
-      // budget testé AVANT : l'ancienne version chargeait toujours au moins un chunk
-      // (~11-15 ms) avant de regarder l'heure, ce qui plafonnait la frame à ~55 FPS
-      // en déplacement continu. On garde le tout premier chunk inconditionnel pour
-      // ne jamais stagner (sinon on peut ne rien charger indéfiniment).
-      if (loaded > 0 && performance.now() - start > CHUNK_LOAD_BUDGET_MS) break;
-      ensureChunk(c.cx, c.cz);
-      loaded++;
-    }
+const start = performance.now();
+let loaded = 0;
+for (const c of candidates) {
+  if (loaded >= MAX_CHUNKS_PER_FRAME) break;
+  // budget testé AVANT : l'ancienne version chargeait toujours au moins un chunk
+  // (~11-15 ms) avant de regarder l'heure, ce qui plafonnait la frame à ~55 FPS
+  // en déplacement continu. On garde le tout premier chunk inconditionnel pour
+  // ne jamais stagner (sinon on peut ne rien charger indéfiniment).
+  if (loaded > 0 && performance.now() - start > CHUNK_LOAD_BUDGET_MS) break;
+  ensureChunk(c.cx, c.cz);
+  loaded++;
+}
 ```
 
 Et abaisser les constantes (lignes 33-34) :
@@ -333,57 +333,57 @@ const MAX_CHUNKS_PER_FRAME = 2;
 Toujours dans `src/world/world.js`. Remplacer entièrement `update` (lignes 287-315) :
 
 ```js
-  // File de chargement persistante : la liste des chunks manquants et le scan de
-  // déchargement ne dépendent QUE du chunk où se trouve le joueur. Les recalculer à
-  // chaque frame (169 candidats + Array.from sur ~113 chunks) était du pur gaspillage
-  // à 60 Hz alors que le joueur ne change de chunk que toutes les ~3 secondes.
-  let lastPcx = null;
-  let lastPcz = null;
-  let loadQueue = [];
+// File de chargement persistante : la liste des chunks manquants et le scan de
+// déchargement ne dépendent QUE du chunk où se trouve le joueur. Les recalculer à
+// chaque frame (169 candidats + Array.from sur ~113 chunks) était du pur gaspillage
+// à 60 Hz alors que le joueur ne change de chunk que toutes les ~3 secondes.
+let lastPcx = null;
+let lastPcz = null;
+let loadQueue = [];
 
-  function rebuildLoadQueue(pcx, pcz) {
-    loadQueue.length = 0;
-    for (let dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
-      for (let dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
-        const d2 = dx * dx + dz * dz;
-        if (d2 > RENDER_DISTANCE * RENDER_DISTANCE) continue;
-        const cx = pcx + dx;
-        const cz = pcz + dz;
-        if (Math.abs(cx * CHUNK_X) > WORLD_BORDER + CHUNK_X) continue;
-        if (Math.abs(cz * CHUNK_Z) > WORLD_BORDER + CHUNK_Z) continue;
-        if (!chunks.has(chunkKey(cx, cz))) loadQueue.push({ cx, cz, d2 });
-      }
-    }
-    loadQueue.sort((a, b) => a.d2 - b.d2);
-  }
-
-  function unloadFar(pcx, pcz) {
-    for (const record of chunks.values()) {
-      const dx = record.cx - pcx;
-      const dz = record.cz - pcz;
-      if (dx * dx + dz * dz > UNLOAD_DISTANCE * UNLOAD_DISTANCE) unloadChunk(record);
+function rebuildLoadQueue(pcx, pcz) {
+  loadQueue.length = 0;
+  for (let dx = -RENDER_DISTANCE; dx <= RENDER_DISTANCE; dx++) {
+    for (let dz = -RENDER_DISTANCE; dz <= RENDER_DISTANCE; dz++) {
+      const d2 = dx * dx + dz * dz;
+      if (d2 > RENDER_DISTANCE * RENDER_DISTANCE) continue;
+      const cx = pcx + dx;
+      const cz = pcz + dz;
+      if (Math.abs(cx * CHUNK_X) > WORLD_BORDER + CHUNK_X) continue;
+      if (Math.abs(cz * CHUNK_Z) > WORLD_BORDER + CHUNK_Z) continue;
+      if (!chunks.has(chunkKey(cx, cz))) loadQueue.push({ cx, cz, d2 });
     }
   }
+  loadQueue.sort((a, b) => a.d2 - b.d2);
+}
 
-  function update(playerPos) {
-    const [pcx, pcz] = worldToChunk(playerPos.x, playerPos.z);
-    if (pcx !== lastPcx || pcz !== lastPcz) {
-      lastPcx = pcx;
-      lastPcz = pcz;
-      rebuildLoadQueue(pcx, pcz);
-      unloadFar(pcx, pcz);
-    }
-    if (loadQueue.length === 0) return;
-
-    const start = performance.now();
-    let loaded = 0;
-    while (loadQueue.length > 0 && loaded < MAX_CHUNKS_PER_FRAME) {
-      if (loaded > 0 && performance.now() - start > CHUNK_LOAD_BUDGET_MS) break;
-      const c = loadQueue.shift();
-      if (!chunks.has(chunkKey(c.cx, c.cz))) ensureChunk(c.cx, c.cz);
-      loaded++;
-    }
+function unloadFar(pcx, pcz) {
+  for (const record of chunks.values()) {
+    const dx = record.cx - pcx;
+    const dz = record.cz - pcz;
+    if (dx * dx + dz * dz > UNLOAD_DISTANCE * UNLOAD_DISTANCE) unloadChunk(record);
   }
+}
+
+function update(playerPos) {
+  const [pcx, pcz] = worldToChunk(playerPos.x, playerPos.z);
+  if (pcx !== lastPcx || pcz !== lastPcz) {
+    lastPcx = pcx;
+    lastPcz = pcz;
+    rebuildLoadQueue(pcx, pcz);
+    unloadFar(pcx, pcz);
+  }
+  if (loadQueue.length === 0) return;
+
+  const start = performance.now();
+  let loaded = 0;
+  while (loadQueue.length > 0 && loaded < MAX_CHUNKS_PER_FRAME) {
+    if (loaded > 0 && performance.now() - start > CHUNK_LOAD_BUDGET_MS) break;
+    const c = loadQueue.shift();
+    if (!chunks.has(chunkKey(c.cx, c.cz))) ensureChunk(c.cx, c.cz);
+    loaded++;
+  }
+}
 ```
 
 > ⚠️ `unloadChunk` fait `chunks.delete(...)`. Itérer sur `chunks.values()` **tout en**
@@ -464,7 +464,7 @@ Un minerai ne peut de toute façon remplacer QUE de la pierre déjà posée.
 Ajouter en haut de la fonction `generateChunk` :
 
 ```js
-  const STONE = BLOCK_ID.stone;
+const STONE = BLOCK_ID.stone;
 ```
 
 Puis, dans la boucle `for (let wy = ore.minY; ...)`, insérer en **première** ligne :
@@ -478,7 +478,7 @@ Puis, dans la boucle `for (let wy = ore.minY; ...)`, insérer en **première** l
 ```
 
 > **Effet de bord assumé, à mentionner dans le commit** : le monde généré n'est plus
-> strictement identique à l'ancien. Les rares veines dont le *centre* tombait dans
+> strictement identique à l'ancien. Les rares veines dont le _centre_ tombait dans
 > l'air/la terre ne sont plus semées (leurs blocs de bordure en pierre disparaissent).
 > Aucun risque de corruption : les diffs sauvegardés sont indexés par position, pas
 > par contenu, et `applySavedDiffs` s'applique après. Le rendu visuel est équivalent.
@@ -536,7 +536,7 @@ export function meshChunk(data, uvByBlockId) {
 
 - `npm test` — en particulier `test/generator.test.js` et `test/mesher.test.js`.
   Si un test asserte un nombre exact de blocs de minerai, il faudra l'ajuster : le
-  changer pour asserter un *intervalle* (`> 0` et `< un plafond`) plutôt qu'une valeur
+  changer pour asserter un _intervalle_ (`> 0` et `< un plafond`) plutôt qu'une valeur
   exacte, en documentant pourquoi dans le test.
 - Re-mesurer :
 
@@ -544,7 +544,7 @@ export function meshChunk(data, uvByBlockId) {
 node --input-type=module -e "import { generateChunk } from './src/world/generator.js'; import { meshChunk } from './src/render/mesher.js'; const uv={}; for(let i=1;i<20;i++) uv[i]={top:[0,0,1,1],bottom:[0,0,1,1],side:[0,0,1,1]}; let t0=performance.now(),g; for(let i=0;i<20;i++) g=generateChunk(10+i,10); console.log('gen', ((performance.now()-t0)/20).toFixed(2), 'ms'); t0=performance.now(); for(let i=0;i<20;i++) meshChunk(g.data, uv); console.log('mesh', ((performance.now()-t0)/20).toFixed(2), 'ms');"
 ```
 
-  Objectif : gen < 3,5 ms, mesh < 2 ms.
+Objectif : gen < 3,5 ms, mesh < 2 ms.
 
 ---
 
@@ -573,15 +573,15 @@ Ne **pas** entreprendre cette phase avant d'avoir mesuré que les phases 1-3 ne 
 
 ## Récapitulatif des fichiers touchés
 
-| Fichier | Phase | Nature |
-|---|---|---|
-| `src/world/world.js` | 1, 2 | `getBlock` pur, `isSolid`, `getGroundHeight`, dispose, file de chargement, suppression `chunkMeshList` |
-| `src/entities/mob.js` | 1 | gel des mobs hors rayon actif |
-| `src/main.js` | 1, 2 | filtre hitboxes, import `voxelRaycast`, câblage `getBlock` du joueur |
-| `src/core/raycast.js` | 2 | **nouveau** — `voxelRaycast` partagé |
-| `src/entities/player.js` | 2 | DDA au lieu du raycast triangle en 3e personne |
-| `src/world/generator.js` | 3 | sortie précoce de la boucle de minerais |
-| `src/render/mesher.js` | 3 | bornage des tranches Y vides |
+| Fichier                  | Phase | Nature                                                                                                 |
+| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------ |
+| `src/world/world.js`     | 1, 2  | `getBlock` pur, `isSolid`, `getGroundHeight`, dispose, file de chargement, suppression `chunkMeshList` |
+| `src/entities/mob.js`    | 1     | gel des mobs hors rayon actif                                                                          |
+| `src/main.js`            | 1, 2  | filtre hitboxes, import `voxelRaycast`, câblage `getBlock` du joueur                                   |
+| `src/core/raycast.js`    | 2     | **nouveau** — `voxelRaycast` partagé                                                                   |
+| `src/entities/player.js` | 2     | DDA au lieu du raycast triangle en 3e personne                                                         |
+| `src/world/generator.js` | 3     | sortie précoce de la boucle de minerais                                                                |
+| `src/render/mesher.js`   | 3     | bornage des tranches Y vides                                                                           |
 
 ## Ordre de commit suggéré
 

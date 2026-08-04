@@ -19,10 +19,27 @@ import {
   SEA_LEVEL,
   WORLD_BORDER,
 } from './generator.js';
-import { BLOCK_ID, BLOCK_BY_ID } from '../data/blocks.js';
+import { BLOCK_ID, BLOCK_BY_ID, BLOCK_TYPES, LIQUID_IDS, SHAPE_BY_ID } from '../data/blocks.js';
 import { buildBlockAtlas } from '../render/atlas.js';
-import { meshChunk } from '../render/mesher.js';
+import { meshChunk, meshLiquid } from '../render/mesher.js';
 import { texWater, texLava } from '../render/textures.js';
+import {
+  propagate as propagateLight,
+  propagateSkylight,
+  propagateSkylightColumn,
+  removeLight,
+  computeSkylightColumn,
+} from './light.js';
+import { stepFluidQueue } from './fluid.js';
+
+// un bloc bloque la lumière s'il existe, n'est pas un liquide (Phase 16 : l'eau
+// laisse filtrer la lumière, une mare de lave est sa propre source) et remplit
+// vraiment sa cellule. La torche est exclue via SHAPE_BY_ID : ce n'est qu'un
+// bâtonnet fin, il serait absurde qu'il projette une colonne d'ombre sous lui ou
+// qu'il coupe le couloir qu'il est censé éclairer.
+function isOpaqueBlock(id) {
+  return id !== 0 && !LIQUID_IDS.has(id) && !SHAPE_BY_ID[id];
+}
 
 export { WORLD_BORDER };
 
@@ -36,6 +53,12 @@ const MAX_CHUNKS_PER_FRAME = 2; // garde-fou : jamais plus que ça même si le b
 const INITIAL_RADIUS = 3; // chargé de façon synchrone au démarrage (le reste suit via update())
 const DIFF_STORAGE_KEY = 'minicrafter_diffs_v1';
 
+// Écoulement (Phase 16.3) : au plus FLUID_BUDGET cellules traitées par tic, à
+// FLUID_TICK_RATE Hz -- jamais un balayage du monde, seulement la file active
+// (cf. world/fluid.js). Un barrage cassé d'un coup ne peut donc jamais geler une frame.
+const FLUID_TICK_RATE = 0.2; // 5 Hz
+const FLUID_BUDGET = 48;
+
 function loadDiffs() {
   try {
     return JSON.parse(localStorage.getItem(DIFF_STORAGE_KEY) || '{}');
@@ -46,36 +69,38 @@ function loadDiffs() {
 
 // renderDistance réglable (Phase 6, qualité adaptative) : un mobile tient une distance
 // de rendu plus courte qu'un desktop pour le même budget de frame.
-export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE }) {
+export function createWorld({
+  scene,
+  renderDistance = DEFAULT_RENDER_DISTANCE,
+  preloadAt = { x: 0, z: 0 },
+  // (x, y, z, present) : une torche entre dans le monde chargé ou en sort. Couvre les
+  // trois cas d'un coup — posée/cassée par le joueur, restaurée depuis les diffs au
+  // chargement d'un chunk, retirée au déchargement — pour que l'appelant n'ait pas à
+  // les suivre séparément (c'est ce qu'il faisait, et il en ratait deux sur trois).
+  onTorchesChanged = (_x, _y, _z, _present) => {},
+}) {
   const RENDER_DISTANCE = renderDistance;
   const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
   const { texture: atlasTexture, uvByBlockId } = buildBlockAtlas();
-  const atlasMaterial = new THREE.MeshLambertMaterial({ map: atlasTexture });
+  // vertexColors (Phase 13) : le mesher écrit un niveau de lumière par sommet dans
+  // l'attribut 'color' -- zéro appel de rendu de plus, juste un buffer de plus.
+  const atlasMaterial = new THREE.MeshLambertMaterial({ map: atlasTexture, vertexColors: true });
 
-  // Lacs : une petite InstancedMesh par chunk, mais TOUTES partagent le même matériau
-  // (donc la même texture) -> animer waterTexture.offset dans main.js fait défiler
-  // l'eau de tous les chunks à la fois, sans avoir à les parcourir un par un.
+  // Eau/lave (Phase 16) : géométrie PAR CHUNK (comme le terrain), mais matériau
+  // PARTAGÉ entre tous les chunks -> animer .offset une fois dans main.js fait
+  // défiler l'eau/la lave de tout le monde chargé sans avoir à les parcourir un par un.
   const waterTexture = texWater();
   const waterMaterial = new THREE.MeshLambertMaterial({
     map: waterTexture,
+    vertexColors: true,
     transparent: true,
-    opacity: 0.65,
+    opacity: 0.7,
   });
-  // cube unité : la hauteur réelle de chaque lac (variable selon la profondeur du
-  // bassin) est appliquée via l'échelle de la matrice d'instance dans buildWaterMesh,
-  // pas via la géométrie elle-même — ainsi un seul mesh partagé peut représenter des
-  // lacs peu profonds sur les berges et bien plus profonds au centre du bassin.
-  const waterGeometry = new THREE.BoxGeometry(1, 1, 1);
-  const waterDummy = new THREE.Object3D();
-
-  // Lave (Phase 4c) : même schéma que l'eau (InstancedMesh partagée par chunk), mais
-  // en MeshBasicMaterial (non affecté par l'éclairage de la scène) pour qu'elle reste
-  // incandescente même dans le noir complet d'une caverne profonde -- une lave "éteinte"
-  // sous MeshLambertMaterial perdrait tout son intérêt visuel comme signal de danger.
   const lavaTexture = texLava();
+  // MeshBasicMaterial (pas affectée par l'éclairage de la scène) : une mare de lave
+  // reste incandescente même dans le noir complet d'une caverne -- perdrait tout son
+  // intérêt visuel comme signal de danger sous un Lambert assombri par l'ambiance nocturne.
   const lavaMaterial = new THREE.MeshBasicMaterial({ map: lavaTexture });
-  const lavaGeometry = new THREE.BoxGeometry(1, 1, 1);
-  const lavaDummy = new THREE.Object3D();
 
   const diffs = loadDiffs(); // "cx,cz" -> { localIdx: blockId }
   let diffsDirty = false;
@@ -99,55 +124,87 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     for (const localIdx in d) data[localIdx] = d[localIdx];
   }
 
-  function buildGeometry(data) {
-    const { positions, normals, uvs, indices } = meshChunk(data, uvByBlockId);
+  function buildGeometry(data, lightData) {
+    const { positions, normals, uvs, colors, indices } = meshChunk(
+      data,
+      uvByBlockId,
+      lightData,
+      LIQUID_IDS,
+      SHAPE_BY_ID,
+    );
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.setIndex(new THREE.BufferAttribute(indices, 1));
     return geo;
   }
 
-  function buildWaterMesh(record) {
-    if (record.waterCells.length === 0) return null;
-    const mesh = new THREE.InstancedMesh(waterGeometry, waterMaterial, record.waterCells.length);
-    record.waterCells.forEach((cell, i) => {
-      // remplit toute la colonne du fond du bassin (cell.h + 1) jusqu'à la surface
-      // (SEA_LEVEL) : avant, une simple plaque fine flottait au niveau de la mer,
-      // laissant un lac "creux" et sans fond visible dès qu'on s'en approchait.
-      const depth = Math.max(0.3, SEA_LEVEL - cell.h);
-      waterDummy.position.set(
-        record.cx * CHUNK_X + cell.lx + 0.5,
-        cell.h + 1 + depth / 2 - 0.15,
-        record.cz * CHUNK_Z + cell.lz + 0.5,
-      );
-      waterDummy.scale.set(1, depth, 1);
-      waterDummy.updateMatrix();
-      mesh.setMatrixAt(i, waterDummy.matrix);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    return mesh;
+  function buildLiquidGeometry(data, targetId, lightData) {
+    const { positions, normals, uvs, colors, indices } = meshLiquid(
+      data,
+      targetId,
+      LIQUID_IDS,
+      lightData,
+    );
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setIndex(new THREE.BufferAttribute(indices, 1));
+    return geo;
   }
 
-  // contrairement à l'eau (une plaque de hauteur variable par colonne), une mare de
-  // lave est un volume de cellules déjà creusées une à une par le générateur -> chaque
-  // cellule est simplement un cube plein 1x1x1 posé à sa position exacte.
-  function buildLavaMesh(record) {
-    if (record.lavaCells.length === 0) return null;
-    const mesh = new THREE.InstancedMesh(lavaGeometry, lavaMaterial, record.lavaCells.length);
-    record.lavaCells.forEach((cell, i) => {
-      lavaDummy.position.set(
-        record.cx * CHUNK_X + cell.lx + 0.5,
-        cell.ly + 0.5,
-        record.cz * CHUNK_Z + cell.lz + 0.5,
-      );
-      lavaDummy.scale.set(1, 1, 1);
-      lavaDummy.updateMatrix();
-      mesh.setMatrixAt(i, lavaDummy.matrix);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    return mesh;
+  // Lumière (Phase 13) : v1, un seul lightmap par chunk, ne se propage pas au-delà
+  // de ses bords (cf. world/light.js). Recalculée à chaque (re)chargement de chunk
+  // plutôt que persistée : entièrement dérivable de `data` (position des torches +
+  // du ciel), donc pas besoin de la sauvegarder à côté des diffs.
+  const TORCH_ID = BLOCK_ID.torch;
+  const LAVA_ID = BLOCK_ID.lava;
+  // Retourne { lightData, torches } — `torches` est la liste des torches LOCALES
+  // trouvées dans le chunk. On la remonte à l'appelant (main.js, via onTorchesChanged)
+  // parce que le pool de PointLight ne connaissait jusqu'ici que les torches posées
+  // à la main pendant la session : après un rechargement de page, une torche restaurée
+  // depuis les diffs sauvegardés revenait bien dans le monde, mais sans sa lumière 3D.
+  function computeInitialLight(data) {
+    const lightData = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
+    const torches = [];
+    for (let lx = 0; lx < CHUNK_X; lx++)
+      for (let lz = 0; lz < CHUNK_Z; lz++)
+        computeSkylightColumn(data, lightData, lx, lz, isOpaqueBlock);
+    // le ciel doit aussi se diffuser LATÉRALEMENT, sinon tout ce qui est sous un
+    // feuillage tombe à 0 d'un coup (ombre noire sous les arbres) — cf. light.js
+    propagateSkylight(data, lightData, isOpaqueBlock);
+    const sources = [];
+    for (let lx = 0; lx < CHUNK_X; lx++)
+      for (let ly = 0; ly < CHUNK_Y; ly++)
+        for (let lz = 0; lz < CHUNK_Z; lz++) {
+          const id = data[idx(lx, ly, lz)];
+          if (id === TORCH_ID) {
+            sources.push({ x: lx, y: ly, z: lz, level: BLOCK_TYPES.torch.emitsLight });
+            torches.push({ lx, ly, lz });
+          } else if (id === LAVA_ID)
+            sources.push({ x: lx, y: ly, z: lz, level: BLOCK_TYPES.lava.emitsLight });
+        }
+    if (sources.length) propagateLight(data, lightData, sources, isOpaqueBlock);
+    return { lightData, torches };
+  }
+
+  function buildLiquidMeshes(record) {
+    record.waterMesh = new THREE.Mesh(
+      buildLiquidGeometry(record.data, BLOCK_ID.water, record.lightData),
+      waterMaterial,
+    );
+    record.waterMesh.position.set(record.cx * CHUNK_X, 0, record.cz * CHUNK_Z);
+    scene.add(record.waterMesh);
+    record.lavaMesh = new THREE.Mesh(
+      buildLiquidGeometry(record.data, BLOCK_ID.lava, record.lightData),
+      lavaMaterial,
+    );
+    record.lavaMesh.position.set(record.cx * CHUNK_X, 0, record.cz * CHUNK_Z);
+    scene.add(record.lavaMesh);
   }
 
   function ensureChunk(cx, cz) {
@@ -155,35 +212,18 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     let record = chunks.get(key);
     if (record) return record;
 
-    const { data, waterCells, lavaCells } = generateChunk(cx, cz);
+    const { data } = generateChunk(cx, cz);
     applySavedDiffs(key, data);
+    const { lightData, torches } = computeInitialLight(data);
+    for (const t of torches) onTorchesChanged(cx * CHUNK_X + t.lx, t.ly, cz * CHUNK_Z + t.lz, true);
 
-    // lookup rapide "lx,ly,lz" -> cellule de lave, pour isInLava() sans reparcourir
-    // le tableau à chaque frame (cf. commentaire sur isInLava plus bas)
-    const lavaSet = new Set(lavaCells.map((c) => `${c.lx},${c.ly},${c.lz}`));
-
-    record = {
-      cx,
-      cz,
-      key,
-      data,
-      waterCells,
-      lavaCells,
-      lavaSet,
-      mesh: null,
-      waterMesh: null,
-      lavaMesh: null,
-    };
-    record.mesh = new THREE.Mesh(buildGeometry(data), atlasMaterial);
+    record = { cx, cz, key, data, lightData, torches, mesh: null, waterMesh: null, lavaMesh: null };
+    record.mesh = new THREE.Mesh(buildGeometry(data, lightData), atlasMaterial);
     record.mesh.position.set(cx * CHUNK_X, 0, cz * CHUNK_Z);
     record.mesh.receiveShadow = true;
     scene.add(record.mesh);
 
-    record.waterMesh = buildWaterMesh(record);
-    if (record.waterMesh) scene.add(record.waterMesh);
-
-    record.lavaMesh = buildLavaMesh(record);
-    if (record.lavaMesh) scene.add(record.lavaMesh);
+    buildLiquidMeshes(record);
 
     chunks.set(key, record);
     return record;
@@ -191,26 +231,27 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
 
   function remesh(record) {
     record.mesh.geometry.dispose();
-    record.mesh.geometry = buildGeometry(record.data);
+    record.mesh.geometry = buildGeometry(record.data, record.lightData);
+    record.waterMesh.geometry.dispose();
+    record.waterMesh.geometry = buildLiquidGeometry(record.data, BLOCK_ID.water, record.lightData);
+    record.lavaMesh.geometry.dispose();
+    record.lavaMesh.geometry = buildLiquidGeometry(record.data, BLOCK_ID.lava, record.lightData);
   }
 
   function unloadChunk(record) {
+    // les torches de ce chunk quittent le monde chargé : sans ça le pool de PointLight
+    // gardait des positions fantômes et pouvait dépenser ses 8 lumières sur des
+    // torches déchargées, donc invisibles.
+    for (const t of record.torches)
+      onTorchesChanged(record.cx * CHUNK_X + t.lx, t.ly, record.cz * CHUNK_Z + t.lz, false);
     scene.remove(record.mesh);
     record.mesh.geometry.dispose();
-    // waterGeometry/waterMaterial (et pareil pour la lave) sont partagés par tous les
-    // chunks : on ne les dispose jamais ici, seulement retirer CE mesh de la scène.
-    // `.dispose()` sur l'InstancedMesh lui-même ne touche ni geometry ni material —
-    // il libère uniquement le buffer instanceMatrix, propre à ce mesh.
-    if (record.waterMesh) {
-      scene.remove(record.waterMesh);
-      record.waterMesh.dispose();
-      record.waterMesh = null;
-    }
-    if (record.lavaMesh) {
-      scene.remove(record.lavaMesh);
-      record.lavaMesh.dispose();
-      record.lavaMesh = null;
-    }
+    // waterMaterial/lavaMaterial sont partagés par tous les chunks : jamais disposés
+    // ici, seulement la géométrie (propre à CE chunk) et le retrait de la scène.
+    scene.remove(record.waterMesh);
+    record.waterMesh.geometry.dispose();
+    scene.remove(record.lavaMesh);
+    record.lavaMesh.geometry.dispose();
     chunks.delete(record.key);
     // NB: `diffs` n'est PAS nettoyé ici — les modifications du joueur doivent survivre
     // au déchargement, elles sont réappliquées par applySavedDiffs() au rechargement.
@@ -231,6 +272,26 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     return id ? BLOCK_BY_ID[id] : null;
   }
 
+  // File active de l'écoulement (Phase 16.3) : {x,y,z,type,dist}[], jamais un scan
+  // du monde. Alimentée quand un bloc devient de l'air à côté d'un liquide (cassé
+  // par le joueur) -- "breaking a block adjacent to water enqueues that cell" (PLAN.md).
+  let fluidQueue = [];
+  const FLUID_NEIGHBORS = [
+    [1, 0, 0],
+    [-1, 0, 0],
+    [0, 1, 0],
+    [0, -1, 0],
+    [0, 0, 1],
+    [0, 0, -1],
+  ];
+  function enqueueFluidNeighbors(x, y, z) {
+    for (const [dx, dy, dz] of FLUID_NEIGHBORS) {
+      const t = getBlock(x + dx, y + dy, z + dz);
+      if (t && BLOCK_TYPES[t]?.liquid)
+        fluidQueue.push({ x: x + dx, y: y + dy, z: z + dz, type: t, dist: 0 });
+    }
+  }
+
   function setBlock(x, y, z, type) {
     if (y < 0 || y >= CHUNK_Y) return;
     const [cx, cz] = worldToChunk(x, z);
@@ -239,11 +300,71 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     const i = idx(lx, y, lz);
     const id = type ? BLOCK_ID[type] : 0;
     if (record.data[i] === id) return;
+    const oldType = record.data[i] ? BLOCK_BY_ID[record.data[i]] : null;
     record.data[i] = id;
     if (!diffs[record.key]) diffs[record.key] = {};
     diffs[record.key][i] = id;
     diffsDirty = true;
+
+    if (!type) enqueueFluidNeighbors(x, y, z); // un bloc vient de disparaître : les liquides voisins peuvent s'y engouffrer
+
+    // suivi des torches du chunk (cf. onTorchesChanged) : c'est ici, et pas chez
+    // l'appelant, parce que c'est le seul point de passage de TOUTE modification.
+    if (oldType === 'torch') {
+      const at = record.torches.findIndex((t) => t.lx === lx && t.ly === y && t.lz === lz);
+      if (at >= 0) record.torches.splice(at, 1);
+      onTorchesChanged(x, y, z, false);
+    }
+    if (type === 'torch') {
+      record.torches.push({ lx, ly: y, lz });
+      onTorchesChanged(x, y, z, true);
+    }
+
+    // Lumière (Phase 13) : ne remet à jour QUE deux cas -- une torche/lave posée/cassée
+    // (source ajoutée/retirée) et le ciel de CETTE colonne qui s'ouvre plus loin
+    // (computeSkylightColumn refait tout le balayage top-down, donc creuser un
+    // puits jusqu'à une grotte la rallume correctement). Ce que la v1 ne fait PAS :
+    // reculer une lumière déjà propagée quand un mur est posé au milieu d'un couloir
+    // déjà éclairé par une torche lointaine, ou effacer un rayon de ciel déjà posé
+    // quand on referme le trou au-dessus -- la "couture" assumée du plan (§Phase 13),
+    // qui se résorbe au prochain rechargement du chunk.
+    const oldEmits = oldType && BLOCK_TYPES[oldType]?.emitsLight;
+    const newEmits = type && BLOCK_TYPES[type]?.emitsLight;
+    if (oldEmits) removeLight(record.data, record.lightData, lx, y, lz, isOpaqueBlock);
+    if (newEmits)
+      propagateLight(
+        record.data,
+        record.lightData,
+        [{ x: lx, y, z: lz, level: newEmits }],
+        isOpaqueBlock,
+      );
+    computeSkylightColumn(record.data, record.lightData, lx, lz, isOpaqueBlock);
+    // même raison qu'au chargement du chunk : creuser rouvre une colonne au ciel, et
+    // ce ciel doit se répandre de côté sous le trou, pas juste tomber tout droit.
+    // Version colonne (pas chunk entier) : setBlock est sur le chemin chaud des
+    // liquides, cf. le commentaire de propagateSkylightColumn.
+    propagateSkylightColumn(record.data, record.lightData, lx, lz, isOpaqueBlock);
+
     remesh(record);
+  }
+
+  // appelée au tic (FLUID_TICK_RATE, pas la frame) : avance la file active d'écoulement
+  // par petits lots. `getBlock` retourne déjà undefined pour un chunk non chargé, donc
+  // stepFluidQueue s'arrête tout seul aux limites du monde chargé (cf. fluid.js).
+  let fluidTickAccum = 0;
+  function updateFluids(dt) {
+    if (fluidQueue.length === 0) return;
+    fluidTickAccum += dt;
+    while (fluidTickAccum >= FLUID_TICK_RATE) {
+      fluidTickAccum -= FLUID_TICK_RATE;
+      if (fluidQueue.length === 0) break;
+      const { spread, remaining } = stepFluidQueue(fluidQueue, FLUID_BUDGET, getBlock);
+      fluidQueue = remaining;
+      for (const cell of spread) {
+        setBlock(cell.x, cell.y, cell.z, cell.type);
+        fluidQueue.push(cell); // continue de se propager depuis sa nouvelle position au prochain tic
+      }
+    }
   }
 
   // Un chunk non chargé est traité comme PLEIN, pas comme de l'air : sinon toute
@@ -253,19 +374,17 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
   function isSolid(x, y, z) {
     const t = getBlock(x, y, z);
     if (t === undefined) return true;
-    return !!t;
+    if (!t) return false;
+    return BLOCK_TYPES[t]?.solid !== false; // solide par défaut ; torche/eau/lave disent non
   }
 
-  // la lave n'est PAS stockée dans `data` (comme l'eau) : elle est traversable/non
-  // solide par nature (on doit pouvoir y tomber dedans), donc on la teste via son
-  // propre index plutôt que via getBlock/isSolid.
+  // Phase 16 : la lave est un vrai bloc désormais, getBlock suffit -- plus besoin
+  // d'un index séparé (lavaSet) comme avant que ce ne soit stocké dans `data`.
   function isInLava(x, y, z) {
-    const [cx, cz] = worldToChunk(x, z);
-    const record = chunks.get(chunkKey(cx, cz));
-    if (!record || record.lavaSet.size === 0) return false;
-    const [lx, lz] = worldToLocal(x, z);
-    const ly = Math.floor(y);
-    return record.lavaSet.has(`${lx},${ly},${lz}`);
+    return getBlock(Math.floor(x), Math.floor(y), Math.floor(z)) === 'lava';
+  }
+  function isInWater(x, y, z) {
+    return getBlock(Math.floor(x), Math.floor(y), Math.floor(z)) === 'water';
   }
 
   // collision boîte générique (utilisée par le joueur ET les mobs) : identique à
@@ -303,7 +422,9 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
       for (let dz = -radiusChunks; dz <= radiusChunks; dz++)
         if (dx * dx + dz * dz <= radiusChunks * radiusChunks) ensureChunk(pcx + dx, pcz + dz);
   }
-  preload(0, 0, INITIAL_RADIUS);
+  // centré sur le point d'apparition, pas sur (0,0) : les deux ne coïncident plus
+  // depuis que le spawn est cherché plutôt que supposé (cf. findSpawnColumn).
+  preload(preloadAt.x, preloadAt.z, INITIAL_RADIUS);
 
   // File de chargement persistante : la liste des chunks manquants et le scan de
   // déchargement ne dépendent QUE du chunk où se trouve le joueur. Les recalculer à
@@ -338,10 +459,10 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
   }
 
   // appelée chaque frame : charge les chunks proches du joueur (quelques-uns par
-  // frame seulement, pour ne jamais bloquer une frame entière) et décharge ceux
-  // devenus trop lointains. La file/le scan ne sont reconstruits que si le joueur a
-  // changé de chunk depuis la frame précédente (cf. commentaire au-dessus).
-  function update(playerPos) {
+  // frame seulement, pour ne jamais bloquer une frame entière), décharge ceux
+  // devenus trop lointains, et avance l'écoulement des liquides. La file/le scan de
+  // chargement ne sont reconstruits que si le joueur a changé de chunk (cf. plus haut).
+  function update(playerPos, dt = 0) {
     const [pcx, pcz] = worldToChunk(playerPos.x, playerPos.z);
     if (pcx !== lastPcx || pcz !== lastPcz) {
       lastPcx = pcx;
@@ -349,6 +470,7 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
       rebuildLoadQueue(pcx, pcz);
       unloadFar(pcx, pcz);
     }
+    updateFluids(dt);
     if (loadQueue.length === 0) return;
 
     const start = performance.now();
@@ -370,6 +492,7 @@ export function createWorld({ scene, renderDistance = DEFAULT_RENDER_DISTANCE })
     setBlock,
     isSolid,
     isInLava,
+    isInWater,
     collidesAtBox,
     getGroundHeight,
     update,

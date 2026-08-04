@@ -11,6 +11,7 @@
   </head>
   <body>
     <div id="crosshair"></div>
+    <div id="hurtVignette"></div>
 
     <div id="fps">-- FPS</div>
 
@@ -20,12 +21,15 @@
       <span id="musicHint" style="opacity: 0.8; cursor: pointer">🔊 Musique (M)</span>
     </div>
 
-    <div id="hint">Clic droit / E : ouvrir la table de craft</div>
+    <div id="hint">Clic droit / E : ouvrir la table de craft / le fourneau</div>
 
     <div id="healthbar"></div>
+    <div id="hungerbar"></div>
+    <div id="breathbar"></div>
     <div id="hotbar"></div>
 
     <div id="chatLog"></div>
+    <div id="chatHistory"></div>
     <div id="chatInputBox"><input id="chatInput" maxlength="140" autocomplete="off" /></div>
 
     <div id="craftPanel">
@@ -37,12 +41,36 @@
       </div>
     </div>
 
+    <div id="furnacePanel">
+      <div id="furnaceBox">
+        <h2>Fourneau</h2>
+        <div id="furnaceRow">
+          <div
+            class="fSlot empty"
+            id="fInput"
+            title="Entrée : clic pour charger l'objet en main"
+          ></div>
+          <div id="furnaceProgress"><div id="furnaceProgressFill"></div></div>
+          <div class="fSlot empty" id="fOutput" title="Sortie : clic pour récupérer"></div>
+        </div>
+        <div id="furnaceFuelRow">
+          <div id="furnaceFlame"><div id="furnaceFlameFill"></div></div>
+          <div
+            class="fSlot empty"
+            id="fFuel"
+            title="Combustible : clic pour charger l'objet en main"
+          ></div>
+        </div>
+        <button id="closeFurnace">Fermer (E)</button>
+      </div>
+    </div>
+
     <div id="blocker">
       <h1>Minicrafter</h1>
       <p>Clique pour jouer</p>
       <p>ZQSD / WASD : se déplacer — Espace : sauter</p>
       <p>Clic gauche : casser / attaquer — Clic droit : poser</p>
-      <p>Molette ou 1-9, 0 : choisir l'objet — E : inventaire / craft</p>
+      <p>Molette ou 1-9 : choisir l'objet — E : inventaire / craft</p>
       <p>Pioche/hache équipées = bonus de récolte sur pierre/bois</p>
       <p>M : couper/remettre la musique — F5 : vue 3e personne</p>
       <p>C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat</p>

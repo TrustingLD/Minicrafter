@@ -26,6 +26,16 @@ const TEXTURE_FN = {
   goldOre: tex.texGoldOre,
   diamondOre: tex.texDiamondOre,
   bedrock: tex.texBedrock,
+  torchStick: tex.texTorchStick,
+  torchFlame: tex.texTorchFlame,
+  torchWood: tex.texTorchWood,
+  furnace: tex.texFurnace,
+  wool: tex.texWool,
+  sand: tex.texSand,
+  sandstone: tex.texSandstone,
+  cactus: tex.texCactus,
+  deadBush: tex.texDeadBush,
+  ice: tex.texIce,
 };
 
 // construit l'atlas + la table d'UV. Appelé une seule fois au boot.

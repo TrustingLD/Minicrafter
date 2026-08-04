@@ -47,11 +47,7 @@ export function createClouds({ scene }) {
   const dummy = new THREE.Object3D();
   cells.forEach((cell, i) => {
     // centré sur (0,0) : la moitié de la grille de part et d'autre de l'origine
-    dummy.position.set(
-      (cell.gx - GRID / 2) * CELL,
-      0,
-      (cell.gz - GRID / 2) * CELL,
-    );
+    dummy.position.set((cell.gx - GRID / 2) * CELL, 0, (cell.gz - GRID / 2) * CELL);
     dummy.updateMatrix();
     mesh.setMatrixAt(i, dummy.matrix);
   });
