@@ -3,7 +3,8 @@
 // PURE — aucun import, testable sans navigateur. Voir PLAN.md Phase 4a.
 
 export const CHUNK_X = 16;
-export const CHUNK_Y = 64; // couvre les montagnes (max ~58) + un peu de marge
+// Increased vertical size to allow ~60 more underground blocks below surface
+export const CHUNK_Y = 124; // was 64 -> now deeper underground
 export const CHUNK_Z = 16;
 export const CHUNK_VOLUME = CHUNK_X * CHUNK_Y * CHUNK_Z;
 
