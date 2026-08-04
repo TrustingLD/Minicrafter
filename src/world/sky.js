@@ -51,12 +51,19 @@ export function createSky({ scene, ambientLight, sunLight }) {
 
   // soleil : sprite plus gros et plus lumineux que l'ancienne sphère pleine
   // (36 unités de large, contre 16 pour l'ancien sunMesh de rayon 8)
+  // Fix (retour utilisateur) : depthTest était à false -- le sprite se dessinait donc
+  // TOUJOURS par-dessus le reste, terrain compris, d'où le soleil/la lune visibles à
+  // travers les blocs. depthTest: true le fait comparer normalement au depth buffer
+  // (donc bien caché derrière une montagne) ; depthWrite reste à false, comme avant,
+  // pour ne pas boucher le fond avec le carré du sprite derrière son propre glow
+  // transparent (étoiles, ciel...). La distance (300, cf. SUN_MOON_DIST) reste bien
+  // dans le camera.far (1000, main.js), donc aucun souci de clipping.
   const sunSprite = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: texGlowDisc('#fff8e0', 'rgba(255,220,120,0.6)'),
       transparent: true,
       depthWrite: false,
-      depthTest: false,
+      depthTest: true,
       fog: false,
       blending: THREE.AdditiveBlending,
     }),
@@ -70,7 +77,7 @@ export function createSky({ scene, ambientLight, sunLight }) {
       map: texGlowDisc('#f4f6ff', 'rgba(180,200,255,0.45)'),
       transparent: true,
       depthWrite: false,
-      depthTest: false,
+      depthTest: true,
       fog: false,
       blending: THREE.AdditiveBlending,
     }),
