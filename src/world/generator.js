@@ -194,121 +194,6 @@ function caveEntranceCarves(wx, wy, wz) {
   return false;
 }
 
-// --- New deterministic cave network generator (simplified, deterministic)
-// Generates sphere carve primitives for tunnels and rooms anchored to nearby
-// chunk cells. Deterministic: uses hash2/hash3 and noise functions only.
-const CAVE_ANCHOR_RADIUS_CHUNKS = 1; // scan neighboring chunks for anchored systems
-const MAX_SYSTEMS_PER_CHUNK = 4;
-const CAVE_START_MIN_DEPTH = 15; // below surface
-const CAVE_START_MAX_DEPTH = 25;
-const CAVE_MAX_BRANCH_DEPTH = 3;
-
-function computeTunnelRadius(seedVals, step, wx, wy, wz) {
-  // base radius 2..4 with detail from noise
-  const base = 2 + hash3(seedVals[0], seedVals[1], step) * 2.2; // 2..4.2
-  const detail = noiseCaveDetail(wx * 0.2, wy * 0.2, wz * 0.2) * 0.7; // wall noise
-  return Math.max(1.2, base + detail);
-}
-
-function intersectsChunkSphere(sphere, originX, originZ) {
-  const minX = originX, maxX = originX + CHUNK_X - 1;
-  const minZ = originZ, maxZ = originZ + CHUNK_Z - 1;
-  const x = sphere.x, z = sphere.z, r = sphere.r;
-  if (x + r < minX || x - r > maxX) return false;
-  if (z + r < minZ || z - r > maxZ) return false;
-  // Y check will be done later when carving
-  return true;
-}
-
-function generateTunnelSystemsForAnchor(anchorCx, anchorCz) {
-  const systems = [];
-  const anchorWx = anchorCx * CHUNK_X;
-  const anchorWz = anchorCz * CHUNK_Z;
-  const count = Math.floor(hash2(anchorCx, anchorCz, 42424) * (MAX_SYSTEMS_PER_CHUNK + 1));
-  for (let s = 0; s < count; s++) {
-    const seedX = Math.floor(hash2(anchorCx, anchorCz, 42425 + s) * CHUNK_X) + anchorWx;
-    const seedZ = Math.floor(hash2(anchorCx, anchorCz, 42426 + s) * CHUNK_Z) + anchorWz;
-    const surfaceH = getHeight(seedX, seedZ);
-    const startDepth = CAVE_START_MIN_DEPTH + Math.floor(hash2(anchorCx, anchorCz, 42427 + s) * (CAVE_START_MAX_DEPTH - CAVE_START_MIN_DEPTH + 1));
-    const startY = Math.max(2, surfaceH - startDepth);
-    const seedBase = [anchorCx + 1000 + s, anchorCz + 2000 + s];
-    const system = generateTunnel(seedX + 0.5, startY + 0.5, seedZ + 0.5, seedBase, 0);
-    systems.push(...system);
-  }
-  return systems;
-}
-
-function generateTunnel(px, py, pz, seedBase, depth) {
-  // returns array of sphere carve primitives
-  const spheres = [];
-  const maxLen = 30 + Math.floor(hash3(Math.floor(px), Math.floor(py), Math.floor(pz), seedBase[0]) * 120); // 30..150
-  let angle = hash3(Math.floor(px), Math.floor(pz), seedBase[1], 11) * Math.PI * 2;
-  let dirY = (hash3(Math.floor(py), seedBase[0], seedBase[1], 13) - 0.5) * 0.1;
-  let stepSeed = 0;
-  for (let i = 0; i < maxLen; i++) {
-    const wx = Math.round(px);
-    const wy = Math.round(py);
-    const wz = Math.round(pz);
-    const r = computeTunnelRadius(seedBase, i, px, py, pz);
-    spheres.push({ x: wx, y: wy, z: wz, r });
-
-    // occasional room
-    if (hash3(wx, wy, wz, 99) < 0.035 && depth < CAVE_MAX_BRANCH_DEPTH) {
-      const roomR = 5 + Math.floor(hash3(wx, wz, wy, 101) * 6); // 5..10
-      for (let rx = -roomR; rx <= roomR; rx++)
-        for (let rz = -roomR; rz <= roomR; rz++)
-          for (let ry = -Math.floor(roomR / 2); ry <= Math.floor(roomR / 2); ry++) {
-            const dx = rx, dz = rz, dy = ry;
-            if (dx * dx + dy * dy + dz * dz > roomR * roomR) continue;
-            const rr = 0.5 + (hash3(wx + dx, wy + dy, wz + dz, 103) * 0.2);
-            spheres.push({ x: wx + dx, y: wy + dy, z: wz + dz, r: rr });
-          }
-    }
-
-    // advance
-    const speed = 1.0 + hash3(wx, wy, wz, 7) * 0.6;
-    px += Math.cos(angle) * speed;
-    pz += Math.sin(angle) * speed;
-    py += dirY * speed;
-
-    // rotate slightly
-    angle += (hash3(wx, wy, wz, 17) - 0.5) * 0.6; // small horizontal turns
-    dirY += (hash3(wx, wy, wz, 19) - 0.5) * 0.12; // vertical wobble
-    dirY = Math.max(-0.6, Math.min(0.6, dirY));
-
-    // branching
-    if (hash3(wx, wy, wz, 23) < 0.08 && depth < CAVE_MAX_BRANCH_DEPTH) {
-      const bx = px + (hash3(wx, wy, wz, 29) - 0.5) * 4;
-      const bz = pz + (hash3(wx, wy, wz, 31) - 0.5) * 4;
-      const by = py + (hash3(wx, wy, wz, 37) - 0.5) * 2;
-      spheres.push(...generateTunnel(bx, by, bz, [seedBase[0] + i + 3, seedBase[1] + i + 5], depth + 1));
-    }
-  }
-  return spheres;
-}
-
-function generateCaveNetwork(cx, cz) {
-  const systems = [];
-  for (let dx = -CAVE_ANCHOR_RADIUS_CHUNKS; dx <= CAVE_ANCHOR_RADIUS_CHUNKS; dx++) {
-    for (let dz = -CAVE_ANCHOR_RADIUS_CHUNKS; dz <= CAVE_ANCHOR_RADIUS_CHUNKS; dz++) {
-      systems.push(...generateTunnelSystemsForAnchor(cx + dx, cz + dz));
-    }
-  }
-  return systems;
-}
-
-function carvedByNetwork(wx, wy, wz, spheres) {
-  for (const s of spheres) {
-    const dy = wy - s.y;
-    const dx = wx - s.x;
-    const dz = wz - s.z;
-    const d2 = dx * dx + dy * dy + dz * dz;
-    const rr = s.r + noiseCaveDetail(wx * 0.25, wy * 0.25, wz * 0.25) * 0.7; // wall noise
-    if (d2 <= rr * rr) return true;
-  }
-  return false;
-}
-
 // Lave (Phase 4c) : uniquement dans le fond des cavernes déjà creusées (jamais dans
 // la pierre pleine), et seulement en profondeur -> pas de lac de lave à ciel ouvert.
 // Bruit dédié à basse fréquence (0.045) pour former de vraies mares connexes plutôt
@@ -376,8 +261,6 @@ export function generateChunk(cx, cz) {
   // (minerais) en a besoin pour savoir où est la surface, et getHeight est trop
   // coûteux pour être rappelé par bloc écrit.
   const heights = new Int16Array(CHUNK_X * CHUNK_Z);
-  // generate cave primitives that may intersect this chunk (deterministic)
-  const caveSpheres = generateCaveNetwork(cx, cz);
 
   // 1) colonnes de terrain + cavernes creusées au passage
   for (let lx = 0; lx < CHUNK_X; lx++) {
@@ -390,16 +273,13 @@ export function generateChunk(cx, cz) {
       // raison que `h`, le mtMask/continentalness sous-jacents ne changent pas avec y.
       const biome = BIOMES[getBiome(wx, wz)];
       for (let y = 0; y < CHUNK_Y && y <= h; y++) {
-        if (y <= 2) {
-          // bedrock: 3 layers at the bottom
+        if (y === 0) {
           data[idx(lx, y, lz)] = BLOCK_ID.bedrock;
           continue;
         }
-        const isEntrance = caveEntranceCarves(wx, y, wz);
-        const isNetwork = carvedByNetwork(wx, y, wz, caveSpheres);
-        // protect roof: keep at least 4 blocks of roof except at explicit entrances
-        const canCarve = isEntrance || (isNetwork && (h - y >= 4));
-        if (canCarve) {
+        if (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz)) {
+          // caverne (naturelle ou puits d'entrée) : on laisse de l'air, sauf poche de
+          // lave en profondeur
           if (lavaPoolAt(wx, y, wz)) data[idx(lx, y, lz)] = BLOCK_ID.lava;
           continue;
         }
