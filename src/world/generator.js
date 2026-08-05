@@ -20,8 +20,21 @@ import { BIOMES, biomeAt, noiseContinent, noiseRiver } from './biomes.js';
 // joueur, cf. world.js) qui, lui, était déjà conçu pour un monde de taille arbitraire.
 // Limite réelle : la précision flottante (~2^53) et le wrap int32 de Math.imul dans
 // hash2/hash3 — des milliards de blocs dans chaque direction avant d'en sentir l'effet.
-export const SEA_LEVEL = 4;
-export const SNOW_LEVEL = 26;
+// TERRAIN_DEPTH : épaisseur de socle rocheux garantie entre la bedrock (toujours à
+// y=0) et le point le plus BAS du relief (avant, la bedrock touchait quasiment la
+// surface en plaine -- une colonne basse n'avait parfois que 4-5 blocs de pierre
+// avant le vide). Tout le relief (calculé ci-dessous à l'échelle "locale" 1..58,
+// inchangée) est maintenant décalé de +60 : le monde a 60 blocs de pierre creusable
+// sous la plaine la plus basse, et jusqu'à ~118 sous les sommets -- assez d'épaisseur
+// pour un vrai réseau souterrain (galeries qui descendent et remontent) au lieu d'une
+// fine couche.
+export const TERRAIN_DEPTH = 60;
+// Valeur "locale" (pré-décalage) de l'ancien niveau de la mer, utilisée uniquement en
+// interne par riverCarve/lakeCarve qui travaillent sur le relief à l'échelle 1..58,
+// avant l'ajout de TERRAIN_DEPTH.
+const RELIEF_SEA_LEVEL = 4;
+export const SEA_LEVEL = RELIEF_SEA_LEVEL + TERRAIN_DEPTH;
+export const SNOW_LEVEL = 26 + TERRAIN_DEPTH;
 export const WORLD_BORDER = Infinity;
 
 // blocs "de canopée" à ignorer quand on cherche la vraie surface du terrain :
@@ -32,8 +45,8 @@ export const CANOPY_BLOCKS = new Set(['leaves', 'wood', 'crafting_table']);
 const noise = makeNoise2D(1337);
 const noiseMountain = makeNoise2D(9001); // bruit séparé, basse fréquence, pour les massifs montagneux
 const noiseLake = makeNoise2D(2024); // bruit basse fréquence dédié aux cuvettes de lac
-const noiseCave = makeNoise3D(4242); // bruit 3D principal pour les cavernes (Phase 4b)
-const noiseCaveDetail = makeNoise3D(7777); // 2e octave, plus fine, pour des tunnels moins "en boule"
+const noiseCave = makeNoise3D(4242); // réseau de tunnels A (Phase 4b, refondu Phase "fourmilière")
+const noiseCaveDetail = makeNoise3D(7777); // réseau de tunnels B, fréquence/orientation différente
 const noiseLava = makeNoise3D(5150); // bruit dédié aux mares de lave, basse fréquence -> grosses poches
 
 // Lacs : avant ce fix, un point ne passait sous SEA_LEVEL que par accident (creux
@@ -92,7 +105,7 @@ const RIVER_OFFSET_Z = 17.3;
 // de rivière parfaitement dessiné, et à sec. Le seuil élargi et le fond abaissé
 // donnent un chenal d'environ 6 blocs avec 2 blocs d'eau.
 const RIVER_EDGE = 0.96; // ridge au-delà duquel on commence à creuser
-const RIVER_BED = SEA_LEVEL - 3; // altitude visée au coeur du chenal
+const RIVER_BED = RELIEF_SEA_LEVEL - 3; // altitude "locale" visée au coeur du chenal (avant TERRAIN_DEPTH)
 function riverCarve(x, z, mtMask) {
   if (mtMask > 0.08) return 0; // pas de rivière en pleine montagne
   const ridge = 1 - Math.abs(noiseRiver(x * 0.01 + RIVER_OFFSET_X, z * 0.01 + RIVER_OFFSET_Z));
@@ -111,7 +124,9 @@ export function getHeight(x, z) {
   let h = base + mountain - lake - ocean;
   const river = riverCarve(x, z, mtMask);
   if (river > 0) h = h * (1 - river) + RIVER_BED * river;
-  return Math.max(1, Math.min(58, Math.floor(h)));
+  // relief "local" borné à 1..58 (inchangé), puis décalé de TERRAIN_DEPTH pour laisser
+  // un socle rocheux creusable sous chaque colonne, même la plus basse.
+  return TERRAIN_DEPTH + Math.max(1, Math.min(58, Math.floor(h)));
 }
 
 // biome d'une colonne (Phase 17.2) — dérive du même mtMask que getHeight, plus la
@@ -125,19 +140,34 @@ export function getBiome(x, z) {
 // seuil de sculpture d'une caverne en un point donné, `surfaceH` déjà connu par
 // l'appelant (évite de rappeler getHeight, coûteux, pour chaque bloc de la colonne)
 //
-// Fix (entrées de grottes trop rares) : l'ancienne version interdisait TOUTE caverne
-// à moins de 3 blocs sous la surface (`return false` dur) — une grotte ne pouvait
-// donc déboucher à l'air libre que via une pente très abrupte (rare, le relief est
-// lisse). On remplace le blocage dur par un seuil qui monte progressivement en
-// approchant de la surface : ça laisse une vraie chance d'entrée naturelle (rare,
-// mais pas quasi-nulle) sans transformer la surface en gruyère.
+// "Fourmilière" (refonte) : l'ancienne version comparait UNE valeur de bruit 3D à un
+// seuil fixe -- ça sculpte des poches arrondies isolées ("blobs"), jamais de vrais
+// tunnels, parce qu'un seuil sur un bruit brut délimite un VOLUME (l'intérieur d'une
+// bulle), pas un chemin. On bascule sur du bruit "ridgé" (1 - |bruit|) : cette
+// quantité n'est proche de son maximum QUE le long des lignes où le bruit 3D change
+// de signe -- une fine toile qui SERPENTE dans les 3 dimensions à la fois, donc aussi
+// bien à l'horizontale qu'en pente, en descente ou en remontée, exactement comme les
+// galeries d'une fourmilière. Deux réseaux indépendants (fréquences et bruits
+// différents, `tunnelA`/`tunnelB`) se croisent occasionnellement pour former de
+// vraies intersections/carrefours plutôt qu'un unique tube qui ne bifurque jamais.
+//
+// Fix (entrées de grottes trop rares), conservé : l'ancienne version interdisait
+// TOUTE caverne à moins de 3-4 blocs sous la surface (seuil qui grimpe en approchant
+// de `surfaceH`) — une grotte ne pouvait donc déboucher à l'air libre que via une
+// pente très abrupte (rare, le relief est lisse). Le seuil qui monte progressivement
+// laisse une vraie chance d'entrée naturelle (rare, mais pas quasi-nulle) sans
+// transformer la surface en gruyère.
 function caveCarves(wx, wy, wz, surfaceH) {
   const depth = surfaceH - wy;
-  const n = noiseCave(wx * 0.09, wy * 0.12, wz * 0.09);
-  const detail = noiseCaveDetail(wx * 0.22, wy * 0.22, wz * 0.22);
-  let threshold = wy < 8 ? 0.58 : 0.53; // un peu plus dur près de la bedrock : pas de gruyère
-  if (depth < 4) threshold += (4 - depth) * 0.16; // de plus en plus dur près de la surface
-  return n + detail * 0.25 > threshold;
+  const tunnelA = 1 - Math.abs(noiseCave(wx * 0.045, wy * 0.07, wz * 0.045));
+  const tunnelB = 1 - Math.abs(noiseCaveDetail(wx * 0.06, wy * 0.05, wz * 0.06));
+  // seuil élevé (0.98+) : on ne creuse que le fin ruban le plus proche de 0 du bruit
+  // brut -> galeries étroites (2-4 blocs), pas des cavernes qui mangent tout le volume.
+  // Calibré par échantillonnage (~11-12% d'air en sous-sol, comparable à une
+  // fourmilière dense mais pas du gruyère).
+  let threshold = wy < 8 ? 0.99 : 0.984; // un peu plus dur près de la bedrock : pas de gruyère
+  if (depth < 4) threshold += (4 - depth) * 0.004; // de plus en plus dur près de la surface
+  return tunnelA > threshold || tunnelB > threshold;
 }
 
 // Fix 2 (entrées de grotte "un peu partout") : le fix ci-dessus rend une ouverture
@@ -157,16 +187,32 @@ export const CAVE_ENTRANCE_MARGIN = 3; // rayon max du puits (+ wobble) : marge 
 // choisit, pour une cellule de la grille, si elle contient une entrée et où -- pure
 // fonction des coordonnées de cellule (même principe que treeAt/desertDecorAt), donc
 // cohérente quel que soit le chunk qui la recalcule.
+//
+// Cache (fix perf) : `caveEntranceCarves` interroge les 9 cellules voisines pour
+// CHAQUE bloc d'une colonne (potentiellement une centaine de niveaux maintenant que
+// le terrain va jusqu'à TERRAIN_DEPTH+58) -- sans cache, ça veut dire rappeler
+// `getHeight` (lui-même ~6 bruits 2D) des centaines de fois pour LA MÊME cellule.
+// La fonction est pure et déterministe -> un cache mémoire simple, jamais invalidé,
+// élimine tout ce travail redondant (un seul calcul réel par cellule visitée).
+const caveEntranceSeedCache = new Map();
 function caveEntranceSeed(cellX, cellZ) {
-  if (hash2(cellX, cellZ, 8181) >= CAVE_ENTRANCE_CHANCE) return null;
-  const ex = cellX * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8182) * CAVE_ENTRANCE_CELL);
-  const ez = cellZ * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8183) * CAVE_ENTRANCE_CELL);
-  const h = getHeight(ex, ez);
-  if (h <= SEA_LEVEL + 2) return null; // pas d'entrée noyée ou au ras de l'eau
-  if (h >= SNOW_LEVEL) return null; // pas de trou incongru au sommet d'un pic enneigé
-  const depth = 6 + Math.floor(hash2(cellX, cellZ, 8184) * 8); // puits de 6 à 13 blocs
-  const radius = 1 + hash2(cellX, cellZ, 8185); // bouche de 1 à 2 blocs de rayon -> on peut y entrer
-  return { ex, ez, h, depth, radius };
+  const key = cellX * 1000003 + cellZ; // clé numérique (évite l'allocation d'une string par appel)
+  const cached = caveEntranceSeedCache.get(key);
+  if (cached !== undefined) return cached;
+  let seed = null;
+  if (hash2(cellX, cellZ, 8181) < CAVE_ENTRANCE_CHANCE) {
+    const ex = cellX * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8182) * CAVE_ENTRANCE_CELL);
+    const ez = cellZ * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8183) * CAVE_ENTRANCE_CELL);
+    const h = getHeight(ex, ez);
+    if (h > SEA_LEVEL + 2 && h < SNOW_LEVEL) {
+      // pas d'entrée noyée/au ras de l'eau, pas de trou incongru au sommet enneigé
+      const depth = 6 + Math.floor(hash2(cellX, cellZ, 8184) * 8); // puits de 6 à 13 blocs
+      const radius = 1 + hash2(cellX, cellZ, 8185); // bouche de 1 à 2 blocs de rayon -> on peut y entrer
+      seed = { ex, ez, h, depth, radius };
+    }
+  }
+  caveEntranceSeedCache.set(key, seed);
+  return seed;
 }
 
 // vrai si (wx, wy, wz) tombe dans le puits d'une entrée de grotte -- scanne les

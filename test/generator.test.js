@@ -6,6 +6,7 @@ import {
   getBiome,
   findSpawnColumn,
   SEA_LEVEL,
+  TERRAIN_DEPTH,
 } from '../src/world/generator.js';
 import { BLOCK_ID, BLOCK_BY_ID } from '../src/data/blocks.js';
 import { CHUNK_X, CHUNK_Y, CHUNK_Z, idx } from '../src/world/chunk.js';
@@ -79,7 +80,7 @@ test('generateChunk: sand appears within a reasonably large sample of chunks (Ph
   );
 });
 
-test('getHeight is deterministic and stays within the documented [1, 58] range', () => {
+test('getHeight is deterministic and stays within the documented [1+TERRAIN_DEPTH, 58+TERRAIN_DEPTH] range', () => {
   for (const [x, z] of [
     [0, 0],
     [100, -50],
@@ -88,7 +89,20 @@ test('getHeight is deterministic and stays within the documented [1, 58] range',
     const h1 = getHeight(x, z);
     const h2 = getHeight(x, z);
     assert.equal(h1, h2);
-    assert.ok(h1 >= 1 && h1 <= 58);
+    assert.ok(h1 >= 1 + TERRAIN_DEPTH && h1 <= 58 + TERRAIN_DEPTH);
+  }
+});
+
+test('TERRAIN_DEPTH: every column has at least TERRAIN_DEPTH blocks of diggable rock above bedrock', () => {
+  // Le point le plus bas du relief est à 1+TERRAIN_DEPTH -- même là, il doit rester
+  // TERRAIN_DEPTH blocs de pierre entre la bedrock (y=0) et la surface.
+  for (const [x, z] of [
+    [0, 0],
+    [100, -50],
+    [-7, 42],
+    [512, -512],
+  ]) {
+    assert.ok(getHeight(x, z) - 1 >= TERRAIN_DEPTH);
   }
 });
 

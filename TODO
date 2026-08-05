@@ -50,14 +50,9 @@ Difficulté	Tâche	Pourquoi ce niveau
 🟠 Difficile	Hache/bloc tenu dans la main	Modèle 3D d'item attaché à la main du joueur en vue première personne, synchronisé avec la hotbar
 🟠 Difficile	Biomes	Plusieurs types de terrain/textures avec transitions propres, pas juste un mask
 🟠 Difficile	Inventaire avec drop au sol + ramassage	Nouveau système d'entités "item au sol" (physique simple, despawn, hitbox de ramassage) lié à l'inventaire
-🔴 Très difficile	Océan / rivière	Génération cohérente à grande échelle (au-delà d'un chunk), niveau d'eau variable, raccords entre chunks
-🔴 Très difficile	L'eau qui coule	Simulation de fluide (propagation, niveaux), coûteux en calcul et complexe à intégrer au système de blocs
-🔴 Très difficile	Multijoueur	Serveur, synchronisation d'état, gestion de la latence — gros chantier à part entière
-
-
-
-
-
+Très difficile	Océan / rivière	Génération cohérente à grande échelle (au-delà d'un chunk), niveau d'eau variable, raccords entre chunks
+Très difficile	L'eau qui coule	Simulation de fluide (propagation, niveaux), coûteux en calcul et complexe à intégrer au système de blocs
+Très difficile	Multijoueur	Serveur, synchronisation d'état, gestion de la latence — gros chantier à part entière
 
 
 
@@ -122,4 +117,8 @@ Soleil jaune
 
 les items qui se droppent au sol de sont pas visibles quand je les regarde et aussi quand je casse un bloc les blocs a coté du bloc cassé deviennent completement noir tu peux me régler ca
 
-3D des items dans la hotbar
+
+
+
+ouf les grottes doivent etre beaucoup plus grosses ca doit etre des conduits sous terrains de 3x3 blocs tunnel minimum pour quon puisse passer et explorer les grottes pour trouver des minerais
+

@@ -3,7 +3,10 @@
 // PURE — aucun import, testable sans navigateur. Voir PLAN.md Phase 4a.
 
 export const CHUNK_X = 16;
-export const CHUNK_Y = 64; // couvre les montagnes (max ~58) + un peu de marge
+// 128 : couvre le socle rocheux (TERRAIN_DEPTH=60 blocs sous le point le plus bas du
+// relief, cf. world/generator.js) + les montagnes (max ~118 avec ce socle) + une
+// marge de ~10 blocs, sur le même principe que l'ancien 64 (max ~58 + marge ~6).
+export const CHUNK_Y = 128;
 export const CHUNK_Z = 16;
 export const CHUNK_VOLUME = CHUNK_X * CHUNK_Y * CHUNK_Z;
 
