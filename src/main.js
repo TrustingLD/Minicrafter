@@ -62,9 +62,9 @@ const touchMode = isTouchDevice();
 /* ---------- Scène / caméra / renderer ---------- */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 55, 170);
+scene.fog = new THREE.Fog(0x87ceeb, 25, 70);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 600);
 scene.add(camera); // nécessaire pour que les objets attachés à la caméra (main FPS) soient rendus
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
