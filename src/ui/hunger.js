@@ -5,9 +5,14 @@
 export function createHungerUI(hungerEl) {
   function render(player) {
     hungerEl.innerHTML = '';
+    const filledCount = Math.ceil(player.hunger / 2);
     for (let i = 0; i < 10; i++) {
       const d = document.createElement('div');
-      d.className = 'drumstick' + (i < Math.ceil(player.hunger / 2) ? '' : ' empty');
+      // Les cuisses pleines restent collées au bord DROIT (celui aligné sur la
+      // hotbar) : on vide donc en retirant d'abord celles de gauche, si bien que
+      // la barre se vide visuellement de gauche à droite au fil du temps.
+      const filled = i >= 10 - filledCount;
+      d.className = 'drumstick' + (filled ? '' : ' empty');
       hungerEl.appendChild(d);
     }
   }
