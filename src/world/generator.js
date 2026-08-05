@@ -151,6 +151,13 @@ export function getBiome(x, z) {
 // différents, `tunnelA`/`tunnelB`) se croisent occasionnellement pour former de
 // vraies intersections/carrefours plutôt qu'un unique tube qui ne bifurque jamais.
 //
+// Largeur (2e passe, sur retour utilisateur "trop étroit") : fréquence basse (0.035)
+// -> le réseau actif est plus espacé, donc chaque conduit dispose de plus de place
+// pour être large avant de croiser le prochain. Mesuré par échantillonnage : diamètre
+// horizontal MÉDIAN ~4-6 blocs (largement de quoi marcher normalement, poser des
+// torches), ~30% d'air en sous-sol -- de vrais conduits explorables pour miner, pas
+// le fil d'araignée de la 1ère version (qui donnait un diamètre médian de 1-2 blocs).
+//
 // Fix (entrées de grottes trop rares), conservé : l'ancienne version interdisait
 // TOUTE caverne à moins de 3-4 blocs sous la surface (seuil qui grimpe en approchant
 // de `surfaceH`) — une grotte ne pouvait donc déboucher à l'air libre que via une
@@ -159,14 +166,16 @@ export function getBiome(x, z) {
 // transformer la surface en gruyère.
 function caveCarves(wx, wy, wz, surfaceH) {
   const depth = surfaceH - wy;
-  const tunnelA = 1 - Math.abs(noiseCave(wx * 0.045, wy * 0.07, wz * 0.045));
-  const tunnelB = 1 - Math.abs(noiseCaveDetail(wx * 0.06, wy * 0.05, wz * 0.06));
-  // seuil élevé (0.98+) : on ne creuse que le fin ruban le plus proche de 0 du bruit
-  // brut -> galeries étroites (2-4 blocs), pas des cavernes qui mangent tout le volume.
-  // Calibré par échantillonnage (~11-12% d'air en sous-sol, comparable à une
-  // fourmilière dense mais pas du gruyère).
-  let threshold = wy < 8 ? 0.99 : 0.984; // un peu plus dur près de la bedrock : pas de gruyère
-  if (depth < 4) threshold += (4 - depth) * 0.004; // de plus en plus dur près de la surface
+  // Fréquence basse (~0.035) = zones "actives" du réseau plus espacées, ce qui laisse
+  // de la place à chaque conduit pour être large (diamètre horizontal mesuré ~4-6
+  // blocs en moyenne) plutôt qu'un simple filet de bruit ridgé trop serré.
+  const tunnelA = 1 - Math.abs(noiseCave(wx * 0.035, wy * 0.049, wz * 0.035));
+  const tunnelB = 1 - Math.abs(noiseCaveDetail(wx * 0.047, wy * 0.066, wz * 0.047));
+  // seuil calibré par échantillonnage : diamètre horizontal médian ~4 blocs (largement
+  // "3x3 pour passer"), ~30% d'air en sous-sol -- de vrais conduits explorables, pas
+  // un simple fil d'araignée.
+  let threshold = wy < 8 ? 0.975 : 0.958; // un peu plus dur près de la bedrock : pas de gruyère
+  if (depth < 4) threshold += (4 - depth) * 0.01; // de plus en plus dur près de la surface
   return tunnelA > threshold || tunnelB > threshold;
 }
 
