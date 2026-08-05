@@ -469,6 +469,7 @@ const commandHandlers = {
   },
   fly() {
     player.flying = !player.flying;
+    player.fallDistance = 0; // pas de dégâts de chute au retour au sol après un vol
     return player.flying ? 'Vol activé.' : 'Vol désactivé.';
   },
   time([value]) {
@@ -914,6 +915,11 @@ function isInLava() {
 
 function respawnPlayer() {
   respawn(spawnPoint());
+  // Mort = on perd tout l'inventaire (hotbar + sac à dos), comme dans Minecraft.
+  slots.fill(null);
+  selectedBlock = slots[selectedIndex]?.item ?? null;
+  refreshHeldItem(selectedBlock);
+  bus.emit('inventory:changed');
   bus.emit('player:health');
   bus.emit('player:hunger');
   bus.emit('player:breath');
@@ -1072,8 +1078,24 @@ function animate() {
       resolveVerticalPhysics(player, dt, worldApi.collidesAtBox, 0.25);
       if (keys['Space']) player.velY = Math.max(player.velY, 2.2);
     } else {
-      const { landed } = resolveVerticalPhysics(player, dt, worldApi.collidesAtBox);
-      if (landed) sfx.playSound('land');
+      const { landed, fallDistance } = resolveVerticalPhysics(player, dt, worldApi.collidesAtBox);
+      if (landed) {
+        sfx.playSound('land');
+        // Dégâts de chute : la vie va de 0 à 20 pour 10 cœurs (health.js), donc
+        // 1 point de vie = un demi-cœur. Les 3 premiers blocs de chute sont sans
+        // dégât ; au-delà, 1 demi-cœur par bloc -- donc une chute de 4 blocs
+        // (1 bloc au-delà de la franchise) retire bien 1 demi-cœur, comme demandé.
+        const FALL_DAMAGE_FREE_BLOCKS = 3;
+        const HALF_HEART = 1; // 1 point de vie == un demi-cœur affiché
+        if (fallDistance > FALL_DAMAGE_FREE_BLOCKS) {
+          const excessBlocks = Math.floor(fallDistance - FALL_DAMAGE_FREE_BLOCKS);
+          if (excessBlocks > 0) {
+            player.health = Math.max(0, player.health - excessBlocks * HALF_HEART);
+            bus.emit('player:health');
+            sfx.playSound('hurt');
+          }
+        }
+      }
       if (keys['Space'] && tryJump(player)) {
         player.hunger = Math.max(0, player.hunger - 0.1); // coût ponctuel (Phase 11)
         bus.emit('player:hunger');

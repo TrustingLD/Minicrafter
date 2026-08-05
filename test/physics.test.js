@@ -102,6 +102,32 @@ test('resolveVerticalPhysics: a gravityScale < 1 falls slower (buoyancy, Phase 1
   assert.ok(buoyant.pos.y > normal.pos.y); // tombe moins vite -> reste plus haut
 });
 
+test('resolveVerticalPhysics: fallDistance accumulates while falling and is reported on landing', () => {
+  const player = makePlayer({ pos: { x: 0, y: 10, z: 0 }, velY: 0, onGround: true });
+  // sol seulement sous y=4 : le joueur chute de 10 à ~4, soit ~6 blocs
+  const floorAtY4 = (x, y) => y < 4;
+  let result;
+  // onGround initial -> false pour déclencher la chute (comme si le sol se dérobait)
+  player.onGround = false;
+  for (let i = 0; i < 200 && !player.onGround; i++) {
+    result = resolveVerticalPhysics(player, 0.05, floorAtY4);
+  }
+  assert.equal(result.landed, true);
+  assert.ok(result.fallDistance > 5 && result.fallDistance < 7);
+});
+
+test('resolveVerticalPhysics: fallDistance resets to 0 after being reported, and while grounded', () => {
+  const player = makePlayer({ pos: { x: 0, y: 5, z: 0 }, velY: -1, onGround: false });
+  const floorAtY4 = (x, y) => y < 4;
+  let result;
+  for (let i = 0; i < 200 && !player.onGround; i++) {
+    result = resolveVerticalPhysics(player, 0.05, floorAtY4);
+  }
+  assert.equal(result.landed, true);
+  const again = resolveVerticalPhysics(player, 0.1, floorAtY4);
+  assert.equal(again.fallDistance, 0); // toujours au sol : rien à signaler
+});
+
 test('tryJump: only works when on the ground, and clears onGround', () => {
   const grounded = makePlayer({ onGround: true, jumpForce: 7 });
   assert.equal(tryJump(grounded), true);

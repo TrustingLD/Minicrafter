@@ -219,6 +219,7 @@ export function createPlayer({
     player.health = 20;
     player.hunger = 20;
     player.breath = player.maxBreath;
+    player.fallDistance = 0;
   }
 
   return {

@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { makeNoise2D } from '../core/math.js';
 
-const CLOUD_Y = 85; // au-dessus du point culminant du terrain (montagnes jusqu'à 58) mais dans la brume (fog far=170)
+const CLOUD_Y = 105; // au-dessus du point culminant du terrain (montagnes jusqu'à 58) mais dans la brume (fog far=170) — remonté de 20 blocs
 const CELL = 8; // taille d'un pavé de nuage, en blocs
 const GRID = 16; // grille GRID x GRID cellules -> motif de PATTERN_SIZE de côté
 const PATTERN_SIZE = CELL * GRID;

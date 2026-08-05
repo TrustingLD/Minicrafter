@@ -27,9 +27,13 @@ export function resolveHorizontalMove(player, dx, dz, yaw, speed, dt, crouching,
   if (!collidesAt(player.pos.x, nz) && canStand(player.pos.x, nz)) player.pos.z = nz;
 }
 
-// gravité + collision verticale normale (hors vol). Retourne { landed } : true
-// uniquement sur la frame où le joueur touche le sol pour la première fois (pour
-// jouer le son d'atterrissage une seule fois, pas à chaque frame au sol).
+// gravité + collision verticale normale (hors vol). Retourne { landed, fallDistance } :
+// `landed` est true uniquement sur la frame où le joueur touche le sol pour la
+// première fois (pour jouer le son d'atterrissage une seule fois, pas à chaque
+// frame au sol). `fallDistance` (blocs) n'est renseigné que sur cette même frame :
+// c'est le cumul de la descente depuis le dernier moment où les pieds touchaient le
+// sol (la montée d'un saut n'y contribue pas, seule la chute compte, comme dans
+// Minecraft) -- sert à calculer les dégâts de chute côté appelant.
 // `gravityScale` (Phase 16, nage) : < 1 flotte, la même fonction sert donc aussi de
 // "gravité sous l'eau" sans dupliquer la résolution de collision.
 export function resolveVerticalPhysics(player, dt, collidesAtBox, gravityScale = 1) {
@@ -43,6 +47,7 @@ export function resolveVerticalPhysics(player, dt, collidesAtBox, gravityScale =
       player.velY = 0;
       player.onGround = true;
     } else {
+      player.fallDistance = (player.fallDistance || 0) + (player.pos.y - newY);
       player.pos.y = newY;
       player.onGround = false;
     }
@@ -51,7 +56,13 @@ export function resolveVerticalPhysics(player, dt, collidesAtBox, gravityScale =
   } else {
     player.velY = 0;
   }
-  return { landed: !wasOnGround && player.onGround };
+  const landed = !wasOnGround && player.onGround;
+  let fallDistance = 0;
+  if (landed) {
+    fallDistance = player.fallDistance || 0;
+    player.fallDistance = 0;
+  }
+  return { landed, fallDistance };
 }
 
 // true si le saut a effectivement eu lieu (au sol au moment de l'appel)
