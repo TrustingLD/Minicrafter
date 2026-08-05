@@ -54,11 +54,7 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
       const t = new THREE.CanvasTexture(iconImg);
       t.magFilter = THREE.NearestFilter;
       t.minFilter = THREE.NearestFilter;
-      const face = new THREE.MeshLambertMaterial({
-        map: t,
-        transparent: true,
-        side: THREE.DoubleSide,
-      });
+      const face = new THREE.MeshLambertMaterial({ map: t, transparent: true, side: THREE.DoubleSide });
       // BoxGeometry groupe ses faces dans l'ordre [+x,-x,+y,-y,+z,-z] (même convention
       // que blockAssets.geometry, cf. render/block-assets.js). +z/-z portent l'icône
       // recto-verso ; les 4 tranches (+x,-x,+y,-y) réutilisent la MÊME texture, juste

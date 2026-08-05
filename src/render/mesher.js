@@ -330,12 +330,19 @@ export function meshLiquid(data, targetId, liquidIds, lightData) {
             colors[cOff++] = factor;
             colors[cOff++] = factor;
             let s, t;
+            // UV ancrées sur la position du bloc dans le chunk (pas 0..1 par face) :
+            // avant, chaque face réaffichait la même tuile complète en 0..1, donc deux
+            // blocs de lave/eau côte à côte montraient chacun leur propre motif isolé
+            // -- aucun lien visuel entre eux malgré la fusion des faces internes.
+            // En decalant l'UV par bloc (RepeatWrapping fait le reste), le motif
+            // s'étend en continu sur toute la mare : les blocs adjacents "s'attachent"
+            // au lieu de se répéter identiques côte à côte.
             if (ny !== 0) {
-              s = corner[0];
-              t = corner[2];
+              s = x + corner[0];
+              t = z + corner[2];
             } else {
-              t = 1 - corner[1];
-              s = nx !== 0 ? corner[2] : corner[0];
+              t = y + (1 - corner[1]);
+              s = nx !== 0 ? z + corner[2] : x + corner[0];
             }
             uvs[uOff++] = s;
             uvs[uOff++] = t;

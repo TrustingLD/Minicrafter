@@ -210,10 +210,8 @@ function caveEntranceSeed(cellX, cellZ) {
   if (cached !== undefined) return cached;
   let seed = null;
   if (hash2(cellX, cellZ, 8181) < CAVE_ENTRANCE_CHANCE) {
-    const ex =
-      cellX * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8182) * CAVE_ENTRANCE_CELL);
-    const ez =
-      cellZ * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8183) * CAVE_ENTRANCE_CELL);
+    const ex = cellX * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8182) * CAVE_ENTRANCE_CELL);
+    const ez = cellZ * CAVE_ENTRANCE_CELL + Math.floor(hash2(cellX, cellZ, 8183) * CAVE_ENTRANCE_CELL);
     const h = getHeight(ex, ez);
     if (h > SEA_LEVEL + 2 && h < SNOW_LEVEL) {
       // pas d'entrée noyée/au ras de l'eau, pas de trou incongru au sommet enneigé
