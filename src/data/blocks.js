@@ -201,7 +201,10 @@ export const BLOCK_TYPES = {
     solid: false,
     liquid: true,
     unbreakable: true,
-    emitsLight: 12, // gratuit maintenant que la lumière existe (Phase 13) -- une mare de lave s'éclaire elle-même
+    // niveau 11 : le BFS de world/light.js perd 1 niveau par bloc et s'arrête dès
+    // qu'il atteint 1 (il ne propage plus au-delà) -> portée exacte de 10 blocs
+    // (11 - 1) depuis la source, comme demandé.
+    emitsLight: 11, // gratuit maintenant que la lumière existe (Phase 13) -- une mare de lave s'éclaire elle-même
     textures: { all: 'lava' },
     drops: [],
   },

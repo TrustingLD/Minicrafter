@@ -253,10 +253,13 @@ function caveEntranceCarves(wx, wy, wz) {
 // la pierre pleine), et seulement en profondeur -> pas de lac de lave à ciel ouvert.
 // Bruit dédié à basse fréquence (0.045) pour former de vraies mares connexes plutôt
 // que des cellules isolées façon poivre-et-sel.
-export const LAVA_LEVEL = 6;
+// LAVA_LEVEL relevé (6 -> 16) et seuil de bruit abaissé (0.42 -> 0.22) : plus de
+// profondeur couverte + plus de cellules qui passent le seuil = de vrais LACS de
+// lave qui remplissent le fond des cavernes, pas juste quelques poches éparses.
+export const LAVA_LEVEL = 16;
 function lavaPoolAt(wx, wy, wz) {
   if (wy > LAVA_LEVEL || wy <= 0) return false;
-  return noiseLava(wx * 0.045, wy * 0.09, wz * 0.045) > 0.42;
+  return noiseLava(wx * 0.045, wy * 0.09, wz * 0.045) > 0.22;
 }
 
 const TREE_MARGIN = 4; // rayon de scan autour du chunk : le feuillage (rayon 2) d'un
@@ -330,6 +333,15 @@ export function generateChunk(cx, cz) {
       for (let y = 0; y < CHUNK_Y && y <= h; y++) {
         if (y === 0) {
           data[idx(lx, y, lz)] = BLOCK_ID.bedrock;
+          continue;
+        }
+        // Couche juste au-dessus de la bedrock (y=1) : toujours de la lave, comme
+        // une véritable mer de lave au fond du monde -- pas seulement dans les
+        // cavernes déjà creusées. Le liquide ne "coule" pas tout seul (fluid.js ne
+        // s'active qu'au bris d'un bloc voisin), donc le remplir en dur ici ne pose
+        // aucun souci de propagation infinie : ça reste contenu à cette couche.
+        if (y === 1) {
+          data[idx(lx, y, lz)] = BLOCK_ID.lava;
           continue;
         }
         if (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz)) {

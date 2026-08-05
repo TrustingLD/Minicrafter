@@ -765,14 +765,19 @@ export function texChickenBeak() {
   return canvasToTexture(c);
 }
 // texture de lave : même principe que texWater (pavés façon pixel-art, RepeatWrapping
-// pour défiler via texture.offset) mais en orange/rouge.
+// pour défiler via texture.offset) mais en orange/rouge. Rendue plus incandescente :
+// base plus claire/saturée + couches de taches (orange puis jaune puis quelques
+// pixels quasi-blancs façon "point chaud") pour un effet plus lumineux, cohérent
+// avec lavaMaterial en MeshBasicMaterial (non affecté par l'éclairage ambiant).
 export function texLava() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const cell = TEX_SIZE / 8;
   const cols = TEX_SIZE / cell;
-  ctx.fillStyle = '#b33500';
+  // base : rouge-orange vif au lieu du brun-rouge terne précédent
+  ctx.fillStyle = '#e6420a';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  // grosses coulées orange
   ctx.fillStyle = '#ff8a1e';
   const blotchCount = 15;
   for (let i = 0; i < blotchCount; i++) {
@@ -781,6 +786,25 @@ export function texLava() {
     const gx = Math.min(cols - w, Math.floor(Math.random() * cols));
     const gy = Math.min(cols - h, Math.floor(Math.random() * cols));
     ctx.fillRect(gx * cell, gy * cell, w * cell, h * cell);
+  }
+  // taches jaune vif, plus petites et plus nombreuses -> impression de chaleur
+  ctx.fillStyle = '#ffc94d';
+  const hotCount = 12;
+  for (let i = 0; i < hotCount; i++) {
+    const w = 1;
+    const h = 1;
+    const gx = Math.min(cols - w, Math.floor(Math.random() * cols));
+    const gy = Math.min(cols - h, Math.floor(Math.random() * cols));
+    ctx.fillRect(gx * cell, gy * cell, w * cell, h * cell);
+  }
+  // quelques points quasi-blancs façon "coeur incandescent", en accent (peu nombreux
+  // pour rester un accent, pas noyer le contraste orange/rouge)
+  ctx.fillStyle = '#fff2c2';
+  const coreCount = 4;
+  for (let i = 0; i < coreCount; i++) {
+    const gx = Math.floor(Math.random() * cols);
+    const gy = Math.floor(Math.random() * cols);
+    ctx.fillRect(gx * cell + cell * 0.25, gy * cell + cell * 0.25, cell * 0.5, cell * 0.5);
   }
   const t = canvasToTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
