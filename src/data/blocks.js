@@ -233,12 +233,18 @@ export const BLOCK_TYPES = {
     textures: { all: 'cactus' },
     drops: [{ item: 'cactus', min: 1, max: 1 }],
   },
+  // Buisson mort : comme la torche (Phase 13), pas un cube plein -- un bouquet de
+  // brindilles fines centré dans la cellule (cf. `shape` dans render/mesher.js).
+  // Avant, le buisson occupait toute la cellule avec une texture "icône" dessinée
+  // dessus ; visuellement ça rendait comme un bloc de terre avec un motif, pas
+  // comme un buisson isolé. `solid: false` déjà présent : on marche à travers.
   dead_bush: {
     id: 22,
     name: 'Buisson mort',
     hardness: 0.1,
     tool: null,
     solid: false,
+    shape: { width: 0.55, height: 0.8 },
     textures: { all: 'deadBush' },
     drops: [],
   },

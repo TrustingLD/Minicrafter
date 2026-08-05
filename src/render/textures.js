@@ -469,37 +469,70 @@ export function texSandstone() {
   speckle(ctx, ['#c1aa70'], 20);
   return canvasToTexture(c);
 }
+// Cactus : avant, juste un aplat vert + des traits verticaux plats pour les côtes.
+// Ça se lisait comme "vert avec des rayures", pas comme des nervures en relief.
+// Chaque côte a maintenant un sillon sombre + une arête claire juste à côté (comme
+// un pli éclairé de biais), plus de petites épines blanchâtres qui accrochent l'oeil
+// le long des côtes -- le détail qui rend un cactus reconnaissable au premier coup d'oeil.
 export function texCactus() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#3f7d32';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#356b2a', '#4c8f3d'], 20);
-  ctx.fillStyle = '#2c5722';
-  for (let x = TEX_SIZE * 0.15; x < TEX_SIZE; x += TEX_SIZE * 0.3)
+  blotches(ctx, ['#356b2a', '#4c8f3d'], 14, 2, 4);
+  speckle(ctx, ['#2c5722', '#5aa347'], 36);
+  const ridges = [];
+  for (let x = TEX_SIZE * 0.15; x < TEX_SIZE; x += TEX_SIZE * 0.3) ridges.push(x);
+  for (const x of ridges) {
+    ctx.fillStyle = '#264d1d'; // sillon : le creux de la côte, bien sombre
     ctx.fillRect(x, 0, 1.5, TEX_SIZE);
+    ctx.fillStyle = '#5ba548'; // arête : le côté éclairé du pli, juste à côté du creux
+    ctx.fillRect(x + 1.5, 0, 1, TEX_SIZE);
+  }
+  const rand = mulberry32(31);
+  ctx.fillStyle = '#eef4cf';
+  for (const x of ridges) {
+    for (let y = 2; y < TEX_SIZE; y += 5) {
+      if (rand() < 0.65) ctx.fillRect(x - 1, y + Math.floor(rand() * 2), 1, 1);
+    }
+  }
   return canvasToTexture(c);
 }
+// Buisson mort : comme la torche (cf. commentaire dans data/blocks.js), ce n'est
+// plus un cube plein posé avec une icône dessus -- un bâton fin dont CHAQUE face
+// est visible en entier (jamais masquée par un voisin, cf. mesher.js). La texture
+// doit donc se lire comme un bouquet de brindilles qui remplit toute la tuile,
+// pas comme un petit motif perdu au milieu d'un fond de terre. Toujours pas de
+// transparence : fond opaque plutôt qu'un canvas alpha=0 qui ressortirait noir sur
+// le matériau non-transparent partagé de l'atlas (même simplification que torch/wool).
 export function texDeadBush() {
-  // pas de transparence : rendu comme un cube plein (même simplification que torch/wool,
-  // cf. leurs commentaires) donc un fond opaque plutôt qu'un canvas alpha=0 qui
-  // ressortirait noir sur le matériau non-transparent partagé de l'atlas.
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#e0c88a';
+  ctx.fillStyle = '#d9bd80';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  ctx.strokeStyle = '#6b4a2a';
-  ctx.lineWidth = 1.2;
+  speckle(ctx, ['#cbae70', '#e4cb95'], 22);
   const rand = mulberry32(7);
-  for (let i = 0; i < 14; i++) {
-    let x = TEX_SIZE / 2,
-      y = TEX_SIZE * 0.9;
+  const browns = ['#6b4a2a', '#523720', '#805a35'];
+  // plusieurs brindilles partent du pied et se ramifient en montant, avec de
+  // petites branches secondaires -- un bouquet éclaté plutôt qu'une seule tige
+  for (let i = 0; i < 10; i++) {
+    let x = TEX_SIZE * (0.28 + rand() * 0.44);
+    let y = TEX_SIZE * 0.96;
+    ctx.strokeStyle = browns[i % browns.length];
+    ctx.lineWidth = 0.9 + rand() * 0.7;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    for (let s = 0; s < 4; s++) {
-      x += (rand() - 0.5) * TEX_SIZE * 0.3;
-      y -= rand() * TEX_SIZE * 0.2;
-      ctx.lineTo(x, y);
+    for (let s = 0; s < 5; s++) {
+      const nx = x + (rand() - 0.5) * TEX_SIZE * 0.32;
+      const ny = y - (rand() * TEX_SIZE * 0.18 + TEX_SIZE * 0.06);
+      ctx.lineTo(nx, ny);
+      if (rand() < 0.55) {
+        ctx.moveTo(nx, ny);
+        ctx.lineTo(nx + (rand() - 0.5) * TEX_SIZE * 0.22, ny - rand() * TEX_SIZE * 0.14);
+        ctx.moveTo(nx, ny);
+      }
+      x = nx;
+      y = ny;
     }
     ctx.stroke();
   }

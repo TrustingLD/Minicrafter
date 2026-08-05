@@ -175,7 +175,13 @@ function caveCarves(wx, wy, wz, surfaceH) {
   // "3x3 pour passer"), ~30% d'air en sous-sol -- de vrais conduits explorables, pas
   // un simple fil d'araignée.
   let threshold = wy < 8 ? 0.975 : 0.958; // un peu plus dur près de la bedrock : pas de gruyère
-  if (depth < 4) threshold += (4 - depth) * 0.01; // de plus en plus dur près de la surface
+  // Durcissement quadratique (au lieu de linéaire) sur les 5 derniers blocs sous la
+  // surface : à depth=0 (le bloc de surface lui-même) le seuil dépasse 1, donc AUCUNE
+  // caverne naturelle ne peut plus jamais percer la surface -- fini les petits trous
+  // qui trouaient le paysage un peu partout. Les seules ouvertures visibles viennent
+  // désormais du système d'entrées dédié (`caveEntranceCarves`, ci-dessous), placées
+  // explicitement et rarement plutôt que laissées au hasard du bruit 3D.
+  if (depth < 5) threshold += (5 - depth) * (5 - depth) * 0.01;
   return tunnelA > threshold || tunnelB > threshold;
 }
 
@@ -185,13 +191,16 @@ function caveCarves(wx, wy, wz, surfaceH) {
 // 4 blocs de profondeur. Mesure faite sur un large échantillon : dans la pratique ça
 // n'arrivait presque jamais (caverne trop rare en tout, entrée visible quasi jamais).
 // Plutôt que de complexifier encore ce seuil, on ajoute un système dédié et
-// indépendant : des puits d'entrée placés explicitement, un peu partout sur la carte,
-// exactement comme les arbres (`treeAt`) ou les décorations de désert (`desertDecorAt`)
-// -- une grille de cellules, une seed déterministe par cellule (même schéma que
-// hash2 partout ailleurs), donc reproductible sans coordination entre chunks.
-const CAVE_ENTRANCE_CELL = 24; // taille de cellule -> repère "un peu partout" sans se marcher dessus
-const CAVE_ENTRANCE_CHANCE = 0.45; // fraction de cellules qui ont effectivement une entrée
-export const CAVE_ENTRANCE_MARGIN = 3; // rayon max du puits (+ wobble) : marge de scan nécessaire
+// indépendant : des puits d'entrée placés explicitement, rares et espacés (une
+// grille de cellules de 100 blocs de large), exactement comme les arbres (`treeAt`)
+// ou les décorations de désert (`desertDecorAt`) -- une seed déterministe par
+// cellule (même schéma que hash2 partout ailleurs), donc reproductible sans
+// coordination entre chunks. Ce sont désormais les SEULES ouvertures qui percent la
+// surface (cf. durcissement de `caveCarves` ci-dessus) : peu nombreuses, mais larges
+// et repérables plutôt qu'un trou anodin tous les 20 blocs.
+const CAVE_ENTRANCE_CELL = 100; // taille de cellule -> une entrée tous les ~100 blocs, plus rares
+const CAVE_ENTRANCE_CHANCE = 0.5; // fraction de cellules qui ont effectivement une entrée
+export const CAVE_ENTRANCE_MARGIN = 7; // rayon max du puits (+ wobble) : marge de scan nécessaire
 
 // choisit, pour une cellule de la grille, si elle contient une entrée et où -- pure
 // fonction des coordonnées de cellule (même principe que treeAt/desertDecorAt), donc
@@ -216,7 +225,7 @@ function caveEntranceSeed(cellX, cellZ) {
     if (h > SEA_LEVEL + 2 && h < SNOW_LEVEL) {
       // pas d'entrée noyée/au ras de l'eau, pas de trou incongru au sommet enneigé
       const depth = 6 + Math.floor(hash2(cellX, cellZ, 8184) * 8); // puits de 6 à 13 blocs
-      const radius = 1 + hash2(cellX, cellZ, 8185); // bouche de 1 à 2 blocs de rayon -> on peut y entrer
+      const radius = 3 + hash2(cellX, cellZ, 8185) * 3; // bouche large, 3 à 6 blocs de rayon
       seed = { ex, ez, h, depth, radius };
     }
   }
