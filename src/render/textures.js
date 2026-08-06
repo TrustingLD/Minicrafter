@@ -489,11 +489,26 @@ export function texCactus() {
     ctx.fillStyle = '#5ba548'; // arête : le côté éclairé du pli, juste à côté du creux
     ctx.fillRect(x + 1.5, 0, 1, TEX_SIZE);
   }
+  // vrais petits pics le long des côtes : un triangle clair (l'épine elle-même)
+  // qui dépasse de part et d'autre du sillon, plus une ombre courte à sa base
+  // pour bien le détacher du fond -- avant ce n'était qu'un pixel isolé, trop
+  // discret pour se lire comme une épine.
   const rand = mulberry32(31);
-  ctx.fillStyle = '#eef4cf';
   for (const x of ridges) {
     for (let y = 2; y < TEX_SIZE; y += 5) {
-      if (rand() < 0.65) ctx.fillRect(x - 1, y + Math.floor(rand() * 2), 1, 1);
+      if (rand() < 0.7) {
+        const spikeY = y + Math.floor(rand() * 2);
+        const dir = rand() < 0.5 ? -1 : 1; // l'épine pointe à gauche ou à droite du sillon
+        ctx.fillStyle = '#5a4327';
+        ctx.fillRect(x - 0.5, spikeY, 1, 1); // base sombre de l'épine
+        ctx.fillStyle = '#f4ecc8';
+        ctx.beginPath();
+        ctx.moveTo(x, spikeY);
+        ctx.lineTo(x, spikeY + 1);
+        ctx.lineTo(x + dir * 2.4, spikeY + 0.5);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
   }
   return canvasToTexture(c);
@@ -554,16 +569,39 @@ export function texIce() {
   }
   return canvasToTexture(c);
 }
+// Four : avant, un aplat gris avec un petit trou noir/orange perdu au milieu --
+// trop discret pour se lire comme un four à l'échelle du bloc. La pierre est
+// maintenant découpée en gros blocs façon maçonnerie (au lieu d'un bruit fin),
+// et l'ouverture + la braise sont nettement agrandies pour occuper le centre
+// de la texture, avec un cadre métallique épais autour du trou.
 export function texFurnace() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#5a5a5a';
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#4a4a4a', '#6c6c6c'], 30);
-  ctx.fillStyle = '#232323';
-  ctx.fillRect(TEX_SIZE * 0.28, TEX_SIZE * 0.32, TEX_SIZE * 0.44, TEX_SIZE * 0.4);
+  // gros pavés de pierre (grain plus large qu'avant) pour un aspect plus massif
+  const rand = mulberry32(19);
+  const stoneShades = ['#4a4a4a', '#666666', '#525252'];
+  for (let gy = 0; gy < TEX_SIZE; gy += TEX_SIZE / 4) {
+    for (let gx = 0; gx < TEX_SIZE; gx += TEX_SIZE / 4) {
+      if (rand() < 0.6) {
+        ctx.fillStyle = stoneShades[Math.floor(rand() * stoneShades.length)];
+        ctx.fillRect(gx, gy, TEX_SIZE / 4, TEX_SIZE / 4);
+      }
+    }
+  }
+  speckle(ctx, ['#3f3f3f', '#787878'], 24, 2);
+  // cadre métallique épais autour de l'ouverture
+  ctx.fillStyle = '#2c2c2c';
+  ctx.fillRect(TEX_SIZE * 0.16, TEX_SIZE * 0.2, TEX_SIZE * 0.68, TEX_SIZE * 0.6);
+  // ouverture noire, bien plus grande qu'avant
+  ctx.fillStyle = '#181818';
+  ctx.fillRect(TEX_SIZE * 0.22, TEX_SIZE * 0.28, TEX_SIZE * 0.56, TEX_SIZE * 0.48);
+  // braise orange, agrandie et avec un coeur plus clair pour la profondeur
   ctx.fillStyle = '#ff7b25';
-  ctx.fillRect(TEX_SIZE * 0.34, TEX_SIZE * 0.5, TEX_SIZE * 0.32, TEX_SIZE * 0.14);
+  ctx.fillRect(TEX_SIZE * 0.3, TEX_SIZE * 0.5, TEX_SIZE * 0.4, TEX_SIZE * 0.2);
+  ctx.fillStyle = '#ffd166';
+  ctx.fillRect(TEX_SIZE * 0.38, TEX_SIZE * 0.54, TEX_SIZE * 0.24, TEX_SIZE * 0.1);
   return canvasToTexture(c);
 }
 export function texIronIngot() {
