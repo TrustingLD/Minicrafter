@@ -1182,7 +1182,7 @@ function animate() {
       camera.rotation.z = 0;
     }
 
-    updateVisuals(dt, isMoving, yaw, pitch); // positionne la caméra (1ère/3e personne) + anime main et avatar
+    updateVisuals(dt, isMoving, yaw, pitch, crouching); // positionne la caméra (1ère/3e personne) + anime main et avatar
 
     mobSystem.update(dt, player.pos);
     itemSystem.update(dt, player.pos, pickupItem);

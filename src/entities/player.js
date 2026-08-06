@@ -72,7 +72,11 @@ export function createPlayer({
       legs.push(pivot);
     });
 
-    return { group, legs, arms };
+    // positions "debout" de repos, pour pouvoir revenir dessus en s'accroupissant
+    // (cf. crouchAmount dans updateVisuals) sans les re-calculer à chaque frame
+    const restY = { body: body.position.y, head: head.position.y };
+
+    return { group, legs, arms, body, head, restY };
   }
   const playerAvatar = buildPlayerAvatar();
   playerAvatar.group.visible = false;
@@ -160,12 +164,17 @@ export function createPlayer({
   // animation : swing de la main (casser/attaquer) et balancier de marche (main + avatar)
   let handSwing = 0; // 0 = repos, monte vers 1 puis redescend quand on clique
   let walkPhasePlayer = 0;
+  let crouchAmount = 0; // 0 = debout, 1 = accroupi -- lissé dans le temps, cf. updateVisuals
+  const CROUCH_LOWER = 0.22; // combien le buste/la tête s'abaissent, en unités monde
+  const CROUCH_LEAN = 0.35; // inclinaison avant du buste (radians)
+  const CROUCH_LEG_BEND = 0.55; // flexion des jambes au repos, en plus du balancier de marche
+  const CROUCH_LERP_SPEED = 10; // /s -- assez rapide pour rester réactif à la touche Maj
   function triggerHandSwing() {
     handSwing = 1;
     playerAvatar._swing = 1;
   }
 
-  function updateVisuals(dt, isMoving, yaw, pitch) {
+  function updateVisuals(dt, isMoving, yaw, pitch, crouching) {
     // -- swing (casser/attaquer) --
     if (handSwing > 0) handSwing = Math.max(0, handSwing - dt * 4.5);
     const swingOffset = Math.sin(handSwing * Math.PI) * 0.9;
@@ -175,6 +184,11 @@ export function createPlayer({
     else walkPhasePlayer *= 1 - Math.min(1, dt * 6);
     const walkSwing = Math.sin(walkPhasePlayer) * 0.55;
 
+    // -- accroupi (Maj, cf. main.js) : lissage vers 0 (debout) ou 1 (accroupi) pour
+    // une transition fluide plutôt qu'un pop instantané --
+    const crouchTarget = crouching ? 1 : 0;
+    crouchAmount += (crouchTarget - crouchAmount) * Math.min(1, dt * CROUCH_LERP_SPEED);
+
     // main FPS : pose de repos + swing + léger bob de marche
     handPivot.rotation.x =
       0.55 -
@@ -182,15 +196,24 @@ export function createPlayer({
       (isMoving && player.onGround ? Math.sin(walkPhasePlayer * 2) * 0.03 : 0);
     handPivot.rotation.y = -0.1 - swingOffset * 0.5;
     handPivot.position.y =
-      -0.5 + (isMoving && player.onGround ? Math.abs(Math.sin(walkPhasePlayer)) * 0.025 : 0);
+      -0.5 +
+      (isMoving && player.onGround ? Math.abs(Math.sin(walkPhasePlayer)) * 0.025 : 0) -
+      crouchAmount * (CROUCH_LOWER * 0.5); // la vue FPS s'abaisse un peu aussi, plus discret que l'avatar
 
     // avatar 3e personne : jambes toujours animées, bras aussi (sauf pendant un swing d'attaque)
     playerAvatar.legs.forEach((pivot, i) => {
-      pivot.rotation.x = i % 2 === 0 ? walkSwing : -walkSwing;
+      const bend = i % 2 === 0 ? walkSwing : -walkSwing;
+      pivot.rotation.x = bend + crouchAmount * CROUCH_LEG_BEND;
     });
     playerAvatar.arms.forEach((pivot, i) => {
-      pivot.rotation.x = (i % 2 === 0 ? -walkSwing : walkSwing) * 0.6;
+      pivot.rotation.x = (i % 2 === 0 ? -walkSwing : walkSwing) * 0.6 - crouchAmount * 0.2;
     });
+    // buste + tête : s'abaissent et se penchent en avant -- c'est ce qui rend
+    // l'accroupissement "visible" en 3e personne, pas juste une hitbox plus basse
+    playerAvatar.body.position.y = playerAvatar.restY.body - crouchAmount * CROUCH_LOWER;
+    playerAvatar.body.rotation.x = crouchAmount * CROUCH_LEAN;
+    playerAvatar.head.position.y =
+      playerAvatar.restY.head - crouchAmount * (CROUCH_LOWER + Math.sin(CROUCH_LEAN) * 0.35);
     playerAvatar.group.position.set(player.pos.x, player.pos.y, player.pos.z);
     playerAvatar.group.rotation.y = yaw;
 
