@@ -150,15 +150,21 @@ export function createPlayer({
     }
   }
 
-  // bascule 1ère / 3e personne (touche F5)
-  let thirdPerson = false;
+  // bascule de vue (touche F5) : 1ère personne -> 3e personne (dos) -> vue de
+  // face "selfie" (6 blocs devant, caméra tournée vers le joueur) -> 1ère personne
+  const VIEW_FIRST = 0;
+  const VIEW_THIRD = 1;
+  const VIEW_SELFIE = 2;
+  let viewMode = VIEW_FIRST;
   const thirdPersonDistance = 4.5;
+  const selfieDistance = 6;
   const camForward = new THREE.Vector3();
   const camRayOrigin = new THREE.Vector3();
   function toggleThirdPerson() {
-    thirdPerson = !thirdPerson;
-    playerAvatar.group.visible = thirdPerson;
-    handPivot.visible = !thirdPerson;
+    viewMode = (viewMode + 1) % 3;
+    // avatar visible dès qu'on quitte la 1ère personne (3e personne ET selfie)
+    playerAvatar.group.visible = viewMode !== VIEW_FIRST;
+    handPivot.visible = viewMode === VIEW_FIRST;
   }
 
   // animation : swing de la main (casser/attaquer) et balancier de marche (main + avatar)
@@ -217,7 +223,7 @@ export function createPlayer({
     playerAvatar.group.position.set(player.pos.x, player.pos.y, player.pos.z);
     playerAvatar.group.rotation.y = yaw;
 
-    if (thirdPerson) {
+    if (viewMode === VIEW_THIRD) {
       const eyePos = camRayOrigin.set(player.pos.x, player.pos.y + player.height, player.pos.z);
       camForward.set(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
       let dist = thirdPersonDistance;
@@ -228,6 +234,20 @@ export function createPlayer({
       if (hit) dist = Math.max(0.6, hit.dist - 0.3);
       const camPos = eyePos.clone().addScaledVector(camForward, -dist);
       camera.position.copy(camPos);
+    } else if (viewMode === VIEW_SELFIE) {
+      // vue "selfie" : caméra placée 6 blocs DEVANT le joueur (dans la direction
+      // visée), mais tournée pour regarder VERS le joueur -- comme une perche à
+      // selfie. On raycast vers l'avant pour ne pas passer à travers un mur.
+      const eyePos = camRayOrigin.set(player.pos.x, player.pos.y + player.height, player.pos.z);
+      camForward.set(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+      let dist = selfieDistance;
+      const hit = voxelRaycast(getBlock, eyePos, camForward, selfieDistance);
+      if (hit) dist = Math.max(0.6, hit.dist - 0.3);
+      const camPos = eyePos.clone().addScaledVector(camForward, dist);
+      camera.position.copy(camPos);
+      // face le joueur : demi-tour par rapport au regard, tangage inversé
+      camera.rotation.y = yaw + Math.PI;
+      camera.rotation.x = -pitch;
     } else {
       camera.position.set(player.pos.x, player.pos.y + player.height, player.pos.z);
     }
@@ -257,7 +277,10 @@ export function createPlayer({
     collidesAt,
     respawn,
     get thirdPerson() {
-      return thirdPerson;
+      return viewMode !== VIEW_FIRST;
+    },
+    get viewMode() {
+      return viewMode;
     },
   };
 }

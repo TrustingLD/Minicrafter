@@ -402,7 +402,7 @@ function dropSelectedItem() {
   refreshHeldItem(selectedBlock);
   bus.emit('inventory:changed');
 
-  camera.getWorldDirection(dropDir); // direction visée (yaw + pitch, cf. aimRaycast)
+  getAimDirection(dropDir); // direction visée (yaw + pitch) -- indépendante de la caméra (vue selfie)
   const eyeY = player.pos.y + player.height;
   // apparaît un peu devant les yeux du joueur pour ne pas se fondre avec le bloc visé/le corps
   const spawnX = player.pos.x + dropDir.x * 0.6;
@@ -698,6 +698,14 @@ document.addEventListener('mousemove', (e) => {
   pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
 });
 
+// Direction visée, calculée depuis yaw/pitch plutôt que via camera.getWorldDirection() :
+// en vue selfie (F5 x2, cf. player.js) la caméra est tournée pour regarder VERS le
+// joueur, donc son orientation ne correspond plus du tout à la direction réellement
+// visée par le joueur (viseur bloc, lancer d'objet doivent rester basés sur yaw/pitch).
+function getAimDirection(out) {
+  return out.set(0, 0, -1).applyEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+}
+
 /* ---------- Interaction (raycast blocs + mobs) ---------- */
 const raycaster = new THREE.Raycaster();
 raycaster.far = 6;
@@ -709,7 +717,7 @@ const rayEye = new THREE.Vector3();
 // une portée effective bien plus courte depuis le joueur. On garde la direction visée
 // (celle de la caméra, donc le viseur reste juste à l'écran) mais l'origine est l'oeil du joueur.
 function aimRaycast() {
-  camera.getWorldDirection(rayDir);
+  getAimDirection(rayDir);
   rayEye.set(player.pos.x, player.pos.y + player.height, player.pos.z);
   raycaster.set(rayEye, rayDir);
 }
