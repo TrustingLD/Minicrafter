@@ -385,6 +385,39 @@ function pickupItem(item, count) {
   return taken;
 }
 
+// Jeter un objet (touche A sur clavier AZERTY = physiquement la même touche que
+// le Q anglais/QWERTY, cf. e.code plus bas -- exactement le raccourci "drop" de
+// Minecraft). Retire 1 unité du slot hotbar sélectionné et fait apparaître un
+// item au sol devant le joueur, propulsé dans la direction regardée.
+const dropDir = new THREE.Vector3();
+const THROW_SPEED = 4;
+function dropSelectedItem() {
+  const stack = slots[selectedIndex];
+  if (!stack) return; // rien à jeter dans le slot actif
+  const item = stack.item;
+  stack.count -= 1;
+  if (stack.count <= 0) slots[selectedIndex] = null;
+  selectedBlock = slots[selectedIndex]?.item ?? null;
+  hotbarUI.render(slots);
+  refreshHeldItem(selectedBlock);
+  bus.emit('inventory:changed');
+
+  camera.getWorldDirection(dropDir); // direction visée (yaw + pitch, cf. aimRaycast)
+  const eyeY = player.pos.y + player.height;
+  // apparaît un peu devant les yeux du joueur pour ne pas se fondre avec le bloc visé/le corps
+  const spawnX = player.pos.x + dropDir.x * 0.6;
+  const spawnY = eyeY + dropDir.y * 0.6;
+  const spawnZ = player.pos.z + dropDir.z * 0.6;
+  const dropped = itemSystem.spawn(spawnX, spawnY, spawnZ, item, 1);
+  if (dropped) {
+    dropped.velX = dropDir.x * THROW_SPEED;
+    dropped.velY = dropDir.y * THROW_SPEED + 2; // petit boost vertical, comme un vrai lancer
+    dropped.velZ = dropDir.z * THROW_SPEED;
+  }
+  sfx.playSound('equip'); // pas de son dédié pour l'instant, réutilise le clic d'équipement
+  triggerHandSwing();
+}
+
 /* ---------- Lumière des torches (Phase 13) ---------- */
 // Un PointLight par torche tuerait le framerate (c'est la leçon de la phase) : un
 // petit pool de PointLight (8) réaffecté aux torches les plus proches du joueur,
@@ -591,6 +624,12 @@ document.addEventListener('keydown', (e) => {
   if (craftOpen || furnaceOpen || chatUI.isOpen) return;
   if (e.code === 'KeyC') {
     zoomed = !zoomed;
+    return;
+  }
+  if (e.code === 'KeyQ' && !e.repeat) {
+    // Touche "A" en AZERTY = même position physique que "Q" en QWERTY (comme le
+    // ZQSD des déplacements, cf. plus haut) -> jeter un objet, raccourci Minecraft.
+    dropSelectedItem();
     return;
   }
   if (e.code === 'KeyW' && !e.repeat) {

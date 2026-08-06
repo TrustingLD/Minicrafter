@@ -60,7 +60,7 @@ export function createSky({ scene, ambientLight, sunLight }) {
   // dans le camera.far (1000, main.js), donc aucun souci de clipping.
   const sunSprite = new THREE.Sprite(
     new THREE.SpriteMaterial({
-      map: texGlowDisc('#fae102', 'rgb(255, 225, 0)'),
+      map: texGlowDisc('#fff8e0', 'rgba(255,220,120,0.6)'),
       transparent: true,
       depthWrite: false,
       depthTest: true,
