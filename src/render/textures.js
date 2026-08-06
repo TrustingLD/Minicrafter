@@ -843,6 +843,37 @@ export function texLava() {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
+// Villageois (Phase 20) : robe de bure + visage au grand nez, pour rester lisible
+// et distinct des autres mobs humanoïdes (le zombie) au premier coup d'oeil.
+export function texVillagerRobe() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8a6a42';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#7a5b37', '#9a7a52'], 10, 1.5, 3.5);
+  speckle(ctx, ['#6b4f2e'], 20);
+  return canvasToTexture(c);
+}
+// visage vu de face : sourcils, yeux, et le grand nez qui fait immédiatement
+// reconnaître un villageois plutôt qu'un autre mob humanoïde.
+export function texVillagerFace() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e8b98f';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#c99468'], 16);
+  ctx.fillStyle = '#2a1c12';
+  ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.3, TEX_SIZE * 0.18, TEX_SIZE * 0.06);
+  ctx.fillRect(TEX_SIZE * 0.62, TEX_SIZE * 0.3, TEX_SIZE * 0.18, TEX_SIZE * 0.06);
+  ctx.fillStyle = '#241a12';
+  ctx.fillRect(TEX_SIZE * 0.22, TEX_SIZE * 0.4, TEX_SIZE * 0.12, TEX_SIZE * 0.1);
+  ctx.fillRect(TEX_SIZE * 0.66, TEX_SIZE * 0.4, TEX_SIZE * 0.12, TEX_SIZE * 0.1);
+  ctx.fillStyle = '#d1a279';
+  ctx.fillRect(TEX_SIZE * 0.41, TEX_SIZE * 0.4, TEX_SIZE * 0.18, TEX_SIZE * 0.36);
+  ctx.fillStyle = '#b98a5f';
+  ctx.fillRect(TEX_SIZE * 0.41, TEX_SIZE * 0.72, TEX_SIZE * 0.18, TEX_SIZE * 0.05);
+  return canvasToTexture(c);
+}
 // vêtements en lambeaux pour le torse du zombie
 export function texZombieShirt() {
   const c = newCanvas();

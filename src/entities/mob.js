@@ -14,6 +14,7 @@ import { voxelRaycast } from '../core/raycast.js';
 import { worldToChunk, CHUNK_X, CHUNK_Y, CHUNK_Z } from '../world/chunk.js';
 import { getBiome } from '../world/generator.js';
 import { BIOMES } from '../world/biomes.js';
+import { findVillagesNear, villageDoorSpots } from '../world/villages.js';
 
 export function createMobTextures() {
   return {
@@ -29,6 +30,9 @@ export function createMobTextures() {
     sheepWool: tex.texMobSkin('#f2ede0', '#d8d2c0'),
     sheepSkin: tex.texMobSkin('#e8b98f', '#c99468'), // corps "nu" une fois tondu
     sheepFace: tex.texSheepFace(),
+    villagerRobe: tex.texVillagerRobe(),
+    villagerSkin: tex.texMobSkin('#e8b98f', '#c99468'),
+    villagerFace: tex.texVillagerFace(),
   };
 }
 
@@ -285,6 +289,13 @@ const DESPAWN_SOFT_DIST = 56; // au-delà pendant DESPAWN_SOFT_TIME : despawn au
 const DESPAWN_SOFT_TIME = 60;
 const HOSTILE_TYPES = ['zombie'];
 
+// Villageois (Phase 20) : peuplement des villages générés par world/villages.js.
+// Contrairement à trySpawnAroundPlayer (mobs random dans un anneau), ici les
+// EMPLACEMENTS sont déterministes (une porte de maison) -- on vérifie juste, à
+// intervalle régulier, si un village à portée n'a pas encore ses villageois.
+const VILLAGER_SPAWN_INTERVAL = 3; // s
+const VILLAGER_SEARCH_RADIUS = 72; // un peu au-delà du rayon de spawn des animaux
+
 // « Cette case voit-elle le ciel ? » — remonte la colonne depuis (x, y) et cherche
 // le premier bloc plein. Remplace l'ancienne heuristique `groundY < 12`, qui était
 // fausse : le relief de base tourne autour de y = 6-10, donc la quasi-totalité de la
@@ -319,7 +330,12 @@ export function createMobSystem({
   const mobs = [];
   let mobHitboxes = [];
   let spawnTimer = SPAWN_INTERVAL;
+  let villagerSpawnTimer = 0.5; // premier essai vite après le boot, pas besoin d'attendre 3s
   const farTimers = new Map(); // mob -> secondes passées au-delà de DESPAWN_SOFT_DIST
+  // clés (village.key) déjà peuplées, pour ne pas re-spawner des villageois à chaque
+  // vague. Une clé est relâchée (cf. releaseVillageIfEmpty) quand plus aucun de ses
+  // villageois n'est en vie/à portée -- le village pourra être repeuplé si le joueur revient.
+  const spawnedVillages = new Set();
 
   function refreshMobHitboxes() {
     mobHitboxes = [];
@@ -340,6 +356,7 @@ export function createMobSystem({
         const idx = mobs.indexOf(mob);
         if (idx >= 0) mobs.splice(idx, 1);
         farTimers.delete(mob);
+        releaseVillageIfEmpty(mob.villageKey);
         refreshMobHitboxes();
         onMobDeath();
       },
@@ -432,6 +449,41 @@ export function createMobSystem({
     }
   }
 
+  // un village n'a plus AUCUN villageois vivant à portée -> on le retire de la liste
+  // des villages peuplés, pour qu'il puisse être repeuplé si le joueur revient plus tard.
+  function releaseVillageIfEmpty(key) {
+    if (key == null) return;
+    for (const m of mobs) if (m.villageKey === key) return;
+    spawnedVillages.delete(key);
+  }
+
+  // peuple les villages générés (world/villages.js) à portée du joueur, un
+  // villageois par porte de maison. Les emplacements sont déterministes (pas de
+  // hasard comme trySpawnAroundPlayer) -- on ne fait qu'attendre que le chunk
+  // concerné soit chargé (comme trySpawnAroundPlayer le fait déjà pour ses propres
+  // spawns) avant de poser les villageois, une seule fois par village.
+  function trySpawnVillagers(playerPos) {
+    if (mobs.length >= MAX_MOBS_TOTAL) return;
+    const villages = findVillagesNear(playerPos.x, playerPos.z, VILLAGER_SEARCH_RADIUS);
+    for (const village of villages) {
+      if (spawnedVillages.has(village.key)) continue;
+      const spots = villageDoorSpots(village);
+      if (spots.length === 0) continue;
+      const probeX = Math.round(spots[0].x),
+        probeZ = Math.round(spots[0].z);
+      const floorType = getBlock(probeX, village.platformY, probeZ);
+      if (floorType === undefined) continue; // chunk pas encore généré : on retentera à la prochaine vague
+      spawnedVillages.add(village.key);
+      for (const spot of spots) {
+        if (mobs.length >= MAX_MOBS_TOTAL) break;
+        const m = new Mob('villager', Math.round(spot.x), Math.round(spot.z), makeCtx());
+        m.villageKey = village.key;
+        mobs.push(m);
+      }
+      refreshMobHitboxes();
+    }
+  }
+
   function despawnFar(dt, playerPos) {
     for (let i = mobs.length - 1; i >= 0; i--) {
       const m = mobs[i];
@@ -443,6 +495,7 @@ export function createMobSystem({
         scene.remove(m.group);
         mobs.splice(i, 1);
         farTimers.delete(m);
+        releaseVillageIfEmpty(m.villageKey);
         continue;
       }
       if (d2 > DESPAWN_SOFT_DIST * DESPAWN_SOFT_DIST) {
@@ -452,6 +505,7 @@ export function createMobSystem({
           scene.remove(m.group);
           mobs.splice(i, 1);
           farTimers.delete(m);
+          releaseVillageIfEmpty(m.villageKey);
           continue;
         }
         farTimers.set(m, t);
@@ -468,6 +522,11 @@ export function createMobSystem({
       spawnTimer = SPAWN_INTERVAL;
       trySpawnAroundPlayer(playerPos);
       despawnFar(dt, playerPos);
+    }
+    villagerSpawnTimer -= dt;
+    if (villagerSpawnTimer <= 0) {
+      villagerSpawnTimer = VILLAGER_SPAWN_INTERVAL;
+      trySpawnVillagers(playerPos);
     }
     for (const m of mobs) {
       const dx = m.pos.x - playerPos.x;

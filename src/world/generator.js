@@ -9,6 +9,21 @@ import { makeNoise2D, makeNoise3D, hash2, hash3 } from '../core/math.js';
 import { BLOCK_ID, ORE_TYPES } from '../data/blocks.js';
 import { CHUNK_X, CHUNK_Y, CHUNK_Z, idx, inBounds } from './chunk.js';
 import { BIOMES, biomeAt, noiseContinent, noiseRiver } from './biomes.js';
+// Villages (Phase 20) : dépendance circulaire assumée avec villages.js (lui-même a
+// besoin de getHeight/getBiome/SEA_LEVEL, exportés plus bas dans CE fichier) --
+// sans danger tant qu'aucun des deux modules n'utilise ces bindings au niveau
+// module, seulement à l'intérieur de fonctions appelées après coup. Cf. le
+// commentaire équivalent en tête de villages.js.
+import {
+  findVillageForChunk,
+  villagePlatformAt,
+  villageStructureBlocksAt,
+  VILLAGE_FOOTPRINT_RADIUS,
+} from './villages.js';
+// marge de scan pour la passe "structures de village" : le centre d'un village peut
+// être hors du chunk courant tout en ayant des maisons qui débordent dedans (même
+// principe que TREE_MARGIN, juste plus large -- une bourgade est plus grande qu'un arbre).
+const VILLAGE_SCAN_MARGIN = Math.ceil(VILLAGE_FOOTPRINT_RADIUS) + 2;
 
 // Monde infini : plus de mur invisible. `getHeight`/`generateChunk` sont des
 // fonctions PURES des coordonnées (bruit à base de hash2/hash3, cf. core/math.js) —
@@ -329,12 +344,21 @@ export function generateChunk(cx, cz) {
   // coûteux pour être rappelé par bloc écrit.
   const heights = new Int16Array(CHUNK_X * CHUNK_Z);
 
+  // Village (Phase 20) : un seul lookup pour tout le chunk (pas par colonne, cf.
+  // villages.js) -- `village` reste `null` pour l'immense majorité des chunks.
+  const village = findVillageForChunk(originX, originZ);
+
   // 1) colonnes de terrain + cavernes creusées au passage
   for (let lx = 0; lx < CHUNK_X; lx++) {
     for (let lz = 0; lz < CHUNK_Z; lz++) {
       const wx = originX + lx,
         wz = originZ + lz;
-      const h = getHeight(wx, wz);
+      // sous l'emprise d'un village : la colonne est ENTIÈREMENT aplanie à la
+      // hauteur de la place du village (`platform`), quel que soit le relief naturel
+      // -- comme une petite plateforme posée sur le terrain. `platform` vaut `null`
+      // presque partout (hors village ou village absent de ce chunk).
+      const platform = village ? villagePlatformAt(village, wx, wz) : null;
+      const h = platform != null ? platform : getHeight(wx, wz);
       heights[lz * CHUNK_X + lx] = h;
       // biome : une seule fois par colonne (pas par bloc de la colonne) -- même
       // raison que `h`, le mtMask/continentalness sous-jacents ne changent pas avec y.
@@ -353,7 +377,9 @@ export function generateChunk(cx, cz) {
           data[idx(lx, y, lz)] = BLOCK_ID.lava;
           continue;
         }
-        if (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz)) {
+        // sous un village : jamais de caverne qui évide le sol sous une maison --
+        // colonne pleine garantie, socle solide pour la plateforme.
+        if (platform == null && (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz))) {
           // caverne (naturelle ou puits d'entrée) : on laisse de l'air, sauf poche de
           // lave en profondeur
           if (lavaPoolAt(wx, y, wz)) data[idx(lx, y, lz)] = BLOCK_ID.lava;
@@ -368,7 +394,9 @@ export function generateChunk(cx, cz) {
       // lac : le terrain de cette colonne s'arrête sous le niveau de la mer -> on
       // remplit l'air laissé au-dessus (jusqu'à SEA_LEVEL-1) avec de l'eau, un vrai
       // bloc désormais. Ne recreuse jamais la pierre pleine (la boucle ci-dessus
-      // s'arrête déjà à `h`) donc aucun risque d'écraser du terrain solide.
+      // s'arrête déjà à `h`) donc aucun risque d'écraser du terrain solide. Jamais
+      // sous un village (`platform` est toujours au-dessus du niveau de la mer, cf.
+      // villages.js) : cette branche ne se déclenche de toute façon pas pour lui.
       if (h < SEA_LEVEL) {
         for (let y = Math.max(1, h + 1); y < SEA_LEVEL; y++) data[idx(lx, y, lz)] = BLOCK_ID.water;
       }
@@ -419,6 +447,7 @@ export function generateChunk(cx, cz) {
     for (let lz = -TREE_MARGIN; lz < CHUNK_Z + TREE_MARGIN; lz++) {
       const wx = originX + lx,
         wz = originZ + lz;
+      if (village && villagePlatformAt(village, wx, wz) != null) continue; // jamais d'arbre dans un village
       const t = treeAt(wx, wz);
       if (!t) continue;
       const { h, treeH } = t;
@@ -445,6 +474,7 @@ export function generateChunk(cx, cz) {
     for (let lz = 0; lz < CHUNK_Z; lz++) {
       const wx = originX + lx,
         wz = originZ + lz;
+      if (village && villagePlatformAt(village, wx, wz) != null) continue; // jamais de cactus/buisson dans un village
       const decor = desertDecorAt(wx, wz);
       if (!decor) continue;
       if (data[idx(lx, decor.h, lz)] === 0) continue; // rien à poser sur du vide (grotte affleurante)
@@ -453,6 +483,25 @@ export function generateChunk(cx, cz) {
           setLocal(data, lx, decor.h + dy, lz, BLOCK_ID.cactus);
       } else {
         setLocal(data, lx, decor.h + 1, lz, BLOCK_ID.dead_bush);
+      }
+    }
+  }
+
+  // 5) structures de village (Phase 20) : posées APRÈS tout le reste, comme un
+  // bâtiment qui s'impose sur le terrain déjà aplani (passe 1). Scan avec une marge
+  // généreuse (le centre du village peut être hors de ce chunk tout en ayant des
+  // maisons qui débordent dedans, cf. VILLAGE_FOOTPRINT_RADIUS dans villages.js) --
+  // ne coûte rien la plupart du temps puisque `village` est déjà `null` pour
+  // l'écrasante majorité des chunks (un seul lookup en tête de fonction).
+  if (village) {
+    const M = VILLAGE_SCAN_MARGIN;
+    for (let lx = -M; lx < CHUNK_X + M; lx++) {
+      for (let lz = -M; lz < CHUNK_Z + M; lz++) {
+        const wx = originX + lx,
+          wz = originZ + lz;
+        const blocks = villageStructureBlocksAt(village, wx, wz);
+        if (!blocks) continue;
+        for (const b of blocks) setLocal(data, lx, b.y, lz, BLOCK_ID[b.block]);
       }
     }
   }

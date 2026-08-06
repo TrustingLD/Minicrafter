@@ -148,6 +148,46 @@ export const MOBS = {
       ],
     },
   },
+  // Villageois (Phase 20) : peuple les villages générés (cf. world/villages.js).
+  // Même gabarit humanoïde que le zombie (corps + tête + bras + membres), juste
+  // reskinné -- pas de nouvelle logique de modèle à écrire. `ai: 'wander'` : il
+  // erre autour de chez lui comme n'importe quel mob passif, rien de spécifique.
+  villager: {
+    name: 'Villageois',
+    speed: 0.85,
+    health: 8,
+    hitbox: { radius: 0.32, height: 1.9 },
+    ai: 'wander',
+    drops: [],
+    model: {
+      parts: [
+        { size: [0.6, 0.9, 0.35], at: [0, 1.05, 0], tex: 'villagerRobe' },
+        { size: [0.5, 0.5, 0.5], at: [0, 1.75, 0], tex: 'villagerSkin', faceTex: 'villagerFace' },
+      ],
+      limbs: [
+        {
+          group: 'arms',
+          size: [0.18, 0.7, 0.18],
+          jointY: 1.4,
+          positions: [
+            [-0.39, 0],
+            [0.39, 0],
+          ],
+          tex: 'villagerRobe',
+        },
+        {
+          group: 'legs',
+          size: [0.2, 0.6, 0.2],
+          jointY: 0.6,
+          positions: [
+            [-0.15, 0],
+            [0.15, 0],
+          ],
+          tex: 'villagerRobe',
+        },
+      ],
+    },
+  },
   chicken: {
     name: 'Poulet',
     speed: 1.3,

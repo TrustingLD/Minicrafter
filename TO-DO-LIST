@@ -10,10 +10,12 @@ NEW MAJ Mer. 5 août 12:14
 
 
 
+ quand on meurt on doit perdre tous nos items dans l'inventaire
 
 
+ deja la lave doit couler,quand un bloc de lave et a coté d'un autre les textures doivent se lier se connecter s'attacher, quand on est dans la lave ca doit nous ralentir a fond
 
-
+ améliore la barre de bouffe
 
  les monstres ne doivent pas pouvoir m'attaquer a travers les blocs si ils sont sur la meme coordonnée Y
 
@@ -46,7 +48,7 @@ NEW MAJ Mer. 5 août 12:14
 
  Le personnage doit pouvoir s’accroupir vraiment quand on appuie sur maj en f5
 
- Les mobs doivent être teinté en rouge pendant 1/4 de seconde quand on le tape et quand on prend un degat la caméra doit fait une rotation de 45° pendant 1/8 de seconde
+ Les mobs doivent être teinté en rouge pendant 1/4 de seconde quand on le tape
 
  Les BLOCS doivent s'afficher en 3D dans la hot bar
 
@@ -56,13 +58,14 @@ NEW MAJ Mer. 5 août 12:14
 
  meilleures textures des minerais (chaqu'un sa texture, pas juste des petit points colorés)
 
- fais un village avec des pnj villagois qui se génerent tous les 1000 bloc
-
-
+ Degats de chute
  
+ Nuages trop bas
 
-
+ Trop de trous dans le sol a cause des grottes laisser juste des entrée grandes mais rares (tous les 100 bloc)
  
  Pouvoir remonter a la surface de la lave et de l’eau
 
  nether
+
+ Brouillard avant la bordure des chunks générés
