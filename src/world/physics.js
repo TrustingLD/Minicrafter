@@ -79,7 +79,8 @@ export function resolveFlyingVertical(player, dt, verticalInput, collidesAtBox) 
   player.velY = 0;
   player.onGround = false;
   if (verticalInput === 0) return;
-  const newY = player.pos.y + verticalInput * player.speed * dt;
+  const flySpeed = player.speed * (player.flySpeedMultiplier || 1);
+  const newY = player.pos.y + verticalInput * flySpeed * dt;
   if (!collidesAtBox(player.pos.x, newY, player.pos.z, player.radius, player.height))
     player.pos.y = newY;
 }

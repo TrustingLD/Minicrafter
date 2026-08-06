@@ -152,3 +152,15 @@ test('resolveFlyingVertical: still blocked by collision (a ceiling stops ascent)
   resolveFlyingVertical(player, 1, 1, ceilingAtY10); // grand pas vers le haut
   assert.equal(player.pos.y, 10); // rejeté par le plafond
 });
+
+test('resolveFlyingVertical: no flySpeedMultiplier set behaves as x1 (backward compatible)', () => {
+  const player = makePlayer({ pos: { x: 0, y: 10, z: 0 } }); // pas de flySpeedMultiplier
+  resolveFlyingVertical(player, 1, 1, NEVER_COLLIDES);
+  assert.equal(player.pos.y, 15); // y0 + speed(5) * dt(1) * x1
+});
+
+test('resolveFlyingVertical: /speedfly x2 doubles vertical distance covered', () => {
+  const player = makePlayer({ pos: { x: 0, y: 10, z: 0 }, flySpeedMultiplier: 2 });
+  resolveFlyingVertical(player, 1, 1, NEVER_COLLIDES);
+  assert.equal(player.pos.y, 20); // y0 + speed(5) * dt(1) * x2
+});

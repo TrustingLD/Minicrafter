@@ -472,6 +472,17 @@ const commandHandlers = {
     player.fallDistance = 0; // pas de dégâts de chute au retour au sol après un vol
     return player.flying ? 'Vol activé.' : 'Vol désactivé.';
   },
+  speedfly([raw]) {
+    // accepte "x2" comme "2" ; borne large pour éviter un vol inutilisable (trop
+    // lent) ou qui traverse les chunks non générés (trop rapide)
+    const value = parseFloat(raw.replace(/^x/i, ''));
+    if (Number.isNaN(value) || value <= 0) {
+      return `Valeur invalide : ${raw} (attendu par ex. x2, x0.5).`;
+    }
+    const clamped = Math.min(10, Math.max(0.25, value));
+    player.flySpeedMultiplier = clamped;
+    return `Vitesse de vol réglée sur x${clamped}.`;
+  },
   time([value]) {
     let t;
     if (value === 'day') t = 0.5;
@@ -994,7 +1005,8 @@ function animate() {
       player.speed *
       (sprinting ? 1.6 : 1) *
       (crouching ? 0.6 : 1) *
-      (underwater || inLava ? 0.5 : 1);
+      (underwater || inLava ? 0.5 : 1) *
+      (player.flying ? player.flySpeedMultiplier || 1 : 1); // /speedfly, pas d'effet hors vol
 
     // dégâts en tic (pas à chaque frame) tant qu'on reste dans la lave -- même
     // mécanique que onPlayerHurt utilisé par les mobs (cf. main.js plus haut)

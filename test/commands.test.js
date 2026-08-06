@@ -31,6 +31,16 @@ test('parseCommand: a zero-arg command needs no arguments', () => {
   assert.deepEqual(parseCommand('/fly', COMMANDS), { name: 'fly', args: [] });
 });
 
+test('parseCommand: /speedfly takes exactly one argument (e.g. x2)', () => {
+  assert.deepEqual(parseCommand('/speedfly x2', COMMANDS), {
+    name: 'speedfly',
+    args: ['x2'],
+  });
+  const missing = parseCommand('/speedfly', COMMANDS);
+  assert.ok(missing.error);
+  assert.match(missing.error, /Usage/);
+});
+
 test('parseCommand: unknown command name returns an error, not a throw', () => {
   const result = parseCommand('/xyzzy', COMMANDS);
   assert.ok(result.error);

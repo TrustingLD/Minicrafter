@@ -28,6 +28,7 @@ export function createPlayer({
     breath: 15, // secondes d'air restantes sous l'eau
     maxBreath: 15,
     flying: false, // /fly (Phase 15) : gravité coupée, Espace/Maj montent/descendent
+    flySpeedMultiplier: 1, // /speedfly : multiplie player.speed, mais seulement pendant le vol
   };
   camera.position.copy(player.pos);
 
