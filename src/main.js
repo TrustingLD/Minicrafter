@@ -187,10 +187,20 @@ bus.on('player:health', () => healthUI.render(player));
 // chaque event player:health (la régénération de faim > 18 en émet un aussi).
 const hurtVignetteEl = document.getElementById('hurtVignette');
 let lastHealth = 20; // vie de départ (cf. entities/player.js) -- `player` n'existe pas encore ici
+
+// Secousse de caméra sur dégât : la caméra s'incline à 45° pendant 1/12 de
+// seconde puis revient à sa rotation normale. `hurtTiltTimer` compte le temps
+// restant (en secondes) de l'inclinaison ; appliqué chaque frame dans la boucle
+// de rendu via camera.rotation.z (cf. plus bas, à côté de rotation.x/y).
+const HURT_TILT_ANGLE = (20 * Math.PI) / 180; // 20°
+const HURT_TILT_DURATION = 1 / 20; // 1/20 de seconde
+let hurtTiltTimer = 0;
+
 bus.on('player:health', () => {
   if (player.health < lastHealth) {
     hurtVignetteEl.classList.add('flash');
     setTimeout(() => hurtVignetteEl.classList.remove('flash'), 80);
+    hurtTiltTimer = HURT_TILT_DURATION;
   }
   lastHealth = player.health;
 });
@@ -1123,6 +1133,16 @@ function animate() {
     camera.rotation.order = 'YXZ';
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
+
+    // Applique l'inclinaison de dégât tant que le timer n'est pas écoulé, puis
+    // remet la caméra bien droite (cf. déclenchement dans le listener player:health).
+    if (hurtTiltTimer > 0) {
+      camera.rotation.z = HURT_TILT_ANGLE;
+      hurtTiltTimer -= dt;
+    } else {
+      camera.rotation.z = 0;
+    }
+
     updateVisuals(dt, isMoving, yaw, pitch); // positionne la caméra (1ère/3e personne) + anime main et avatar
 
     mobSystem.update(dt, player.pos);
