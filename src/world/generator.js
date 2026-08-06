@@ -22,8 +22,17 @@ import {
 } from './villages.js';
 // marge de scan pour la passe "structures de village" : le centre d'un village peut
 // être hors du chunk courant tout en ayant des maisons qui débordent dedans (même
-// principe que TREE_MARGIN, juste plus large -- une bourgade est plus grande qu'un arbre).
-const VILLAGE_SCAN_MARGIN = Math.ceil(VILLAGE_FOOTPRINT_RADIUS) + 2;
+// principe que TREE_MARGIN, juste plus large -- une bourgade est plus grande qu'un
+// arbre). Fonction plutôt que constante top-level (fix) : generator.js et
+// villages.js s'importent mutuellement (cf. commentaire plus haut) -- lire
+// VILLAGE_FOOTPRINT_RADIUS au niveau MODULE marchait par accident selon l'ordre
+// d'import (ça plantait en TDZ dès qu'un autre fichier importait villages.js avant
+// generator.js, par ex. un test qui importe villages.js en premier). Un appel de
+// fonction, lui, ne s'exécute qu'au moment de generateChunk -- bien après que les
+// deux modules aient fini de s'évaluer, donc jamais de TDZ possible.
+function villageScanMargin() {
+  return Math.ceil(VILLAGE_FOOTPRINT_RADIUS) + 2;
+}
 
 // Monde infini : plus de mur invisible. `getHeight`/`generateChunk` sont des
 // fonctions PURES des coordonnées (bruit à base de hash2/hash3, cf. core/math.js) —
@@ -494,7 +503,7 @@ export function generateChunk(cx, cz) {
   // ne coûte rien la plupart du temps puisque `village` est déjà `null` pour
   // l'écrasante majorité des chunks (un seul lookup en tête de fonction).
   if (village) {
-    const M = VILLAGE_SCAN_MARGIN;
+    const M = villageScanMargin();
     for (let lx = -M; lx < CHUNK_X + M; lx++) {
       for (let lz = -M; lz < CHUNK_Z + M; lz++) {
         const wx = originX + lx,

@@ -1,19 +1,20 @@
-// Villages (Phase 20) : peuplement du monde par bourgades, généré au même titre que
-// le relief -- fonction PURE des coordonnées (hash2 déterministe, comme treeAt ou
-// caveEntranceSeed dans generator.js). Même chunk demandé deux fois -> même village.
+// Villages (Phase 20, densité revue) : peuplement du monde par bourgades, généré au
+// même titre que le relief -- fonction PURE des coordonnées (hash2 déterministe,
+// comme treeAt ou caveEntranceSeed dans generator.js). Même chunk demandé deux fois
+// -> même village.
 //
 // Grille de cellules de VILLAGE_CELL blocs. Chaque cellule est CANDIDATE à un
 // village : son centre est tiré au hasard mais toujours à au moins VILLAGE_MARGIN
-// blocs du bord de la cellule -- largement plus que VILLAGE_FOOTPRINT_RADIUS (la
-// plus grande distance possible entre le centre et un bloc de structure), donc un
-// village ne peut JAMAIS déborder sur une cellule voisine. Contrairement aux entrées
-// de grotte (generator.js), aucun scan des cellules adjacentes n'est donc nécessaire :
-// une colonne n'a besoin d'interroger que la cellule qui la contient.
+// blocs du bord de la cellule -- toujours nettement plus que VILLAGE_FOOTPRINT_RADIUS
+// (la plus grande distance possible entre le centre et un bloc de structure), donc
+// un village ne peut JAMAIS déborder sur une cellule voisine. Contrairement aux
+// entrées de grotte (generator.js), aucun scan des cellules adjacentes n'est donc
+// nécessaire : une colonne n'a besoin d'interroger que la cellule qui la contient.
 //
 // Le village n'est effectivement posé que si son centre tombe sur un biome
 // constructible et hors de l'eau -- sinon la cellule reste vide. Le résultat n'est
-// donc pas "un village exactement tous les 1000 blocs" mais "une tentative tous les
-// 1000 blocs, réalisée quand le terrain s'y prête" (même simplification assumée que
+// donc pas "un village exactement tous les 250 blocs" mais "une tentative tous les
+// 250 blocs, réalisée quand le terrain s'y prête" (même simplification assumée que
 // pour les arbres/minerais : pure fonction du bruit, jamais de coordination globale).
 
 import { hash2 } from '../core/math.js';
@@ -26,8 +27,14 @@ import { CHUNK_X, CHUNK_Z } from './chunk.js';
 // jamais au niveau module). Cf. commentaire équivalent en tête de generator.js.
 import { getHeight, getBiome, SEA_LEVEL } from './generator.js';
 
-export const VILLAGE_CELL = 1000;
-const VILLAGE_MARGIN = 150; // centre <-> bord de cellule (cf. commentaire en tête de fichier)
+// 250 (au lieu de 1000) : villages ~4x plus fréquents, sur demande -- des bourgades
+// qu'on croise vraiment en explorant, pas une curiosité qu'il faut chercher pendant
+// des heures. VILLAGE_MARGIN réduit en proportion (150 -> 40), mais reste largement
+// supérieur à VILLAGE_FOOTPRINT_RADIUS (~16) : la garantie "jamais à cheval sur deux
+// cellules" tient toujours, juste avec moins de marge de manoeuvre pour le tirage
+// aléatoire du centre à l'intérieur de sa cellule.
+export const VILLAGE_CELL = 250;
+const VILLAGE_MARGIN = 40; // centre <-> bord de cellule (cf. commentaire en tête de fichier)
 const BUILDABLE_BIOMES = new Set(['plains', 'forest', 'snowy']);
 
 const HOUSE_SIZE = 2; // demi-côté : empreinte de maison 5x5 (-2..2)
