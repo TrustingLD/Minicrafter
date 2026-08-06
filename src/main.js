@@ -951,8 +951,10 @@ function animate() {
   // on l'ignore pour ne pas injecter une division par zéro dans la moyenne.
   hud.updateFps(rawDt);
 
-  // zoom (C) : interpolation douce du FOV, indépendante du reste (marche même en 3e personne)
-  const targetFov = zoomed ? 25 : 75;
+  // zoom (C) : interpolation douce du FOV, indépendante du reste (marche même en 3e personne).
+  // Le sprint ajoute un léger élargissement par-dessus (comme Minecraft), sauf en zoom où
+  // l'effet resterait imperceptible et casserait la valeur de zoom voulue par le joueur.
+  const targetFov = zoomed ? 25 : sprinting ? 85 : 75;
   if (Math.abs(camera.fov - targetFov) > 0.05) {
     camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
     camera.updateProjectionMatrix();
