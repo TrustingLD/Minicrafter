@@ -114,6 +114,12 @@ export class Mob extends Entity {
     this.sightTimer = Math.random() * 0.25; // décalé pour ne pas tester tous les mobs la même frame
     this.canSeePlayer = false;
     this.aggroTimer = 0; // temps restant avant de perdre l'aggro si la vue est coupée
+    // Villageois (Phase 20) : clé du village d'origine (`village.key` dans
+    // world/villages.js), posée après coup par trySpawnVillagers -- `null` pour
+    // tout mob qui n'est pas un villageois. Déclaré ici (plutôt que laissé
+    // "surgir" au premier `m.villageKey = ...`) pour que TypeScript/checkJs
+    // reconnaisse le champ sur la classe (cf. tsconfig.json).
+    this.villageKey = null;
   }
   // essaie de déplacer le mob sur un axe ; si un bloc bloque le chemin, autorise
   // à "monter la marche" seulement si l'obstacle ne fait pas plus de 1 bloc de haut
@@ -471,7 +477,7 @@ export function createMobSystem({
       if (spots.length === 0) continue;
       const probeX = Math.round(spots[0].x),
         probeZ = Math.round(spots[0].z);
-      const floorType = getBlock(probeX, village.platformY, probeZ);
+      const floorType = getBlock(probeX, spots[0].y, probeZ);
       if (floorType === undefined) continue; // chunk pas encore généré : on retentera à la prochaine vague
       spawnedVillages.add(village.key);
       for (const spot of spots) {

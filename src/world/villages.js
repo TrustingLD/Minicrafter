@@ -1,81 +1,86 @@
-// Villages (Phase 20, densité revue) : peuplement du monde par bourgades, généré au
-// même titre que le relief -- fonction PURE des coordonnées (hash2 déterministe,
-// comme treeAt ou caveEntranceSeed dans generator.js). Même chunk demandé deux fois
-// -> même village.
+// Villages (Phase 20, garantis + adaptatifs) : peuplement du monde par bourgades,
+// généré au même titre que le relief -- fonction PURE des coordonnées (hash2
+// déterministe, comme treeAt ou caveEntranceSeed dans generator.js). Même chunk
+// demandé deux fois -> même village.
 //
-// Grille de cellules de VILLAGE_CELL blocs. Chaque cellule est CANDIDATE à un
-// village : son centre est tiré au hasard mais toujours à au moins VILLAGE_MARGIN
-// blocs du bord de la cellule -- toujours nettement plus que VILLAGE_FOOTPRINT_RADIUS
-// (la plus grande distance possible entre le centre et un bloc de structure), donc
-// un village ne peut JAMAIS déborder sur une cellule voisine. Contrairement aux
-// entrées de grotte (generator.js), aucun scan des cellules adjacentes n'est donc
-// nécessaire : une colonne n'a besoin d'interroger que la cellule qui la contient.
+// Grille de cellules de VILLAGE_CELL blocs. CHAQUE cellule a un village (son centre
+// est tiré au hasard mais toujours à au moins VILLAGE_MARGIN blocs du bord de la
+// cellule -- toujours nettement plus que VILLAGE_FOOTPRINT_RADIUS, donc un village ne
+// peut JAMAIS déborder sur une cellule voisine ; aucun scan des cellules adjacentes
+// n'est donc nécessaire, contrairement aux entrées de grotte dans generator.js).
 //
-// Le village n'est effectivement posé que si son centre tombe sur un biome
-// constructible et hors de l'eau -- sinon la cellule reste vide. Le résultat n'est
-// donc pas "un village exactement tous les 250 blocs" mais "une tentative tous les
-// 250 blocs, réalisée quand le terrain s'y prête" (même simplification assumée que
-// pour les arbres/minerais : pure fonction du bruit, jamais de coordination globale).
+// Adaptatif au terrain (fix : avant, tout le village était aplati à UNE hauteur
+// unique, une plateforme plaquée sur le paysage sans le respecter) : chaque maison
+// -- et le puits -- a maintenant sa PROPRE fondation, calée sur le relief local à
+// son emplacement (`Math.max(getHeight(...), SEA_LEVEL + 1)` : jamais sous l'eau,
+// sinon la hauteur naturelle telle quelle). Seule l'empreinte de CHAQUE bâtiment
+// (5x5 pour une maison, 5x5 pour le puits avec ses torches) est nivelée à sa propre
+// hauteur -- pas tout le disque du village -- donc un village en terrain vallonné
+// prend l'aspect d'un hameau étagé (chaque maison à sa hauteur), pas d'un plateau
+// artificiel, et le terrain entre les maisons (arbres, pente, rivière) reste intact.
 
 import { hash2 } from '../core/math.js';
 import { CHUNK_X, CHUNK_Z } from './chunk.js';
 
 // Résolus paresseusement (pas un import direct au niveau module) : generator.js
-// importe ce fichier ET ce fichier a besoin de generator.js (relief/biome) --
-// dépendance circulaire saine tant que rien ici n'utilise ces bindings AVANT que
-// generator.js ait fini de s'évaluer (uniquement à l'intérieur de fonctions,
-// jamais au niveau module). Cf. commentaire équivalent en tête de generator.js.
-import { getHeight, getBiome, SEA_LEVEL } from './generator.js';
+// importe ce fichier ET ce fichier a besoin de generator.js (relief) -- dépendance
+// circulaire saine tant que rien ici n'utilise ces bindings AVANT que generator.js
+// ait fini de s'évaluer (uniquement à l'intérieur de fonctions, jamais au niveau
+// module). Cf. commentaire équivalent en tête de generator.js.
+import { getHeight, SEA_LEVEL } from './generator.js';
 
-// 250 (au lieu de 1000) : villages ~4x plus fréquents, sur demande -- des bourgades
-// qu'on croise vraiment en explorant, pas une curiosité qu'il faut chercher pendant
-// des heures. VILLAGE_MARGIN réduit en proportion (150 -> 40), mais reste largement
-// supérieur à VILLAGE_FOOTPRINT_RADIUS (~16) : la garantie "jamais à cheval sur deux
-// cellules" tient toujours, juste avec moins de marge de manoeuvre pour le tirage
-// aléatoire du centre à l'intérieur de sa cellule.
+// 250 (au lieu de 1000 à l'origine) : villages ~4x plus fréquents, sur demande --
+// des bourgades qu'on croise vraiment en explorant. VILLAGE_MARGIN réduit en
+// proportion (150 -> 40), mais reste largement supérieur à VILLAGE_FOOTPRINT_RADIUS
+// (~16) : la garantie "jamais à cheval sur deux cellules" tient toujours.
 export const VILLAGE_CELL = 250;
 const VILLAGE_MARGIN = 40; // centre <-> bord de cellule (cf. commentaire en tête de fichier)
-const BUILDABLE_BIOMES = new Set(['plains', 'forest', 'snowy']);
 
 const HOUSE_SIZE = 2; // demi-côté : empreinte de maison 5x5 (-2..2)
 const WALL_H = 3; // hauteur de mur (en blocs, au-dessus du sol de la maison)
 const ORBIT_MIN = 8; // distance mini centre du village <-> centre d'une maison
 const ORBIT_MAX = 12; // distance maxi
 const STRUCT_MARGIN = 4; // plus grande distance possible entre le centre d'UNE maison et un de ses blocs
-export const VILLAGE_FOOTPRINT_RADIUS = ORBIT_MAX + STRUCT_MARGIN; // rayon aplani autour du centre du village
+export const VILLAGE_FOOTPRINT_RADIUS = ORBIT_MAX + STRUCT_MARGIN; // rayon englobant tout le village (scan/portée), PAS une zone aplatie
+const WELL_FOOTPRINT = 2; // demi-côté de l'empreinte nivelée du puits (anneau + torches)
 
 const villageCache = new Map();
 
+// hauteur de fondation en un point : le relief naturel, jamais sous le niveau de la
+// mer + 1 (sinon une maison tirée au sort sur un lac ou un océan serait engloutie).
+function foundationHeight(x, z) {
+  return Math.max(getHeight(x, z), SEA_LEVEL + 1);
+}
+
 // tire (ou relit depuis le cache) le village d'une cellule de grille -- pure
-// fonction de (cellX, cellZ), jamais invalidée (comme caveEntranceSeed).
+// fonction de (cellX, cellZ), jamais invalidée (comme caveEntranceSeed). Il y a
+// TOUJOURS un village (fini le tirage "annulé si mauvais biome") : chaque maison
+// adapte sa propre hauteur au terrain, donc plus besoin de rejeter une cellule pour
+// cause de relief ou de biome défavorable.
 function villageAtCell(cellX, cellZ) {
   const key = cellX * 1000003 + cellZ;
   const cached = villageCache.get(key);
   if (cached !== undefined) return cached;
-  let village = null;
   const span = VILLAGE_CELL - 2 * VILLAGE_MARGIN;
   const cx = cellX * VILLAGE_CELL + VILLAGE_MARGIN + Math.floor(hash2(cellX, cellZ, 9001) * span);
   const cz = cellZ * VILLAGE_CELL + VILLAGE_MARGIN + Math.floor(hash2(cellX, cellZ, 9002) * span);
-  const biome = getBiome(cx, cz);
-  const h = getHeight(cx, cz);
-  if (BUILDABLE_BIOMES.has(biome) && h > SEA_LEVEL + 2) {
-    const n = 4 + Math.floor(hash2(cellX, cellZ, 9003) * 3); // 4 à 6 maisons
-    const houses = [];
-    for (let i = 0; i < n; i++) {
-      const angle = (i / n) * Math.PI * 2 + (hash2(cellX, cellZ, 9010 + i) - 0.5) * 0.6;
-      const dist = ORBIT_MIN + hash2(cellX, cellZ, 9020 + i) * (ORBIT_MAX - ORBIT_MIN);
-      const hx = cx + Math.round(Math.sin(angle) * dist);
-      const hz = cz + Math.round(Math.cos(angle) * dist);
-      // porte orientée vers le centre du village : l'axe dominant du vecteur
-      // (centre - maison) donne le côté (0 = nord/-z, 1 = est/+x, 2 = sud/+z, 3 = ouest/-x)
-      const ddx = cx - hx,
-        ddz = cz - hz;
-      const facing =
-        Math.abs(ddx) > Math.abs(ddz) ? (ddx > 0 ? 1 : 3) : ddz > 0 ? 2 : 0;
-      houses.push({ x: hx, z: hz, facing, hasCraftingTable: i === 0 });
-    }
-    village = { cx, cz, platformY: h, houses, key };
+  const n = 4 + Math.floor(hash2(cellX, cellZ, 9003) * 3); // 4 à 6 maisons
+  const houses = [];
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 + (hash2(cellX, cellZ, 9010 + i) - 0.5) * 0.6;
+    const dist = ORBIT_MIN + hash2(cellX, cellZ, 9020 + i) * (ORBIT_MAX - ORBIT_MIN);
+    const hx = cx + Math.round(Math.sin(angle) * dist);
+    const hz = cz + Math.round(Math.cos(angle) * dist);
+    // porte orientée vers le centre du village : l'axe dominant du vecteur
+    // (centre - maison) donne le côté (0 = nord/-z, 1 = est/+x, 2 = sud/+z, 3 = ouest/-x)
+    const ddx = cx - hx,
+      ddz = cz - hz;
+    const facing = Math.abs(ddx) > Math.abs(ddz) ? (ddx > 0 ? 1 : 3) : ddz > 0 ? 2 : 0;
+    // fondation propre à CETTE maison -- pas la hauteur du centre du village -- pour
+    // que le hameau suive le relief plutôt que de l'aplatir en un seul plateau.
+    houses.push({ x: hx, z: hz, facing, y: foundationHeight(hx, hz), hasCraftingTable: i === 0 });
   }
+  const village = { cx, cz, wellY: foundationHeight(cx, cz), houses, key };
   villageCache.set(key, village);
   return village;
 }
@@ -96,13 +101,23 @@ export function findVillageForChunk(originX, originZ) {
   return village;
 }
 
-// plateforme du village sous (wx, wz), ou null si hors de son emprise -- utilisé par
-// generateChunk pour aplatir le terrain avant d'y poser les structures.
-export function villagePlatformAt(village, wx, wz) {
-  const dx = wx - village.cx,
-    dz = wz - village.cz;
-  if (dx * dx + dz * dz > VILLAGE_FOOTPRINT_RADIUS * VILLAGE_FOOTPRINT_RADIUS) return null;
-  return village.platformY;
+// fondation à (wx, wz), ou null si hors de l'empreinte de tout bâtiment -- une
+// maison OU le puits, jamais tout le disque du village (cf. commentaire en tête de
+// fichier). Utilisé par generateChunk pour aplatir le terrain avant d'y poser les
+// structures : seule l'empreinte réelle de chaque bâtiment est nivelée, pas le
+// terrain entre eux.
+export function villageFootprintAt(village, wx, wz) {
+  for (const house of village.houses) {
+    // l'empreinte est un carré (5x5), donc invariante par rotation -- inutile de
+    // tenir compte de `house.facing` ici, contrairement à houseLocalBlocks.
+    if (Math.abs(wx - house.x) <= HOUSE_SIZE && Math.abs(wz - house.z) <= HOUSE_SIZE) {
+      return house.y;
+    }
+  }
+  if (Math.abs(wx - village.cx) <= WELL_FOOTPRINT && Math.abs(wz - village.cz) <= WELL_FOOTPRINT) {
+    return village.wellY;
+  }
+  return null;
 }
 
 // rotation locale -> monde selon la façade choisie pour la maison (cf. `facing`
@@ -170,19 +185,19 @@ function villageColumns(village) {
   const cached = villageColumnsCache.get(village.key);
   if (cached) return cached;
   const map = new Map();
-  const add = (wx, dy, wz, block) => {
+  const add = (wx, y, wz, block) => {
     const k = wx * 1000003 + wz;
     let arr = map.get(k);
     if (!arr) map.set(k, (arr = []));
-    arr.push({ y: village.platformY + dy, block });
+    arr.push({ y, block });
   };
   for (const house of village.houses) {
     for (const b of houseLocalBlocks(house.hasCraftingTable)) {
       const [wx0, wz0] = rotate(b.dx, b.dz, house.facing);
-      add(house.x + wx0, b.dy, house.z + wz0, b.block);
+      add(house.x + wx0, house.y + b.dy, house.z + wz0, b.block);
     }
   }
-  for (const b of wellLocalBlocks()) add(village.cx + b.dx, b.dy, village.cz + b.dz, b.block);
+  for (const b of wellLocalBlocks()) add(village.cx + b.dx, village.wellY + b.dy, village.cz + b.dz, b.block);
   villageColumnsCache.set(village.key, map);
   return map;
 }
@@ -200,7 +215,7 @@ export function villageDoorSpots(village) {
   const S = HOUSE_SIZE;
   return village.houses.map((house) => {
     const [wx0, wz0] = rotate(0, -(S + 1), house.facing);
-    return { x: house.x + wx0, z: house.z + wz0, y: village.platformY };
+    return { x: house.x + wx0, z: house.z + wz0, y: house.y };
   });
 }
 

@@ -16,7 +16,7 @@ import { BIOMES, biomeAt, noiseContinent, noiseRiver } from './biomes.js';
 // commentaire équivalent en tête de villages.js.
 import {
   findVillageForChunk,
-  villagePlatformAt,
+  villageFootprintAt,
   villageStructureBlocksAt,
   VILLAGE_FOOTPRINT_RADIUS,
 } from './villages.js';
@@ -362,12 +362,12 @@ export function generateChunk(cx, cz) {
     for (let lz = 0; lz < CHUNK_Z; lz++) {
       const wx = originX + lx,
         wz = originZ + lz;
-      // sous l'emprise d'un village : la colonne est ENTIÈREMENT aplanie à la
-      // hauteur de la place du village (`platform`), quel que soit le relief naturel
-      // -- comme une petite plateforme posée sur le terrain. `platform` vaut `null`
-      // presque partout (hors village ou village absent de ce chunk).
-      const platform = village ? villagePlatformAt(village, wx, wz) : null;
-      const h = platform != null ? platform : getHeight(wx, wz);
+      // sous l'empreinte d'une maison ou du puits : la colonne est aplanie à la
+      // fondation propre de CE bâtiment (`footprint`), qui suit le relief local --
+      // pas une plateforme unique pour tout le village (cf. villages.js). `footprint`
+      // vaut `null` presque partout (hors empreinte, ou village absent de ce chunk).
+      const footprint = village ? villageFootprintAt(village, wx, wz) : null;
+      const h = footprint != null ? footprint : getHeight(wx, wz);
       heights[lz * CHUNK_X + lx] = h;
       // biome : une seule fois par colonne (pas par bloc de la colonne) -- même
       // raison que `h`, le mtMask/continentalness sous-jacents ne changent pas avec y.
@@ -386,9 +386,9 @@ export function generateChunk(cx, cz) {
           data[idx(lx, y, lz)] = BLOCK_ID.lava;
           continue;
         }
-        // sous un village : jamais de caverne qui évide le sol sous une maison --
-        // colonne pleine garantie, socle solide pour la plateforme.
-        if (platform == null && (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz))) {
+        // sous une maison/le puits : jamais de caverne qui évide le sol --
+        // colonne pleine garantie, socle solide pour la fondation.
+        if (footprint == null && (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz))) {
           // caverne (naturelle ou puits d'entrée) : on laisse de l'air, sauf poche de
           // lave en profondeur
           if (lavaPoolAt(wx, y, wz)) data[idx(lx, y, lz)] = BLOCK_ID.lava;
@@ -404,8 +404,9 @@ export function generateChunk(cx, cz) {
       // remplit l'air laissé au-dessus (jusqu'à SEA_LEVEL-1) avec de l'eau, un vrai
       // bloc désormais. Ne recreuse jamais la pierre pleine (la boucle ci-dessus
       // s'arrête déjà à `h`) donc aucun risque d'écraser du terrain solide. Jamais
-      // sous un village (`platform` est toujours au-dessus du niveau de la mer, cf.
-      // villages.js) : cette branche ne se déclenche de toute façon pas pour lui.
+      // sous une maison/le puits (`footprint` est toujours au-dessus du niveau de la
+      // mer, cf. foundationHeight dans villages.js) : cette branche ne se déclenche
+      // de toute façon pas pour eux.
       if (h < SEA_LEVEL) {
         for (let y = Math.max(1, h + 1); y < SEA_LEVEL; y++) data[idx(lx, y, lz)] = BLOCK_ID.water;
       }
@@ -456,7 +457,7 @@ export function generateChunk(cx, cz) {
     for (let lz = -TREE_MARGIN; lz < CHUNK_Z + TREE_MARGIN; lz++) {
       const wx = originX + lx,
         wz = originZ + lz;
-      if (village && villagePlatformAt(village, wx, wz) != null) continue; // jamais d'arbre dans un village
+      if (village && villageFootprintAt(village, wx, wz) != null) continue; // jamais d'arbre dans un bâtiment
       const t = treeAt(wx, wz);
       if (!t) continue;
       const { h, treeH } = t;
@@ -483,7 +484,7 @@ export function generateChunk(cx, cz) {
     for (let lz = 0; lz < CHUNK_Z; lz++) {
       const wx = originX + lx,
         wz = originZ + lz;
-      if (village && villagePlatformAt(village, wx, wz) != null) continue; // jamais de cactus/buisson dans un village
+      if (village && villageFootprintAt(village, wx, wz) != null) continue; // jamais de cactus/buisson dans un bâtiment
       const decor = desertDecorAt(wx, wz);
       if (!decor) continue;
       if (data[idx(lx, decor.h, lz)] === 0) continue; // rien à poser sur du vide (grotte affleurante)
