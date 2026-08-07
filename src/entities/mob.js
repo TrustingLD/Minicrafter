@@ -62,6 +62,19 @@ const MOB_ACTIVE_RADIUS_SQ = MOB_ACTIVE_RADIUS * MOB_ACTIVE_RADIUS;
 const AGGRO_RANGE = 9;
 const LOS_RECHECK_INTERVAL = 0.25; // s — pas la peine de relancer le DDA à 60Hz par mob
 const LOS_GRACE = 3; // s sans ligne de vue avant de perdre l'aggro et repartir en errance
+
+// Flash rouge au moment où le mob encaisse un coup : donne un retour visuel
+// immédiat même quand le clic ne le tue pas. 1/4 de seconde, comme demandé.
+// Rouge adouci (pas un rouge pur) pour rester lisible sans écraser la texture.
+const HIT_FLASH_DURATION = 0.25;
+const HIT_FLASH_COLOR = new THREE.Color(0xff8a8a);
+const NORMAL_COLOR = new THREE.Color(0xffffff);
+
+// Knockback (coup reçu) : recule le mob d'environ 1 bloc dans l'axe attaquant -> mob,
+// étalé sur une courte durée plutôt qu'un téléportage instantané (plus lisible, et
+// passe par moveAxis donc respecte toujours les collisions avec le décor).
+const KNOCKBACK_DISTANCE = 1; // bloc
+const KNOCKBACK_DURATION = 0.15; // s
 function canSeeTarget(getBlock, from, to) {
   const dx = to.x - from.x,
     dy = to.y - from.y,
@@ -94,6 +107,20 @@ export class Mob extends Entity {
     this.hitParts = built.parts;
     this.legs = built.legs;
     this.arms = built.arms;
+    // Aplatit les matériaux de toutes les parts (certaines ont un tableau de 6
+    // matériaux, une par face, pour le museau/visage texturé) afin de pouvoir les
+    // teinter en rouge lors d'un coup. Chaque Mob a ses propres instances de
+    // matériaux (matFor() en crée une neuve à chaque appel, cf. model.js) : les
+    // modifier ici ne touche donc jamais les autres mobs du même type.
+    this.flashMaterials = built.parts.flatMap((p) =>
+      Array.isArray(p.material) ? p.material : [p.material]
+    );
+    this.flashTimer = 0;
+    // Knockback en cours (cf. hit()) : vitesse constante appliquée pendant
+    // knockbackTimer secondes, puis retombe à 0 -- voir update().
+    this.knockbackTimer = 0;
+    this.knockbackVX = 0;
+    this.knockbackVZ = 0;
     // Tonte (Phase 18) : `built.parts[i]` correspond à `data.model.parts[i]` dans le
     // même ordre (buildBoxModel pousse les parts avant les membres) -- on garde les
     // meshes marqués `wool: true` pour pouvoir changer juste leur texture.
@@ -173,6 +200,14 @@ export class Mob extends Entity {
   update(dt, playerPos) {
     if (!this.alive) return;
     const { playSound, onPlayerHurt } = this.ctx;
+    // fin du flash rouge (cf. hit()) : revient à la teinte normale une fois écoulé
+    if (this.flashTimer > 0) {
+      this.flashTimer -= dt;
+      if (this.flashTimer <= 0) {
+        this.flashTimer = 0;
+        this.flashMaterials.forEach((m) => m.color.copy(NORMAL_COLOR));
+      }
+    }
     if (this.sheared) {
       this.regrowTimer -= dt;
       if (this.regrowTimer <= 0) this.regrow();
@@ -235,6 +270,14 @@ export class Mob extends Entity {
       actuallyMoved = movedX || movedZ;
     }
 
+    // Knockback (coup reçu, cf. hit()) : s'ajoute au déplacement normal ci-dessus
+    // plutôt que de le remplacer -- le mob continue son IA tout en étant repoussé.
+    if (this.knockbackTimer > 0) {
+      this.knockbackTimer -= dt;
+      this.moveAxis('x', this.knockbackVX * dt);
+      this.moveAxis('z', this.knockbackVZ * dt);
+    }
+
     // gravité + collision verticale, comme le joueur : ça fait vraiment "tomber"
     // et "toucher le sol" le mob, au lieu de le clipper directement sur la surface
     // (Phase 10 : extraite dans entities/entity.js, partagée avec item-entity.js)
@@ -255,10 +298,34 @@ export class Mob extends Entity {
       pivot.rotation.x = (i % 2 === 0 ? -swing : swing) * 0.6;
     });
   }
-  hit(dmg) {
+  hit(dmg, attackerPos) {
     const { scene, itemSystem, playSound, onDeath } = this.ctx;
     this.health -= dmg;
     playSound('hit');
+    // teinte rouge immédiate (1/4 de seconde, cf. update()) pour un retour visuel
+    // au coup, même mortel -- si le mob meurt son group est retiré juste après donc
+    // ça ne se voit pas, mais ça ne coûte rien de le faire dans tous les cas
+    this.flashTimer = HIT_FLASH_DURATION;
+    this.flashMaterials.forEach((m) => m.color.copy(HIT_FLASH_COLOR));
+    // Knockback : direction horizontale attaquant -> mob, normalisée. Si les deux
+    // sont exactement à la même position (cas limite), on pousse dans une direction
+    // aléatoire plutôt que de ne rien faire (dx/dz nuls sinon).
+    if (attackerPos) {
+      let dx = this.pos.x - attackerPos.x;
+      let dz = this.pos.z - attackerPos.z;
+      const len = Math.hypot(dx, dz);
+      if (len > 1e-4) {
+        dx /= len;
+        dz /= len;
+      } else {
+        const a = Math.random() * Math.PI * 2;
+        dx = Math.sin(a);
+        dz = Math.cos(a);
+      }
+      this.knockbackVX = dx * (KNOCKBACK_DISTANCE / KNOCKBACK_DURATION);
+      this.knockbackVZ = dz * (KNOCKBACK_DISTANCE / KNOCKBACK_DURATION);
+      this.knockbackTimer = KNOCKBACK_DURATION;
+    }
     if (this.health <= 0 && this.alive) {
       this.alive = false;
       scene.remove(this.group);

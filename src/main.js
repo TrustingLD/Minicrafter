@@ -828,7 +828,7 @@ function performPrimaryAction() {
   // priorité au mob si plus proche que le bloc
   if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
     const hasSword = TOOL_CATEGORY[selectedBlock] === 'sword' && countOf(slots, selectedBlock) > 0;
-    mobHit.mob.hit(hasSword ? 5 : 1);
+    mobHit.mob.hit(hasSword ? 5 : 1, player.pos);
     return;
   }
   // le cassage lui-même est géré dans animate() : il faut maintenir l'action

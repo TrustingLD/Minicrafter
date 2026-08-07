@@ -414,6 +414,12 @@ canvas {
 #blocker h1 {
   margin-bottom: 10px;
 }
+#blockerSubtitle {
+  margin: -8px 0 14px;
+  font-size: 0.75em;
+  color: #999;
+  font-weight: normal;
+}
 #blocker p {
   margin: 4px 0;
   color: #ccc;
