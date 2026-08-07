@@ -912,6 +912,38 @@ export function texVillagerFace() {
   ctx.fillRect(TEX_SIZE * 0.41, TEX_SIZE * 0.72, TEX_SIZE * 0.18, TEX_SIZE * 0.05);
   return canvasToTexture(c);
 }
+// visage du joueur vu de face : sourcils, yeux (avec pupilles), et un sourire --
+// appliqué uniquement sur la face avant de la tête de l'avatar (cf. entities/player.js),
+// visible en 3e personne et surtout en vue "selfie" (F5 x2) où la caméra se retourne
+// pour regarder le joueur en face.
+export function texPlayerFace() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f9b87e';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#dd8e53'], 14);
+  // sourcils
+  ctx.fillStyle = '#5a3a22';
+  ctx.fillRect(TEX_SIZE * 0.18, TEX_SIZE * 0.28, TEX_SIZE * 0.2, TEX_SIZE * 0.06);
+  ctx.fillRect(TEX_SIZE * 0.62, TEX_SIZE * 0.28, TEX_SIZE * 0.2, TEX_SIZE * 0.06);
+  // yeux (blanc + pupille)
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.38, TEX_SIZE * 0.16, TEX_SIZE * 0.14);
+  ctx.fillRect(TEX_SIZE * 0.64, TEX_SIZE * 0.38, TEX_SIZE * 0.16, TEX_SIZE * 0.14);
+  ctx.fillStyle = '#2c1c10';
+  ctx.fillRect(TEX_SIZE * 0.25, TEX_SIZE * 0.41, TEX_SIZE * 0.08, TEX_SIZE * 0.08);
+  ctx.fillRect(TEX_SIZE * 0.69, TEX_SIZE * 0.41, TEX_SIZE * 0.08, TEX_SIZE * 0.08);
+  // nez, léger
+  ctx.fillStyle = '#dd8e53';
+  ctx.fillRect(TEX_SIZE * 0.46, TEX_SIZE * 0.52, TEX_SIZE * 0.08, TEX_SIZE * 0.12);
+  // bouche : sourire
+  ctx.fillStyle = '#8a4a3a';
+  ctx.fillRect(TEX_SIZE * 0.32, TEX_SIZE * 0.72, TEX_SIZE * 0.36, TEX_SIZE * 0.07);
+  ctx.fillStyle = '#5a2a20';
+  ctx.fillRect(TEX_SIZE * 0.3, TEX_SIZE * 0.7, TEX_SIZE * 0.06, TEX_SIZE * 0.04);
+  ctx.fillRect(TEX_SIZE * 0.64, TEX_SIZE * 0.7, TEX_SIZE * 0.06, TEX_SIZE * 0.04);
+  return canvasToTexture(c);
+}
 // vêtements en lambeaux pour le torse du zombie
 export function texZombieShirt() {
   const c = newCanvas();

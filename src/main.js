@@ -341,17 +341,22 @@ function spawnPoint() {
   return new THREE.Vector3(SPAWN_COLUMN.x + 0.5, SPAWN_COLUMN.y + 1, SPAWN_COLUMN.z + 0.5);
 }
 
+// on garde une référence à l'objet complet (playerCtrl) en plus des propriétés
+// déstructurées : `viewMode` est un getter posé sur cet objet, pas sur `player`
+// (qui n'est que l'état position/vie/faim). Le déstructurer directement aurait
+// figé sa valeur au moment de l'appel au lieu de la relire à chaque F5.
+const playerCtrl = createPlayer({
+  scene,
+  camera,
+  materials: blockAssets.materials,
+  blockTypes: blockAssets.blockTypes,
+  toolTextures: blockAssets.toolTextures,
+  collidesAtBox: worldApi.collidesAtBox,
+  getBlock: worldApi.getBlock,
+  spawnPos: spawnPoint(),
+});
 const { player, updateVisuals, refreshHeldItem, toggleThirdPerson, triggerHandSwing, respawn } =
-  createPlayer({
-    scene,
-    camera,
-    materials: blockAssets.materials,
-    blockTypes: blockAssets.blockTypes,
-    toolTextures: blockAssets.toolTextures,
-    collidesAtBox: worldApi.collidesAtBox,
-    getBlock: worldApi.getBlock,
-    spawnPos: spawnPoint(),
-  });
+  playerCtrl;
 healthUI.render(player);
 hungerUI.render(player);
 breathUI.render(player);
@@ -581,6 +586,11 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'F5') {
     e.preventDefault();
     toggleThirdPerson();
+    // le viseur (croix centrale) n'a de sens que quand la caméra regarde dans la
+    // direction visée -- en vue selfie elle regarde le joueur, donc on la masque.
+    const crosshair = document.getElementById('crosshair');
+    // caché dès qu'on quitte la 1ère personne (viewMode 0) : 3e personne (1) ET selfie (2)
+    if (crosshair) crosshair.style.display = playerCtrl.viewMode !== 0 ? 'none' : '';
   }
 });
 

@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { makeLimb } from './limb.js';
-import { texMobSkin } from '../render/textures.js';
+import { texMobSkin, texPlayerFace } from '../render/textures.js';
 import { voxelRaycast } from '../core/raycast.js';
 
 export function createPlayer({
@@ -38,6 +38,21 @@ export function createPlayer({
   const playerSkinMat = new THREE.MeshLambertMaterial({ map: tPlayerSkin });
   const playerShirtMat = new THREE.MeshLambertMaterial({ map: tPlayerShirt });
   const playerPantsMat = new THREE.MeshLambertMaterial({ map: tPlayerPants });
+  const playerFaceMat = new THREE.MeshLambertMaterial({ map: texPlayerFace() });
+  // ordre des matériaux d'un BoxGeometry : [+x, -x, +y, -y, +z, -z]. L'avatar tourne
+  // avec `yaw` (cf. updateVisuals) selon la même convention que camForward -- à yaw=0
+  // le joueur regarde vers -z monde, donc c'est la face locale -z (index 5) qui pointe
+  // dans la direction visée. En vue selfie (F5 x2) la caméra est placée devant le
+  // joueur dans cette même direction et retournée vers lui : la face -z, donc le
+  // visage, se retrouve naturellement face à la caméra, quel que soit le yaw.
+  const headMaterials = [
+    playerSkinMat,
+    playerSkinMat,
+    playerSkinMat,
+    playerSkinMat,
+    playerSkinMat,
+    playerFaceMat,
+  ];
 
   // avatar visible uniquement à la 3e personne (F5) - construit comme les mobs, avec des pivots articulés
   function buildPlayerAvatar() {
@@ -50,7 +65,7 @@ export function createPlayer({
     body.castShadow = true;
     group.add(body);
 
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), playerSkinMat);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), headMaterials);
     head.position.y = 1.775;
     head.castShadow = true;
     group.add(head);
@@ -222,6 +237,13 @@ export function createPlayer({
       playerAvatar.restY.head - crouchAmount * (CROUCH_LOWER + Math.sin(CROUCH_LEAN) * 0.35);
     playerAvatar.group.position.set(player.pos.x, player.pos.y, player.pos.z);
     playerAvatar.group.rotation.y = yaw;
+    // tangage de la tête (haut/bas) : jusqu'ici seul le lacet (yaw) du corps entier
+    // orientait l'avatar, la tête restait toujours à plat. En vue selfie la caméra,
+    // elle, monte/descend avec `pitch` -- sans ce tangage la tête ne "suivait" donc
+    // la caméra qu'à gauche/droite, jamais quand on regarde vers le haut ou le bas.
+    // rotation.x est dans le repère local du groupe (déjà tourné en yaw), donc ceci
+    // s'ajoute au lacet plutôt que de le remplacer.
+    playerAvatar.head.rotation.x = pitch;
 
     if (viewMode === VIEW_THIRD) {
       const eyePos = camRayOrigin.set(player.pos.x, player.pos.y + player.height, player.pos.z);
