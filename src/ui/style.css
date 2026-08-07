@@ -257,29 +257,75 @@ canvas {
   opacity: 0.35;
 }
 .slot .swatch {
-  width: 34px;
-  height: 34px;
+  width: 48px;
+  height: 48px;
   border-radius: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.3);
   image-rendering: pixelated;
-  background-size: cover;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .slot .key {
   position: absolute;
   top: 2px;
   left: 4px;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   text-shadow: 1px 1px 1px #000;
+  pointer-events: none;
+  z-index: 2;
 }
 .slot .count {
   position: absolute;
-  bottom: 1px;
-  right: 3px;
+  bottom: 2px;
+  right: 4px;
   color: #fff;
-  font-size: 11px;
+  font-size: 16px;
   font-weight: bold;
-  text-shadow: 1px 1px 1px #000;
+  text-shadow:
+    1px 1px 0 #000,
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    0 2px 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Icône 3D des blocs (hotbar / sac à dos / four, cf. ui/block-icon-3d.js) : un
+   cube en CSS 3D pur, sans perspective (donc pas de distorsion, un rendu
+   isométrique propre qui garde le style pixel art des textures). 3 faces
+   visibles (dessus/gauche/droite). */
+.blockIcon3d {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(-28deg) rotateY(-45deg);
+  margin: auto;
+}
+.blockIcon3dFace {
+  position: absolute;
+  width: var(--bi3d-face);
+  height: var(--bi3d-face);
+  top: calc(50% - var(--bi3d-face) / 2);
+  left: calc(50% - var(--bi3d-face) / 2);
+  background-size: cover;
+  image-rendering: pixelated;
+  backface-visibility: hidden;
+}
+.blockIcon3dFace.top {
+  transform: rotateX(90deg) translateZ(var(--bi3d-half));
+  filter: brightness(1.2);
+}
+.blockIcon3dFace.left {
+  transform: translateZ(var(--bi3d-half));
+  filter: brightness(0.75);
+}
+.blockIcon3dFace.right {
+  transform: rotateY(90deg) translateZ(var(--bi3d-half));
+  filter: brightness(0.95);
 }
 
 #info {
@@ -498,6 +544,9 @@ canvas {
   margin: 0 auto 4px;
   border-radius: 2px;
 }
+.invItem .blockIcon3d {
+  margin-bottom: 4px;
+}
 .recipe {
   display: flex;
   align-items: center;
@@ -569,6 +618,9 @@ canvas {
   background: rgba(0, 0, 0, 0.3);
   cursor: pointer;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .fSlot.empty {
   opacity: 0.4;

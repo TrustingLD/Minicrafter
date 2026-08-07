@@ -200,5 +200,46 @@ export function createBlockAssets() {
     }
   }
 
-  return { geometry, materials, toolTextures, iconCanvas, blockTypes: BLOCK_TYPES };
+  // Faces (mêmes canvases procéduraux que les blocs réels, cf. `materials` plus
+  // haut) pour l'icône 3D d'un bloc dans l'inventaire/hotbar/four -- uniquement
+  // les blocs qui sont de vrais cubes pleins en jeu. `null` pour tout le reste
+  // (outils, nourriture, minerais, bâtonnet, torche, buisson mort...) : ceux-là
+  // gardent l'icône plate 2D habituelle (iconCanvas), un fin bâtonnet ou une
+  // torche rendus en mini-cube ferait moins sens visuellement qu'un vrai bloc.
+  function iconFaces3D(type) {
+    switch (type) {
+      case 'grass':
+        return { top: tGrassTop.image, left: tGrassSide.image, right: tGrassSide.image };
+      case 'dirt':
+        return { top: tDirt.image, left: tDirt.image, right: tDirt.image };
+      case 'stone':
+        return { top: tStone.image, left: tStone.image, right: tStone.image };
+      case 'wood':
+        return { top: tWoodTop.image, left: tWoodSide.image, right: tWoodSide.image };
+      case 'leaves':
+        return { top: tLeaves.image, left: tLeaves.image, right: tLeaves.image };
+      case 'planks':
+        return { top: tPlanks.image, left: tPlanks.image, right: tPlanks.image };
+      case 'crafting_table':
+        return { top: tCraftTop.image, left: tCraftSide.image, right: tCraftSide.image };
+      case 'snow':
+        return { top: tSnow.image, left: tSnow.image, right: tSnow.image };
+      case 'furnace':
+        return { top: tFurnace.image, left: tFurnace.image, right: tFurnace.image };
+      case 'wool':
+        return { top: tWool.image, left: tWool.image, right: tWool.image };
+      case 'sand':
+        return { top: tSand.image, left: tSand.image, right: tSand.image };
+      case 'sandstone':
+        return { top: tSandstone.image, left: tSandstone.image, right: tSandstone.image };
+      case 'cactus':
+        return { top: tCactus.image, left: tCactus.image, right: tCactus.image };
+      case 'ice':
+        return { top: tIce.image, left: tIce.image, right: tIce.image };
+      default:
+        return null;
+    }
+  }
+
+  return { geometry, materials, toolTextures, iconCanvas, iconFaces3D, blockTypes: BLOCK_TYPES };
 }

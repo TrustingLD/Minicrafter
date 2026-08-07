@@ -4,7 +4,9 @@
 // (jusqu'à une pile), cliquer la sortie récupère tout ce qu'elle contient — le
 // "click-to-move" que PLAN.md juge suffisant pour cette phase.
 
-export function createFurnaceUI({ elements, iconCanvas, onClose }) {
+import { createBlockIcon3D } from './block-icon-3d.js';
+
+export function createFurnaceUI({ elements, iconCanvas, iconFaces3D, onClose }) {
   const { panel, inputSlot, fuelSlot, outputSlot, progressFill, flameFill, closeBtn } = elements;
   let isOpen = false;
   let currentPos = null; // { x, y, z } du fourneau ouvert
@@ -16,11 +18,17 @@ export function createFurnaceUI({ elements, iconCanvas, onClose }) {
       return;
     }
     el.classList.remove('empty');
-    const img = iconCanvas(cell.item);
-    if (img) {
-      const image = document.createElement('img');
-      image.src = img.toDataURL();
-      el.appendChild(image);
+    // vrai bloc (cf. iconFaces3D) -> petit cube 3D CSS, sinon icône plate 2D
+    const faces = iconFaces3D(cell.item);
+    if (faces) {
+      el.appendChild(createBlockIcon3D(faces, 40));
+    } else {
+      const img = iconCanvas(cell.item);
+      if (img) {
+        const image = document.createElement('img');
+        image.src = img.toDataURL();
+        el.appendChild(image);
+      }
     }
     const count = document.createElement('span');
     count.className = 'fCount';

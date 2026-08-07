@@ -4,8 +4,9 @@
 // appartient, comme dans n'importe quel jeu à inventaire.
 
 import { HOTBAR_SLOTS } from '../entities/inventory.js';
+import { createBlockIcon3D } from './block-icon-3d.js';
 
-export function createHotbarUI({ hotbarEl, blockTypes, itemNames, iconCanvas, onSelect }) {
+export function createHotbarUI({ hotbarEl, blockTypes, itemNames, iconCanvas, iconFaces3D, onSelect }) {
   let selectedIndex = 0;
 
   function render(slots) {
@@ -14,10 +15,19 @@ export function createHotbarUI({ hotbarEl, blockTypes, itemNames, iconCanvas, on
       const cell = slots[i];
       const slot = document.createElement('div');
       slot.className = 'slot' + (i === selectedIndex ? ' selected' : '') + (!cell ? ' empty' : '');
-      const img = cell ? iconCanvas(cell.item) : null;
       const swatch = document.createElement('div');
       swatch.className = 'swatch';
-      if (img) swatch.style.backgroundImage = `url(${img.toDataURL()})`;
+      if (cell) {
+        // les vrais blocs (cf. iconFaces3D) s'affichent en petit cube 3D CSS,
+        // le reste (outils, nourriture, minerais...) garde l'icône plate 2D
+        const faces = iconFaces3D(cell.item);
+        if (faces) {
+          swatch.appendChild(createBlockIcon3D(faces, 44));
+        } else {
+          const img = iconCanvas(cell.item);
+          if (img) swatch.style.backgroundImage = `url(${img.toDataURL()})`;
+        }
+      }
       const key = document.createElement('span');
       key.className = 'key';
       key.textContent = String(i + 1);

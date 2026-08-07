@@ -174,6 +174,7 @@ const hotbarUI = createHotbarUI({
   blockTypes: BLOCK_TYPES,
   itemNames: ITEM_NAMES,
   iconCanvas: blockAssets.iconCanvas,
+  iconFaces3D: blockAssets.iconFaces3D,
   onSelect: selectSlot,
 });
 hotbarUI.setSelectedIndex(selectedIndex);
@@ -221,6 +222,7 @@ const craftUI = createCraftUI({
   RECIPES,
   itemNames: ITEM_NAMES,
   iconCanvas: blockAssets.iconCanvas,
+  iconFaces3D: blockAssets.iconFaces3D,
   playSound: sfx.playSound,
   onCrafted: () => bus.emit('inventory:changed'),
   // cliquer une case du sac à dos l'échange avec le slot hotbar sélectionné —
@@ -267,6 +269,7 @@ const furnaceUI = createFurnaceUI({
     closeBtn: document.getElementById('closeFurnace'),
   },
   iconCanvas: blockAssets.iconCanvas,
+  iconFaces3D: blockAssets.iconFaces3D,
   onClose: () => {
     if (!touchMode && document.pointerLockElement !== renderer.domElement)
       blocker.style.display = 'flex';

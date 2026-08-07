@@ -7,6 +7,7 @@ import {
   removeItem,
   addItem,
 } from '../entities/inventory.js';
+import { createBlockIcon3D } from './block-icon-3d.js';
 
 export function isNearCraftingTable(getBlock, playerPos) {
   const px = Math.round(playerPos.x),
@@ -28,6 +29,7 @@ export function createCraftUI({
   RECIPES,
   itemNames,
   iconCanvas,
+  iconFaces3D,
   playSound,
   onCrafted,
   onSlotClick,
@@ -53,16 +55,22 @@ export function createCraftUI({
       const div = document.createElement('div');
       div.className = 'invItem' + (!cell ? ' empty' : '');
       if (cell) {
-        const img = iconCanvas(cell.item);
-        if (img) {
-          const image = document.createElement('img');
-          image.src = img.toDataURL();
-          div.appendChild(image);
+        // vrai bloc (cf. iconFaces3D) -> petit cube 3D CSS, sinon icône plate 2D
+        const faces = iconFaces3D(cell.item);
+        if (faces) {
+          div.appendChild(createBlockIcon3D(faces, 36));
         } else {
-          const ic = document.createElement('div');
-          ic.className = 'ic';
-          ic.style.background = '#dfc27b';
-          div.appendChild(ic);
+          const img = iconCanvas(cell.item);
+          if (img) {
+            const image = document.createElement('img');
+            image.src = img.toDataURL();
+            div.appendChild(image);
+          } else {
+            const ic = document.createElement('div');
+            ic.className = 'ic';
+            ic.style.background = '#dfc27b';
+            div.appendChild(ic);
+          }
         }
         const label = document.createElement('div');
         label.textContent = `${itemNames[cell.item] || cell.item} x${cell.count}`;
