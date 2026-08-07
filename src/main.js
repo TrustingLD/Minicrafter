@@ -1099,14 +1099,15 @@ function animate() {
     const hungerRate = sprinting && isMoving ? 0.05 : 0.005;
     player.hunger = Math.max(0, player.hunger - hungerRate * dt);
 
-    // au tic (toutes les 4s, pas chaque frame) : famine si à 0, régénération si > 18
+    // au tic (toutes les 4s, pas chaque frame) : famine si à 0, régénération si la
+    // barre de faim est PLEINE (20/20) -- pas juste "presque pleine" comme avant
     hungerTickTimer -= dt;
     if (hungerTickTimer <= 0) {
       hungerTickTimer = 4;
       if (player.hunger <= 0) {
         player.health = Math.max(0, player.health - 1);
         bus.emit('player:health');
-      } else if (player.hunger > 18 && player.health < 20) {
+      } else if (player.hunger >= 20 && player.health < 20) {
         player.health = Math.min(20, player.health + 1);
         player.hunger = Math.max(0, player.hunger - 1); // la régénération coûte de la faim
         bus.emit('player:health');

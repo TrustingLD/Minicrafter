@@ -75,6 +75,12 @@ const NORMAL_COLOR = new THREE.Color(0xffffff);
 // passe par moveAxis donc respecte toujours les collisions avec le décor).
 const KNOCKBACK_DISTANCE = 1; // bloc
 const KNOCKBACK_DURATION = 0.15; // s
+
+// Fuite : un animal (tout mob non hostile) qui encaisse un coup détale en sprintant
+// à l'opposé du joueur pendant quelques secondes, plutôt que de continuer à errer
+// tranquillement juste à côté de celui qui vient de le frapper.
+const FLEE_DURATION = 3; // s
+const FLEE_SPEED_MULT = 1.8;
 function canSeeTarget(getBlock, from, to) {
   const dx = to.x - from.x,
     dy = to.y - from.y,
@@ -121,6 +127,8 @@ export class Mob extends Entity {
     this.knockbackTimer = 0;
     this.knockbackVX = 0;
     this.knockbackVZ = 0;
+    // Fuite en cours (cf. hit() / update()) : temps restant à sprinter loin du joueur.
+    this.fleeTimer = 0;
     // Tonte (Phase 18) : `built.parts[i]` correspond à `data.model.parts[i]` dans le
     // même ordre (buildBoxModel pousse les parts avant les membres) -- on garde les
     // meshes marqués `wool: true` pour pouvoir changer juste leur texture.
@@ -216,12 +224,23 @@ export class Mob extends Entity {
     this.hitCooldown -= dt;
     let moveAngle = this.wanderAngle;
     let moving = true;
+    let speedMultiplier = 1; // > 1 pendant la fuite (cf. FLEE_SPEED_MULT), pour "sprinter"
 
     const dx = playerPos.x - this.pos.x,
       dz = playerPos.z - this.pos.z;
     const distToPlayer = Math.hypot(dx, dz);
 
-    if (this.data.ai === 'hostile' && distToPlayer < AGGRO_RANGE) {
+    if (this.fleeTimer > 0) {
+      // Fuite (coup reçu, animal non hostile, cf. hit()) : détale à l'opposé du
+      // joueur, recalculé chaque frame pour bien fuir même si le joueur se déplace.
+      // Prioritaire sur l'errance normale, mais laisse volontiers place à l'aggro
+      // si jamais data.ai==='hostile' passait ici (n'arrive jamais, cf. hit()).
+      this.fleeTimer -= dt;
+      moveAngle = Math.atan2(-dx, -dz);
+      this.wanderAngle = moveAngle;
+      moving = true;
+      speedMultiplier = FLEE_SPEED_MULT;
+    } else if (this.data.ai === 'hostile' && distToPlayer < AGGRO_RANGE) {
       // Phase 12 : ne chasse (et ne frappe) que s'il y a une ligne de vue dégagée
       // vers le joueur — recalculée au plus 4x/s, pas à chaque frame pour chaque mob.
       this.sightTimer -= dt;
@@ -263,8 +282,8 @@ export class Mob extends Entity {
 
     let actuallyMoved = false;
     if (moving) {
-      const stepX = Math.sin(moveAngle) * this.speed * dt;
-      const stepZ = Math.cos(moveAngle) * this.speed * dt;
+      const stepX = Math.sin(moveAngle) * this.speed * speedMultiplier * dt;
+      const stepZ = Math.cos(moveAngle) * this.speed * speedMultiplier * dt;
       const movedX = this.moveAxis('x', stepX);
       const movedZ = this.moveAxis('z', stepZ);
       actuallyMoved = movedX || movedZ;
@@ -288,7 +307,7 @@ export class Mob extends Entity {
 
     // animation de marche : balancier des pattes/bras en opposition de phase,
     // uniquement quand le mob avance réellement et touche le sol
-    if (actuallyMoved && this.onGround) this.walkPhase += dt * this.speed * 6;
+    if (actuallyMoved && this.onGround) this.walkPhase += dt * this.speed * speedMultiplier * 6;
     else this.walkPhase *= 1 - Math.min(1, dt * 6); // retour progressif au repos
     const swing = Math.sin(this.walkPhase) * 0.6;
     this.legs.forEach((pivot, i) => {
@@ -325,6 +344,11 @@ export class Mob extends Entity {
       this.knockbackVX = dx * (KNOCKBACK_DISTANCE / KNOCKBACK_DURATION);
       this.knockbackVZ = dz * (KNOCKBACK_DISTANCE / KNOCKBACK_DURATION);
       this.knockbackTimer = KNOCKBACK_DURATION;
+    }
+    // Un animal (pas un zombie/mob hostile) qui se fait taper détale en sprintant
+    // à l'opposé du joueur pendant quelques secondes (cf. update()).
+    if (this.data.ai !== 'hostile') {
+      this.fleeTimer = FLEE_DURATION;
     }
     if (this.health <= 0 && this.alive) {
       this.alive = false;
