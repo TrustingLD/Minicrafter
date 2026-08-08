@@ -184,3 +184,46 @@ test('meshChunk: a shaped block is lit by its OWN cell, not by the wall it leans
   }
   assert.ok(torchVerts > 0, 'sanity: some stick vertices were actually checked');
 });
+
+// Forme "croix" (`shape.cross`, herbe haute) : contrairement à la boîte réduite
+// ci-dessus, ce n'est PAS un petit cube texturé sur ses 6 faces — 2 plans
+// diagonaux qui traversent toute la cellule (coin à coin), chacun recto-verso,
+// avec une texture à trous (alpha). Cf. commentaire dans mesher.js pour le détail.
+const CROSS_SHAPES = { 3: { height: 0.7, cross: true } };
+const CROSS_UV = {
+  1: { top: [0, 0, 1, 1], bottom: [0, 0, 1, 1], side: [0, 0, 1, 1] },
+  3: { top: [0, 0, 1, 1], bottom: [0, 0, 1, 1], side: [0.2, 0.1, 0.8, 0.9] },
+};
+
+test('meshChunk: a cross-shaped block emits 2 double-sided diagonal planes, not a box', () => {
+  const data = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
+  data[idx(8, 10, 8)] = 3;
+  const { positions, indices } = meshChunk(data, CROSS_UV, null, null, CROSS_SHAPES);
+
+  // 2 diagonales x (recto + verso) = 4 quads, jamais 6 comme la boîte réduite
+  assert.equal(positions.length / 3, 4 * 4);
+  assert.equal(indices.length, 4 * 6);
+
+  // les coins touchent bien les 2 coins opposés de la cellule (pas rétréci au
+  // centre comme la boîte réduite) : x/z vont de 8 à 9, jamais de valeur entre
+  const xs = [];
+  for (let i = 0; i < positions.length / 3; i++) xs.push(positions[i * 3]);
+  assert.ok(xs.some((v) => Math.abs(v - 8) < 1e-6));
+  assert.ok(xs.some((v) => Math.abs(v - 9) < 1e-6));
+  assert.ok(
+    xs.every((v) => Math.abs(v - 8) < 1e-6 || Math.abs(v - 9) < 1e-6),
+    'diagonal corners only — never a shrunk centred box',
+  );
+});
+
+test('meshChunk: a cross-shaped block is never culled and always full brightness in flat light (own cell)', () => {
+  // entouré de pierre pleine des deux côtés : une boîte réduite garderait ses 6
+  // faces (déjà couvert plus haut) ; on vérifie ici que le croix, lui, garde
+  // bien ses 4 faces (jamais culled par isOpaque) même collé contre un mur.
+  const data = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
+  data[idx(8, 10, 8)] = 1; // mur opaque
+  data[idx(9, 10, 8)] = 3; // touffe collée au mur
+  const { positions } = meshChunk(data, CROSS_UV, null, null, CROSS_SHAPES);
+  // mur : 6 faces (aucune cachée par la touffe non pleine) + touffe : 4 quads
+  assert.equal(positions.length / 3, (6 + 4) * 4);
+});

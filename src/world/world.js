@@ -93,7 +93,15 @@ export function createWorld({
   const { texture: atlasTexture, uvByBlockId } = buildBlockAtlas();
   // vertexColors (Phase 13) : le mesher écrit un niveau de lumière par sommet dans
   // l'attribut 'color' -- zéro appel de rendu de plus, juste un buffer de plus.
-  const atlasMaterial = new THREE.MeshLambertMaterial({ map: atlasTexture, vertexColors: true });
+  // alphaTest (pas `transparent: true`) : découpe les pixels à alpha quasi-nul
+  // (herbe haute en croix, cf. mesher.js `shape.cross` + textures.js texWeeds)
+  // sans activer le tri par profondeur ni le blending — tous les autres blocs de
+  // l'atlas sont opaques (alpha=1 partout), donc ce réglage ne change rien pour eux.
+  const atlasMaterial = new THREE.MeshLambertMaterial({
+    map: atlasTexture,
+    vertexColors: true,
+    alphaTest: 0.5,
+  });
 
   // Eau/lave (Phase 16) : géométrie PAR CHUNK (comme le terrain), mais matériau
   // PARTAGÉ entre tous les chunks -> animer .offset une fois dans main.js fait

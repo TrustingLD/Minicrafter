@@ -328,6 +328,20 @@ function desertDecorAt(wx, wz) {
     : { h, kind: 'dead_bush' };
 }
 
+const WEEDS_CHANCE = 0.25; // 1 chance sur 4 par bloc d'herbe de surface
+// essaie de faire pousser une touffe de mauvaises herbes en (wx, wz) — même
+// schéma que treeAt/desertDecorAt : pure fonction de (x,z). Uniquement sur la
+// surface "herbe" des biomes concernés (plaine/forêt...), jamais sous l'eau,
+// jamais sur la neige, jamais au pied d'un arbre (le tronc prend la place).
+function weedsAt(wx, wz) {
+  const h = getHeight(wx, wz);
+  if (h <= SEA_LEVEL || h > SNOW_LEVEL) return null;
+  if (BIOMES[getBiome(wx, wz)].surface !== 'grass') return null;
+  if (treeAt(wx, wz)) return null;
+  if (hash2(wx, wz, 6) >= WEEDS_CHANCE) return null;
+  return { h };
+}
+
 function setLocal(data, lx, ly, lz, blockId) {
   if (inBounds(lx, ly, lz)) data[idx(lx, ly, lz)] = blockId;
 }
@@ -497,7 +511,26 @@ export function generateChunk(cx, cz) {
     }
   }
 
-  // 5) structures de village (Phase 20) : posées APRÈS tout le reste, comme un
+  // 5) mauvaises herbes (décor, Phase 21) : 1 chance sur 4 par bloc d'herbe de
+  // surface (biome.surface === 'grass'), jamais dans un bâtiment de village.
+  // Même schéma que la passe désert ci-dessus : pas de marge nécessaire, rien
+  // ne déborde sur un chunk voisin.
+  for (let lx = 0; lx < CHUNK_X; lx++) {
+    for (let lz = 0; lz < CHUNK_Z; lz++) {
+      const wx = originX + lx,
+        wz = originZ + lz;
+      if (village && villageFootprintAt(village, wx, wz) != null) continue; // jamais dans un bâtiment
+      const w = weedsAt(wx, wz);
+      if (!w) continue;
+      // la colonne peut avoir été aplanie (village) ou creusée (grotte affleurante)
+      // depuis le calcul de weedsAt : on revérifie sur `data`, la source de vérité.
+      if (data[idx(lx, w.h, lz)] !== BLOCK_ID.grass) continue;
+      if (data[idx(lx, w.h + 1, lz)] !== 0) continue; // case déjà occupée (rare)
+      setLocal(data, lx, w.h + 1, lz, BLOCK_ID.weeds);
+    }
+  }
+
+  // 6) structures de village (Phase 20) : posées APRÈS tout le reste, comme un
   // bâtiment qui s'impose sur le terrain déjà aplani (passe 1). Scan avec une marge
   // généreuse (le centre du village peut être hors de ce chunk tout en ayant des
   // maisons qui débordent dedans, cf. VILLAGE_FOOTPRINT_RADIUS dans villages.js) --

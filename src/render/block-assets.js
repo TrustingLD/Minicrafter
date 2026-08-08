@@ -48,7 +48,8 @@ export function createBlockAssets() {
     tSandstone = tex.texSandstone(),
     tCactus = tex.texCactus(),
     tDeadBush = tex.texDeadBush(),
-    tIce = tex.texIce();
+    tIce = tex.texIce(),
+    tWeeds = tex.texWeeds();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -110,6 +111,7 @@ export function createBlockAssets() {
       mat(tDeadBush),
     ],
     ice: [mat(tIce), mat(tIce), mat(tIce), mat(tIce), mat(tIce), mat(tIce)],
+    weeds: [mat(tWeeds), mat(tWeeds), mat(tWeeds), mat(tWeeds), mat(tWeeds), mat(tWeeds)],
   };
 
   const toolTextures = {
@@ -161,6 +163,8 @@ export function createBlockAssets() {
         return tDeadBush.image;
       case 'ice':
         return tIce.image;
+      case 'weeds':
+        return tWeeds.image;
       case 'wood_sword':
         return tWoodSword.image;
       case 'wood_pickaxe':

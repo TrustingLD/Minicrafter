@@ -256,6 +256,22 @@ export const BLOCK_TYPES = {
     textures: { all: 'ice' },
     drops: [],
   },
+  // Mauvaises herbes (décor) : contrairement au buisson mort (une boîte fine
+  // texturée sur ses 6 faces), on veut ici de vrais brins qui se découpent dans
+  // une texture à trous — `cross: true` bascule le mesher sur un rendu "en X"
+  // (2 plans diagonaux à travers la cellule, texture avec fond transparent),
+  // le vrai rendu "herbe haute" façon Minecraft plutôt qu'un petit cube vert.
+  // Non pleine (on marche à travers), purement esthétique (aucun drop).
+  weeds: {
+    id: 24,
+    name: 'Mauvaises herbes',
+    hardness: 0.1,
+    tool: null,
+    solid: false,
+    shape: { height: 0.7, cross: true },
+    textures: { all: 'weeds' },
+    drops: [],
+  },
 };
 
 // tous les blocs liquides, avec leur id résolu — le mesher (faces séparées,

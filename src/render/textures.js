@@ -553,6 +553,41 @@ export function texDeadBush() {
   }
   return canvasToTexture(c);
 }
+// Mauvaises herbes (Phase 21, puis passage en rendu "croix" — cf. data/blocks.js
+// `shape.cross`) : plus un cube texturé sur ses 6 faces, mais un vrai sprite en
+// X posé dans la cellule (mesher.js). La texture DOIT donc avoir un fond
+// réellement transparent (alpha=0, on laisse le canvas tel quel — pas de
+// fillRect) : c'est ce qui découpe les brins et laisse voir le sol/le décor
+// derrière, au lieu d'un petit carré vert plein. Le matériau du monde a un
+// alphaTest (cf. atlasMaterial dans world.js) : rien à faire côté canvas
+// à part NE PAS remplir le fond.
+export function texWeeds() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const rand = mulberry32(11);
+  const greens = ['#2e6a1a', '#387d20', '#256014', '#4a9330', '#5cb238'];
+  // plusieurs brins fins partent du pied (bas du sprite) et montent en
+  // penchant légèrement, jamais parfaitement droits ni parfaitement alignés —
+  // c'est cette irrégularité qui lit comme de l'herbe plutôt qu'un motif.
+  for (let i = 0; i < 9; i++) {
+    let x = TEX_SIZE * (0.08 + rand() * 0.84);
+    const y0 = TEX_SIZE * (0.98 + rand() * 0.05); // léger débord pour ancrer au sol
+    ctx.strokeStyle = greens[i % greens.length];
+    ctx.lineWidth = 1.6 + rand() * 1.1;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y0);
+    const lean = (rand() - 0.5) * TEX_SIZE * 0.3; // chaque brin penche un peu
+    const height = TEX_SIZE * (0.55 + rand() * 0.4);
+    const midX = x + lean * 0.5;
+    const midY = y0 - height * 0.55;
+    const tipX = x + lean;
+    const tipY = y0 - height;
+    ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+    ctx.stroke();
+  }
+  return canvasToTexture(c);
+}
 export function texIce() {
   const c = newCanvas();
   const ctx = c.getContext('2d');

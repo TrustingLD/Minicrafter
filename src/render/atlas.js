@@ -36,6 +36,7 @@ const TEXTURE_FN = {
   cactus: tex.texCactus,
   deadBush: tex.texDeadBush,
   ice: tex.texIce,
+  weeds: tex.texWeeds,
 };
 
 // construit l'atlas + la table d'UV. Appelé une seule fois au boot.

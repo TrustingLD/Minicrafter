@@ -165,8 +165,10 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
         if (!id || liquids.has(id)) continue; // les liquides sont rendus par meshLiquid()
         // forme réduite : la boîte est plus petite que la cellule, donc AUCUNE de ses
         // faces ne peut être cachée par un voisin — les 6 comptent toujours.
+        // forme "croix" (herbe haute) : 2 plans diagonaux, chacun dessiné recto-verso
+        // (4 quads au total) — cf. bloc de remplissage plus bas pour le détail.
         if (shapes[id]) {
-          faceCount += 6;
+          faceCount += shapes[id].cross ? 4 : 6;
           continue;
         }
         for (const face of FACES) {
@@ -199,6 +201,77 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
         if (!id || liquids.has(id)) continue;
         const uv = uvByBlockId[id];
         const shape = shapes[id];
+        // forme "croix" (herbe haute, mauvaises herbes) : contrairement à la boîte
+        // réduite ci-dessus, on ne veut PAS un petit cube texturé sur ses 6 faces —
+        // on veut de vrais brins qui se découpent dans une texture à trous (alpha),
+        // comme l'herbe haute de Minecraft. Concrètement : 2 plans verticaux qui se
+        // croisent en X, chacun allant d'un coin de la cellule au coin opposé. Un
+        // seul plan serait invisible de dos (backface culling) ou obligerait à rendre
+        // TOUT l'atlas en double-face (coûteux, et inutile pour les cubes pleins) —
+        // on duplique donc chaque plan en sens inverse (recto + verso), d'où les 4
+        // faces comptées plus haut (2 plans x 2 côtés) au lieu de 6.
+        if (shape && shape.cross) {
+          const rect = uv.side;
+          const h = shape.height;
+          const factor = lightFactor(getLight(x, y, z));
+          // les 2 diagonales de la cellule, vues du dessus : (0,0)->(1,1) et (1,0)->(0,1)
+          const diagonals = [
+            [
+              [0, 0],
+              [1, 1],
+            ],
+            [
+              [1, 0],
+              [0, 1],
+            ],
+          ];
+          for (const [[x0, z0], [x1, z1]] of diagonals) {
+            // les 4 coins du quad, dans l'ordre pied-A, sommet-A, sommet-B, pied-B —
+            // avec s/t déjà résolus (t suit la même convention que les faces latérales
+            // des cubes : haut du brin = haut de l'atlas, cf. commentaire plus haut).
+            const quad = [
+              { x: x0, y: 0, z: z0, s: 0, t: 1 },
+              { x: x0, y: h, z: z0, s: 0, t: 0 },
+              { x: x1, y: h, z: z1, s: 1, t: 0 },
+              { x: x1, y: 0, z: z1, s: 1, t: 1 },
+            ];
+            // recto (ordre direct) puis verso (ordre inversé = normale opposée) :
+            // le brin reste visible de n'importe quel côté sans matériau double-face.
+            for (const order of [
+              [0, 1, 2, 3],
+              [3, 2, 1, 0],
+            ]) {
+              const base = vertCount;
+              for (const k of order) {
+                const corner = quad[k];
+                positions[pOff++] = x + corner.x;
+                positions[pOff++] = y + corner.y;
+                positions[pOff++] = z + corner.z;
+                // normale conventionnelle vers le haut plutôt que perpendiculaire au
+                // plan : un brin d'herbe vu de profil ne doit pas paraître plus sombre
+                // qu'un vu de face, sinon la moitié des brins semble éteinte selon
+                // l'angle de vue -- même logique que les "shading fix" habituels sur
+                // ce genre de sprite en croix.
+                normals[nOff++] = 0;
+                normals[nOff++] = 1;
+                normals[nOff++] = 0;
+                colors[cOff++] = factor;
+                colors[cOff++] = factor;
+                colors[cOff++] = factor;
+                uvs[uOff++] = rect[0] + corner.s * (rect[2] - rect[0]);
+                uvs[uOff++] = rect[1] + corner.t * (rect[3] - rect[1]);
+              }
+              indices[iOff++] = base;
+              indices[iOff++] = base + 1;
+              indices[iOff++] = base + 2;
+              indices[iOff++] = base;
+              indices[iOff++] = base + 2;
+              indices[iOff++] = base + 3;
+              vertCount += 4;
+            }
+          }
+          continue;
+        }
         for (const face of FACES) {
           const [nx, ny, nz] = face.n;
           if (!shape && isOpaque(x + nx, y + ny, z + nz)) continue; // face cachée
