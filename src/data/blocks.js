@@ -238,13 +238,16 @@ export const BLOCK_TYPES = {
   // Avant, le buisson occupait toute la cellule avec une texture "icône" dessinée
   // dessus ; visuellement ça rendait comme un bloc de terre avec un motif, pas
   // comme un buisson isolé. `solid: false` déjà présent : on marche à travers.
+  // Buisson mort (décor) : même traitement que les mauvaises herbes ci-dessous —
+  // un sprite en croix qui se découpe dans une texture à trous, pas un petit
+  // cube texturé sur ses 6 faces (cf. `shape.cross` dans mesher.js).
   dead_bush: {
     id: 22,
     name: 'Buisson mort',
     hardness: 0.1,
     tool: null,
     solid: false,
-    shape: { width: 0.55, height: 0.8 },
+    shape: { height: 0.8, cross: true },
     textures: { all: 'deadBush' },
     drops: [],
   },

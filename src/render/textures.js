@@ -513,28 +513,24 @@ export function texCactus() {
   }
   return canvasToTexture(c);
 }
-// Buisson mort : comme la torche (cf. commentaire dans data/blocks.js), ce n'est
-// plus un cube plein posé avec une icône dessus -- un bâton fin dont CHAQUE face
-// est visible en entier (jamais masquée par un voisin, cf. mesher.js). La texture
-// doit donc se lire comme un bouquet de brindilles qui remplit toute la tuile,
-// pas comme un petit motif perdu au milieu d'un fond de terre. Toujours pas de
-// transparence : fond opaque plutôt qu'un canvas alpha=0 qui ressortirait noir sur
-// le matériau non-transparent partagé de l'atlas (même simplification que torch/wool).
+// Buisson mort : même traitement que les mauvaises herbes (cf. texWeeds juste en
+// dessous) — un sprite en croix (`shape.cross` dans data/blocks.js) qui se
+// découpe dans une texture à trous, pas un cube plein. Fond réellement
+// transparent (alpha=0, on ne remplit rien) : c'est ce qui laisse voir à
+// travers entre les brindilles au lieu d'un carré beige plein.
 export function texDeadBush() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#d9bd80';
-  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-  speckle(ctx, ['#cbae70', '#e4cb95'], 22);
   const rand = mulberry32(7);
-  const browns = ['#6b4a2a', '#523720', '#805a35'];
+  const browns = ['#6b4a2a', '#523720', '#805a35', '#8a6540'];
   // plusieurs brindilles partent du pied et se ramifient en montant, avec de
   // petites branches secondaires -- un bouquet éclaté plutôt qu'une seule tige
   for (let i = 0; i < 10; i++) {
-    let x = TEX_SIZE * (0.28 + rand() * 0.44);
-    let y = TEX_SIZE * 0.96;
+    let x = TEX_SIZE * (0.22 + rand() * 0.56);
+    let y = TEX_SIZE * 0.98;
     ctx.strokeStyle = browns[i % browns.length];
-    ctx.lineWidth = 0.9 + rand() * 0.7;
+    ctx.lineWidth = 1.3 + rand() * 0.9;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(x, y);
     for (let s = 0; s < 5; s++) {
