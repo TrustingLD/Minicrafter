@@ -32,10 +32,12 @@ import {
 import { createHud } from './ui/hud.js';
 import {
   createSlots,
+  createArmorSlots,
   addItem,
   removeItem,
   countOf,
   moveSlot,
+  swapArmor,
   HOTBAR_SLOTS,
 } from './entities/inventory.js';
 import { createItemEntitySystem } from './entities/item-entity.js';
@@ -164,6 +166,7 @@ function triggerPlaceFeedback(x, y, z) {
 // emplacements (9 hotbar + 27 sac à dos), cf. entities/inventory.js. Vide au départ —
 // casser un bloc ou ramasser un drop au sol (item-entity.js) le remplit.
 const slots = createSlots();
+const armorSlots = createArmorSlots(); // 4 emplacements casque/plastron/jambières/bottes (cf. E)
 
 let selectedIndex = 0;
 let selectedBlock = slots[selectedIndex]?.item ?? null;
@@ -216,6 +219,9 @@ const craftUI = createCraftUI({
   elements: {
     craftPanel: document.getElementById('craftPanel'),
     invGrid: document.getElementById('invGrid'),
+    hotbarGrid: document.getElementById('invHotbarGrid'),
+    armorSlotEls: Array.from(document.querySelectorAll('.armorSlot')),
+    charHead: document.querySelector('.charHead'),
     recipeList: document.getElementById('recipeList'),
     craftTitle: document.getElementById('craftTitle'),
   },
@@ -233,7 +239,21 @@ const craftUI = createCraftUI({
     selectedBlock = slots[selectedIndex]?.item ?? null;
     refreshHeldItem(selectedBlock);
     bus.emit('inventory:changed');
-    craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex);
+    craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
+  },
+  // cliquer une case de la hotbar dupliquée dans le panneau = changer la
+  // sélection active, sans fermer l'inventaire.
+  onHotbarSlotClick: (hotbarIndex) => {
+    selectSlot(hotbarIndex);
+    craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
+  },
+  // cliquer une case d'armure échange son contenu avec le slot hotbar sélectionné.
+  onArmorSlotClick: (armorIndex) => {
+    swapArmor(armorSlots, slots, armorIndex, selectedIndex);
+    selectedBlock = slots[selectedIndex]?.item ?? null;
+    refreshHeldItem(selectedBlock);
+    bus.emit('inventory:changed');
+    craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
   },
 });
 let craftOpen = false;
@@ -241,7 +261,7 @@ function openCraft() {
   craftOpen = true;
   craftUI.show();
   document.exitPointerLock();
-  craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex);
+  craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
 }
 function closeCraft() {
   craftOpen = false;

@@ -35,7 +35,28 @@
     <div id="craftPanel">
       <div id="craftBox">
         <h2 id="craftTitle">Inventaire</h2>
+        <div id="invTop">
+          <div id="armorSlots">
+            <div class="armorSlot" data-armor="0" title="Casque"><span class="armorIcon">⛑</span></div>
+            <div class="armorSlot" data-armor="1" title="Plastron"><span class="armorIcon">👕</span></div>
+            <div class="armorSlot" data-armor="2" title="Jambières"><span class="armorIcon">👖</span></div>
+            <div class="armorSlot" data-armor="3" title="Bottes"><span class="armorIcon">👢</span></div>
+          </div>
+          <div id="charPreview">
+            <div id="charDoll">
+              <div class="charHead">
+                <div class="charEye left"></div>
+                <div class="charEye right"></div>
+              </div>
+              <div class="charArm left"></div>
+              <div class="charArm right"></div>
+              <div class="charBody"></div>
+              <div class="charLegs"></div>
+            </div>
+          </div>
+        </div>
         <div class="invGrid" id="invGrid"></div>
+        <div class="invGrid hotbarGrid" id="invHotbarGrid"></div>
         <div id="recipeList"></div>
         <button id="closeCraft">Fermer (E)</button>
       </div>

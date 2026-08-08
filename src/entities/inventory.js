@@ -7,8 +7,27 @@ export const BACKPACK_SLOTS = 27;
 export const TOTAL_SLOTS = HOTBAR_SLOTS + BACKPACK_SLOTS;
 export const MAX_STACK = 64;
 
+// emplacements d'armure (casque / plastron / jambières / bottes) : un tableau à
+// part (pas ajouté à `slots`) pour ne pas décaler HOTBAR_SLOTS/TOTAL_SLOTS et
+// casser tout le code qui itère déjà sur l'inventaire principal.
+export const ARMOR_SLOTS = 4;
+export const ARMOR_NAMES = ['head', 'chest', 'legs', 'feet'];
+
 export function createSlots() {
   return new Array(TOTAL_SLOTS).fill(null);
+}
+
+export function createArmorSlots() {
+  return new Array(ARMOR_SLOTS).fill(null);
+}
+
+// échange le contenu d'une case d'armure avec une case de l'inventaire principal
+// (typiquement le slot hotbar sélectionné) — même logique "clic pour échanger"
+// que le sac à dos, cf. ui/craft.js: onSlotClick.
+export function swapArmor(armorSlots, slots, armorIndex, slotIndex) {
+  const tmp = armorSlots[armorIndex];
+  armorSlots[armorIndex] = slots[slotIndex];
+  slots[slotIndex] = tmp;
 }
 
 // remplit les stacks partiels existants d'abord, puis les emplacements vides.

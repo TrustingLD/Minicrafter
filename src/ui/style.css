@@ -496,11 +496,13 @@ canvas {
   justify-content: center;
 }
 #craftBox {
-  background: #4b3a2a;
-  border: 4px solid #2b2018;
+  /* rectangle gris façon inventaire Minecraft, plutôt que le panneau marron
+     d'origine (cf. capture fournie par l'utilisateur) */
+  background: #545454;
+  border: 4px solid #2b2b2b;
   border-radius: 8px;
   padding: 18px;
-  width: 480px;
+  width: 500px;
   max-height: 80vh;
   overflow-y: auto;
   color: #f0e6d2;
@@ -509,11 +511,138 @@ canvas {
 #craftBox h2 {
   margin-top: 0;
 }
+
+/* ---------- Haut du panneau : armure + aperçu du personnage ---------- */
+#invTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#armorSlots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.armorSlot {
+  width: 48px;
+  height: 48px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid #2b2b2b;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 22px;
+  opacity: 0.55;
+}
+.armorSlot:hover {
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0.85;
+}
+.armorSlot.filled {
+  opacity: 1;
+}
+.armorSlot img,
+.armorSlot .ic {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+.armorSlot .blockIcon3d {
+  margin: 0;
+}
+#charPreview {
+  flex: 1;
+  height: calc(4 * 48px + 3 * 6px); /* même hauteur que la colonne des 4 cases d'armure */
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid #2b2b2b;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  perspective: 300px; /* pour que la rotation 3D de la tête (cf. .charHead) ait du relief */
+}
+
+/* petit "doll" du joueur, en CSS pur : la tête tourne vers le curseur de la
+   souris (cf. ui/craft.js) tant que l'inventaire est ouvert. */
+#charDoll {
+  position: relative;
+  width: 70px;
+  height: 150px;
+  transform-style: preserve-3d;
+}
+.charHead {
+  position: absolute;
+  top: 0;
+  left: 15px;
+  width: 40px;
+  height: 40px;
+  background: #f9b87e;
+  border-radius: 4px;
+  transition: transform 0.05s linear;
+  transform-origin: center 60%;
+}
+.charEye {
+  position: absolute;
+  top: 16px;
+  width: 5px;
+  height: 5px;
+  background: #241a12;
+  border-radius: 50%;
+}
+.charEye.left {
+  left: 9px;
+}
+.charEye.right {
+  right: 9px;
+}
+.charBody {
+  position: absolute;
+  top: 42px;
+  left: 12px;
+  width: 46px;
+  height: 55px;
+  background: #2068b4;
+  border-radius: 3px;
+}
+.charArm {
+  position: absolute;
+  top: 42px;
+  width: 14px;
+  height: 55px;
+  background: #f9b87e;
+  border-radius: 3px;
+}
+.charArm.left {
+  left: -2px;
+}
+.charArm.right {
+  right: -2px;
+}
+.charLegs {
+  position: absolute;
+  top: 97px;
+  left: 15px;
+  width: 40px;
+  height: 50px;
+  background: #353537;
+  border-radius: 0 0 3px 3px;
+  background-image: linear-gradient(to right, transparent 49%, #2b2b2b 49%, #2b2b2b 51%, transparent 51%);
+}
+
 .invGrid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.hotbarGrid {
   margin-bottom: 16px;
+  padding-top: 8px;
+  border-top: 2px solid rgba(0, 0, 0, 0.35);
 }
 .invItem {
   background: rgba(0, 0, 0, 0.3);
