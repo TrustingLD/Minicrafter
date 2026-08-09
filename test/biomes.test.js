@@ -38,9 +38,14 @@ test('biomeAt: always returns a name present in BIOMES (never an unknown key)', 
 });
 
 test('biomeAt: produces more than one biome across a wide sample (variety, not a constant)', () => {
+  // biomes ~1000 blocs de large désormais (cf. biomes.js) -- un échantillonnage sur
+  // ±300 blocs comme avant retomberait facilement dans un seul et même biome ; on
+  // élargit donc largement la zone (±4000) pour être sûr de traverser plusieurs biomes
+  // quelle que soit la phase du bruit, tout en gardant un pas assez grand pour rester
+  // rapide.
   const seen = new Set();
-  for (let x = -300; x <= 300; x += 23) {
-    for (let z = -300; z <= 300; z += 29) {
+  for (let x = -4000; x <= 4000; x += 331) {
+    for (let z = -4000; z <= 4000; z += 347) {
       seen.add(biomeAt(x, z, 0, false));
     }
   }

@@ -489,6 +489,31 @@ export function generateChunk(cx, cz) {
           }
         }
       }
+      // Neige sur le feuillage (retour utilisateur) : en toundra, la cime des arbres
+      // se couvre de neige comme le sol (`biome.surface === 'snow'`) -- sans ça, les
+      // arbres de la toundra restaient verts toute l'année alors même que le sol
+      // autour est blanc. Repasse APRÈS la pose des feuilles ci-dessus (et pas pendant,
+      // dans la même boucle dx/dz/dy) : les trous aléatoires du feuillage (ligne
+      // précédente, hash3 < 0.15) rendent le sommet réel de chaque colonne imprévisible
+      // depuis les seuls indices dy -- il faut donc le retrouver après coup, colonne par
+      // colonne, en scannant de haut (dy=2) en bas.
+      if (getBiome(wx, wz) === 'snowy') {
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dz = -2; dz <= 2; dz++) {
+            for (let dy = 2; dy >= 0; dy--) {
+              if (Math.abs(dx) + Math.abs(dz) + dy > 3) continue;
+              const ly = h + treeH + dy - 1;
+              const tlx = lx + dx,
+                tlz = lz + dz;
+              if (!inBounds(tlx, ly, tlz) || data[idx(tlx, ly, tlz)] !== BLOCK_ID.leaves) continue;
+              const aly = ly + 1; // juste au-dessus du sommet du feuillage de cette colonne
+              if (inBounds(tlx, aly, tlz) && data[idx(tlx, aly, tlz)] === 0)
+                data[idx(tlx, aly, tlz)] = BLOCK_ID.snow;
+              break; // sommet de CETTE colonne trouvé, inutile de continuer plus bas
+            }
+          }
+        }
+      }
     }
   }
 

@@ -561,7 +561,10 @@ export function texWeeds() {
   const c = newCanvas();
   const ctx = c.getContext('2d');
   const rand = mulberry32(11);
-  const greens = ['#2e6a1a', '#387d20', '#256014', '#4a9330', '#5cb238'];
+  // même famille de verts que le bloc "herbe" (cf. texGrassTop ci-dessus : base
+  // #50b424, blotches #439922/#62da31, brins #2c7112) -- retour utilisateur : les
+  // mauvaises herbes doivent être de la même couleur que l'herbe, pas une palette à part.
+  const greens = ['#439922', '#50b424', '#2c7112', '#62da31', '#3e9119'];
   // plusieurs brins fins partent du pied (bas du sprite) et montent en
   // penchant légèrement, jamais parfaitement droits ni parfaitement alignés —
   // c'est cette irrégularité qui lit comme de l'herbe plutôt qu'un motif.

@@ -14,10 +14,11 @@ import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
 import { ITEM_NAMES, RECIPES, NON_PLACEABLE, TOOL_CATEGORY, FOOD } from './data/items.js';
 import { SMELTING, FUELS } from './data/recipes.js';
 import { createBlockEntitySystem } from './world/block-entities.js';
-import { SEA_LEVEL, getHeight, findSpawnColumn } from './world/generator.js';
+import { SEA_LEVEL, getHeight, getBiome, findSpawnColumn } from './world/generator.js';
 import { createWorld } from './world/world.js';
 import { createClouds } from './world/clouds.js';
 import { createSky } from './world/sky.js';
+import { createSnowWeather } from './world/weather.js';
 import { createSfx } from './audio/sfx.js';
 import { createMusic } from './audio/music.js';
 import { createMobTextures, createMobSystem } from './entities/mob.js';
@@ -120,6 +121,7 @@ const worldApi = createWorld({
 });
 const cloudsApi = createClouds({ scene });
 const skyApi = createSky({ scene, ambientLight: ambient, sunLight: sun });
+const snowWeatherApi = createSnowWeather({ scene });
 
 // Bordure du monde : mur purement invisible, seule la collision existe (cf.
 // collidesAtBox dans world.js). Pas de plan rouge/brume — juste un stop net.
@@ -1057,6 +1059,9 @@ function animate() {
   worldApi.lavaTexture.offset.y = (worldApi.lavaTexture.offset.y + dt * 0.008) % 1;
   worldApi.update(player.pos, dt); // charge/décharge les chunks proches (Phase 4a) + écoulement des liquides (Phase 16)
   cloudsApi.update(dt, player.pos);
+  // biome du joueur : un seul échantillonnage de bruit par frame, négligeable (même
+  // ordre de coût qu'un seul getHeight, déjà rappelé ailleurs sans souci de perf)
+  snowWeatherApi.update(dt, player.pos, getBiome(player.pos.x, player.pos.z) === 'snowy');
 
   torchLightTimer -= dt;
   if (torchLightTimer <= 0) {
