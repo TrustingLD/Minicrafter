@@ -13,7 +13,19 @@ import { Entity } from './entity.js';
 import { TEX_SIZE } from '../render/textures.js';
 
 const ITEM_SCALE = 0.28;
-const PICKUP_RADIUS = 1.2;
+// Aspiration façon "item magnet" (retour utilisateur) : au lieu d'un ramassage
+// instantané dès l'entrée dans un rayon fixe, l'item est d'abord ATTIRÉ vers le
+// joueur (MAGNET_RADIUS, "1 bloc de distance MAX"), puis réellement absorbé une fois
+// tout près (ABSORB_RADIUS) -- c'est ce trajet visible qui EST la "petite animation
+// d'aspiration" demandée, pas un effet séparé à ajouter par-dessus.
+const MAGNET_RADIUS = 1.0; // "1 bloc de distance MAX" : distance à partir de laquelle l'item se met à voler vers le joueur
+const MAGNET_VERTICAL_RANGE = 1.6; // tolérance verticale généreuse (~hauteur du joueur) : ne doit PAS réduire la portée horizontale (cf. bug ci-dessous)
+const MAGNET_DURATION = 0.15; // s : le trajet magnet_radius -> joueur doit être bouclé dans CE temps-là (retour utilisateur)
+// vitesse constante (pas de rampe progressive) dérivée de la contrainte ci-dessus :
+// au pire cas (item accroché tout juste sous MAGNET_RADIUS), le franchir prend
+// MAGNET_RADIUS / MAGNET_SPEED = MAGNET_DURATION secondes, pile la contrainte demandée.
+const MAGNET_SPEED = MAGNET_RADIUS / MAGNET_DURATION; // = 20 unités/s
+const ABSORB_RADIUS = 0.35; // distance à laquelle l'item est effectivement ramassé (fin de l'aspiration)
 const PICKUP_DELAY = 0.5; // s avant qu'un item fraîchement lâché soit ramassable
 const DESPAWN_TIME = 300; // 5 min
 const MERGE_RADIUS = 0.6; // fusionne les items identiques proches pour éviter 200 cubes
@@ -149,35 +161,75 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
         e.velX *= f;
         e.velZ *= f;
       }
-      const nx = e.pos.x + e.velX * dt;
-      const nz = e.pos.z + e.velZ * dt;
-      if (!collidesAtBox(nx, e.pos.y, e.pos.z, e.radius, e.height)) e.pos.x = nx;
-      else e.velX = 0;
-      if (!collidesAtBox(e.pos.x, e.pos.y, nz, e.radius, e.height)) e.pos.z = nz;
-      else e.velZ = 0;
 
+      // Aspiration vers le joueur (cf. constantes ci-dessus) : dans MAGNET_RADIUS,
+      // l'item est tiré directement (sans passer par la physique gravité/collision
+      // normale ci-dessus, ni le test de collision x/z ci-dessous) -- exactement comme
+      // dans Minecraft, un item aspiré traverse librement les petits obstacles plutôt
+      // que de rester coincé au dernier moment. En dehors du rayon, mouvement inchangé.
+      let magnetPull = false;
       if (e.age > PICKUP_DELAY) {
-        const dx = playerPos.x - e.pos.x,
-          dy = playerPos.y + 0.9 - e.pos.y,
-          dz = playerPos.z - e.pos.z;
-        if (dx * dx + dy * dy + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) {
-          const taken = pickup(e.item, e.count);
-          if (taken > 0) {
-            e.count -= taken;
-            if (e.count <= 0) {
-              playSound('pickup');
-              despawn(e);
-              continue;
+        const px = playerPos.x,
+          py = playerPos.y + 0.9,
+          pz = playerPos.z;
+        const dx = px - e.pos.x,
+          dy = py - e.pos.y,
+          dz = pz - e.pos.z;
+        // BUG corrigé (retour utilisateur : "je n'arrive pas à aspirer à 1 bloc") :
+        // mesurer la distance en 3D (dx,dy,dz) pénalisait le rayon horizontal, car le
+        // décalage vertical fixe (+0.9, vers la poitrine du joueur) s'ajoutait TOUJOURS
+        // à l'écart, même pour un item posé au sol juste à côté du joueur -- à 1 bloc
+        // horizontal pile, la distance 3D dépassait déjà MAGNET_RADIUS=1.0
+        // (sqrt(1² + 0.9²) ≈ 1.35), donc l'aspiration ne se déclenchait quasiment
+        // jamais. Fix : la PORTÉE (déclenchement du magnet) se juge sur la distance
+        // HORIZONTALE seule (distH), avec une tolérance verticale large et séparée
+        // (MAGNET_VERTICAL_RANGE) pour ne filtrer que les items à un autre étage.
+        const distH = Math.sqrt(dx * dx + dz * dz);
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz); // distance 3D réelle, utilisée seulement pour le déplacement/l'absorption
+        if (distH < MAGNET_RADIUS && Math.abs(dy) < MAGNET_VERTICAL_RANGE) {
+          magnetPull = true;
+          if (dist < ABSORB_RADIUS) {
+            const taken = pickup(e.item, e.count);
+            if (taken > 0) {
+              e.count -= taken;
+              if (e.count <= 0) {
+                playSound('pickup');
+                despawn(e);
+                continue;
+              }
             }
+          } else {
+            // vitesse constante (MAGNET_SPEED, pas de rampe) dérivée de MAGNET_DURATION
+            // ci-dessus ; le pas est borné à `dist` pour ne jamais dépasser le joueur
+            // en un seul frame (MAGNET_SPEED est volontairement élevée pour boucler le
+            // trajet en 0,1s, donc speed*dt peut largement dépasser la distance
+            // restante dès qu'on approche de ABSORB_RADIUS).
+            const step = Math.min(MAGNET_SPEED * dt, dist);
+            e.pos.x += (dx / dist) * step;
+            e.pos.y += (dy / dist) * step;
+            e.pos.z += (dz / dist) * step;
           }
         }
       }
 
+      if (!magnetPull) {
+        const nx = e.pos.x + e.velX * dt;
+        const nz = e.pos.z + e.velZ * dt;
+        if (!collidesAtBox(nx, e.pos.y, e.pos.z, e.radius, e.height)) e.pos.x = nx;
+        else e.velX = 0;
+        if (!collidesAtBox(e.pos.x, e.pos.y, nz, e.radius, e.height)) e.pos.z = nz;
+        else e.velZ = 0;
+      }
+
       const pool = pools.get(e.item);
       if (pool) {
-        const bob = Math.sin(e.age * 3 + e.bobPhase) * 0.06;
+        // pendant l'aspiration : pas de bob (l'item ne "flotte" plus, il fonce vers le
+        // joueur) et rotation accélérée -- lisible comme "en train de se faire aspirer"
+        // plutôt qu'un item qui continue de flotter tranquillement en glissant au sol.
+        const bob = magnetPull ? 0 : Math.sin(e.age * 3 + e.bobPhase) * 0.06;
+        const spin = magnetPull ? 10 : 1.4;
         dummy.position.set(e.pos.x, e.pos.y + e.height * 0.5 + bob, e.pos.z);
-        dummy.rotation.set(0, e.age * 1.4 + e.bobPhase, 0);
+        dummy.rotation.set(0, e.age * spin + e.bobPhase, 0);
         dummy.scale.setScalar(ITEM_SCALE);
         dummy.updateMatrix();
         pool.mesh.setMatrixAt(e.slotIndex, dummy.matrix);
