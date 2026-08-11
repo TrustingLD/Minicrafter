@@ -91,6 +91,21 @@ function canSeeTarget(getBlock, from, to) {
   return !voxelRaycast(getBlock, from, dir, dist);
 }
 
+// canSeeTarget() ci-dessus part des yeux du mob (pos.y + height*0.9) vers le
+// point visé chez le joueur (pos.y + 1.2). Quand mob et joueur sont au même
+// niveau Y (même sol), ces deux points sont TOUS LES DEUX au-dessus d'un mur
+// d'un seul bloc de haut qui les sépare : le rayon passe par-dessus sans
+// jamais croiser le mur, donc canSeeTarget répond "visible" -- et le mob
+// peut alors frapper "à travers" le mur. hasClearMeleePath() referait le même
+// test mais au ras du sol (hauteur des pieds, pas des yeux) pour s'assurer
+// qu'aucun bloc ne sépare vraiment les deux au niveau où le coup est porté.
+function hasClearMeleePath(getBlock, mobPos, playerPos) {
+  const y = Math.min(mobPos.y, playerPos.y) + 0.1;
+  const from = { x: mobPos.x, y, z: mobPos.z };
+  const to = { x: playerPos.x, y, z: playerPos.z };
+  return canSeeTarget(getBlock, from, to);
+}
+
 export class Mob extends Entity {
   // ctx: { scene, mobAssets, collidesAtBox, getGroundHeight, itemSystem,
   //        playSound, onPlayerHurt, onDeath }
@@ -256,7 +271,12 @@ export class Mob extends Entity {
       if (this.aggroTimer > 0) {
         moveAngle = Math.atan2(dx, dz);
         this.wanderAngle = moveAngle;
-        if (distToPlayer < 1.1 && this.hitCooldown <= 0 && this.canSeePlayer) {
+        if (
+          distToPlayer < 1.1 &&
+          this.hitCooldown <= 0 &&
+          this.canSeePlayer &&
+          hasClearMeleePath(this.ctx.getBlock, this.pos, playerPos)
+        ) {
           onPlayerHurt(1);
           this.hitCooldown = 1.0;
           playSound('hurt');
