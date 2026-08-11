@@ -194,19 +194,21 @@ bus.on('player:health', () => healthUI.render(player));
 const hurtVignetteEl = document.getElementById('hurtVignette');
 let lastHealth = 20; // vie de départ (cf. entities/player.js) -- `player` n'existe pas encore ici
 
-// Secousse de caméra sur dégât : la caméra s'incline à 45° pendant 1/12 de
-// seconde puis revient à sa rotation normale. `hurtTiltTimer` compte le temps
-// restant (en secondes) de l'inclinaison ; appliqué chaque frame dans la boucle
-// de rendu via camera.rotation.z (cf. plus bas, à côté de rotation.x/y).
+// Secousse de caméra sur dégât : la caméra part à 20° d'inclinaison puis revient
+// SOUPLEMENT à 0, comme un ressort qui se relâche (pas un aller-retour instantané).
+// `hurtTiltAngle` est l'inclinaison courante (en radians) ; on la fait décroître
+// exponentiellement vers 0 à chaque frame dans la boucle de rendu, à côté de
+// rotation.x/y (cf. plus bas). L'angle est signé aléatoirement à chaque coup pour
+// que la caméra ne penche pas toujours du même côté.
 const HURT_TILT_ANGLE = (20 * Math.PI) / 180; // 20°
-const HURT_TILT_DURATION = 1 / 20; // 1/20 de seconde
-let hurtTiltTimer = 0;
+const HURT_TILT_DECAY = 10; // plus haut = retour au neutre plus rapide
+let hurtTiltAngle = 0;
 
 bus.on('player:health', () => {
   if (player.health < lastHealth) {
     hurtVignetteEl.classList.add('flash');
     setTimeout(() => hurtVignetteEl.classList.remove('flash'), 80);
-    hurtTiltTimer = HURT_TILT_DURATION;
+    hurtTiltAngle = HURT_TILT_ANGLE * (Math.random() < 0.5 ? -1 : 1);
   }
   lastHealth = player.health;
 });
@@ -1220,14 +1222,12 @@ function animate() {
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
 
-    // Applique l'inclinaison de dégât tant que le timer n'est pas écoulé, puis
-    // remet la caméra bien droite (cf. déclenchement dans le listener player:health).
-    if (hurtTiltTimer > 0) {
-      camera.rotation.z = HURT_TILT_ANGLE;
-      hurtTiltTimer -= dt;
-    } else {
-      camera.rotation.z = 0;
-    }
+    // Ramène fluidement l'inclinaison de dégât vers 0 (décroissance exponentielle,
+    // indépendante du framerate) plutôt qu'un saut brutal à l'angle puis retour
+    // instantané (cf. déclenchement dans le listener player:health).
+    hurtTiltAngle *= Math.exp(-HURT_TILT_DECAY * dt);
+    if (Math.abs(hurtTiltAngle) < 0.0005) hurtTiltAngle = 0;
+    camera.rotation.z = hurtTiltAngle;
 
     updateVisuals(dt, isMoving, yaw, pitch, crouching); // positionne la caméra (1ère/3e personne) + anime main et avatar
 
