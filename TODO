@@ -57,3 +57,53 @@ Difficulté	Tâche	Pourquoi ce niveau
 
 
 
+
+
+
+NEW MAJ Mer. 5 août 12:14
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ les monstres ne doivent pas pouvoir m'attaquer a travers les blocs si ils sont sur la meme coordonnée Y
+
+ les cactus doivent nous faire des degats quand on est collé a eux)
+
+
+
+ un tout petit peu plus de spawn de mob et les zombies doivent beaucoup spawn QUE pendant la nuit et si le jour QUE dans les caves
+
+ l'eau ne doit avoir qu'une texture celle du haut(pas de bordure d'eau a chaque bordure de chunk)
+
+ revoir la liaison/connection des blocs
+
+ systheme redstone
+
+ les nuages doivent spawn avec la génération et doivent apparaitre en blocs entiers
+
+ les mobs doivent aussi pourvoir s'arreter quand ils veulent
+
+ les points verts sur les cotés du bloc d'herbe doivent partir
+
+ l'item qu'on tien doit se trouver DANS la main
+
+ On doit pouvoir récupérer les objets drops au sol a 1 bloc de distance et avec une petite animation d’aspiration et un bruitage comme quoi on a ramassé un objet
+
+
+
+
+ Le personnage doit pouvoir s'accroupir (plier les jenoux) quand on appuie sur maj en f5
+
+
+ 
