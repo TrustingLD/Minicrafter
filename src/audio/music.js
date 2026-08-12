@@ -36,6 +36,12 @@ export function createMusic(urls, hintEl) {
     if (bgmStarted && !bgmMuted) playCurrent();
   });
 
+  function nextTrack() {
+    currentIndex = (currentIndex + 1) % playlist.length;
+    loadCurrentTrack();
+    if (bgmStarted && !bgmMuted) playCurrent();
+  }
+
   function startBgm() {
     if (bgmStarted || bgmMuted) return;
     bgmStarted = true;
@@ -48,5 +54,5 @@ export function createMusic(urls, hintEl) {
     if (hintEl) hintEl.textContent = bgmMuted ? '🔇 Musique coupée (M)' : '🔊 Musique (M)';
   }
 
-  return { startBgm, toggleBgmMute };
+  return { startBgm, toggleBgmMute, nextTrack };
 }

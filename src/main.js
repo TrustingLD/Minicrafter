@@ -93,6 +93,7 @@ const sfx = createSfx();
 const musicHintEl = document.getElementById('musicHint');
 const music = createMusic(['./luft-mini.mp3', './minicrafter_theme_final.mp3', './nightpersonas.mp3', './mini-hands.mp3', './mini-city3.mp3'], musicHintEl);
 document.getElementById('musicHint').addEventListener('click', music.toggleBgmMute);
+document.getElementById('musicNextBtn').addEventListener('click', music.nextTrack);
 
 /* ---------- Monde ---------- */
 // Colonne d'apparition : calculée AVANT createWorld, parce que c'est autour d'ELLE
@@ -648,6 +649,10 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyM') {
     music.toggleBgmMute();
+    return;
+  }
+  if (e.code === 'KeyL') {
+    music.nextTrack();
     return;
   }
   if (e.code === 'KeyT') {
