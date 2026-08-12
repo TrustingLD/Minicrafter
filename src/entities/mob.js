@@ -48,6 +48,11 @@ function randInt(min, max) {
 // escalader plus d'un bloc d'un coup) — c'est ce qui empêche les mobs de se
 // retrouver téléportés en haut d'un arbre ou d'une falaise
 const MOB_STEP_HEIGHT = 1;
+// vitesse verticale donnée au mob pour "sauter" par-dessus un obstacle d'un bloc,
+// au lieu de le téléporter directement à pos.y + MOB_STEP_HEIGHT. Même valeur que
+// jumpForce du joueur (src/entities/player.js) pour un arc de saut cohérent avec
+// GRAVITY=20 (src/entities/entity.js) : hauteur max ≈ 7²/(2*20) ≈ 1.2 bloc.
+const MOB_JUMP_VELOCITY = 7;
 
 // Rayon (en blocs) au-delà duquel un mob n'est plus simulé du tout. Doit rester
 // STRICTEMENT inférieur au rayon de chunks chargés (RENDER_DISTANCE * 16 = 96 blocs
@@ -156,6 +161,7 @@ export class Mob extends Entity {
     ctx.scene.add(this.group);
     this.wanderAngle = Math.random() * Math.PI * 2;
     this.wanderTimer = 0;
+    this.moving = true;
     this.hitCooldown = 0;
     this.onGround = true;
     this.walkPhase = 0;
@@ -186,11 +192,15 @@ export class Mob extends Entity {
       this.onGround &&
       !collidesAtBox(nx, this.pos.y + MOB_STEP_HEIGHT, nz, this.radius, this.height)
     ) {
-      this.pos.x = nx;
-      this.pos.z = nz;
-      this.pos.y += MOB_STEP_HEIGHT;
-      this.velY = 0;
-      return true;
+      // Saute par-dessus l'obstacle au lieu de téléporter directement le mob à
+      // pos.y + MOB_STEP_HEIGHT : on se contente de donner une impulsion
+      // verticale, et c'est applyGravity() (appelé juste après dans update())
+      // qui fait monter puis retomber le mob comme un vrai saut. Le déplacement
+      // horizontal suit tout seul une fois le mob assez haut : la première
+      // branche ci-dessus est réévaluée à chaque frame et finit par passer.
+      this.velY = MOB_JUMP_VELOCITY;
+      this.onGround = false;
+      return false;
     }
     return false; // bloqué (obstacle trop haut)
   }
@@ -238,7 +248,6 @@ export class Mob extends Entity {
     this.wanderTimer -= dt;
     this.hitCooldown -= dt;
     let moveAngle = this.wanderAngle;
-    let moving = true;
     let speedMultiplier = 1; // > 1 pendant la fuite (cf. FLEE_SPEED_MULT), pour "sprinter"
 
     const dx = playerPos.x - this.pos.x,
@@ -253,7 +262,7 @@ export class Mob extends Entity {
       this.fleeTimer -= dt;
       moveAngle = Math.atan2(-dx, -dz);
       this.wanderAngle = moveAngle;
-      moving = true;
+      this.moving = true;
       speedMultiplier = FLEE_SPEED_MULT;
     } else if (this.data.ai === 'hostile' && distToPlayer < AGGRO_RANGE) {
       // Phase 12 : ne chasse (et ne frappe) que s'il y a une ligne de vue dégagée
@@ -271,6 +280,7 @@ export class Mob extends Entity {
       if (this.aggroTimer > 0) {
         moveAngle = Math.atan2(dx, dz);
         this.wanderAngle = moveAngle;
+        this.moving = true; // en chasse, ne s'arrête jamais tant qu'il a l'aggro
         if (
           distToPlayer < 1.1 &&
           this.hitCooldown <= 0 &&
@@ -285,7 +295,7 @@ export class Mob extends Entity {
         // vue perdue depuis plus de LOS_GRACE : retombe en errance, comme un mob passif
         this.wanderAngle = Math.random() * Math.PI * 2;
         this.wanderTimer = 2 + Math.random() * 3;
-        moving = Math.random() > 0.3;
+        this.moving = Math.random() > 0.3;
         moveAngle = this.wanderAngle;
       } else {
         moveAngle = this.wanderAngle;
@@ -295,13 +305,17 @@ export class Mob extends Entity {
       if (this.wanderTimer <= 0) {
         this.wanderAngle = Math.random() * Math.PI * 2;
         this.wanderTimer = 2 + Math.random() * 3;
-        moving = Math.random() > 0.3;
+        this.moving = Math.random() > 0.3;
       }
       moveAngle = this.wanderAngle;
     }
 
+    // this.moving persiste entre les frames (posé sur l'instance, pas une variable
+    // locale) : sans ça, la décision "s'arrêter" prise ci-dessus ne durait qu'une
+    // seule frame (~16ms) avant d'être écrasée par une valeur par défaut à chaque
+    // appel de update(), et les mobs ne semblaient donc jamais vraiment s'arrêter.
     let actuallyMoved = false;
-    if (moving) {
+    if (this.moving) {
       const stepX = Math.sin(moveAngle) * this.speed * speedMultiplier * dt;
       const stepZ = Math.cos(moveAngle) * this.speed * speedMultiplier * dt;
       const movedX = this.moveAxis('x', stepX);
