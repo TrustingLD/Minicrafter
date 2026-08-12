@@ -76,8 +76,16 @@ export function texGrassSide() {
     const h = grassH + (Math.random() * 4 - 2);
     ctx.fillRect(x, 0, 1, Math.max(2, h));
   }
+  // blotches/speckle vertes confinées à la bande d'herbe (clip) : sans ce clip,
+  // ces deux appels dessinent sur tout le canvas comme les autres textures et
+  // laissent des points verts isolés sur la partie terre en dessous.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, TEX_SIZE, grassH + 3);
+  ctx.clip();
   blotches(ctx, ['#3e9119', '#62da31'], 8, 1.5, 3);
   speckle(ctx, ['#45921e', '#70e53e'], 25);
+  ctx.restore();
   return canvasToTexture(c);
 }
 export function texDirt() {
