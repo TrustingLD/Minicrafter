@@ -78,13 +78,34 @@ export function createPlayer({
       group.add(pivot);
       arms.push(pivot);
     });
+    // Jambes en deux segments (cuisse + tibia, articulés au genou) plutôt qu'un
+    // seul bloc rigide pivoté à la hanche : un accroupissement doit PLIER le
+    // genou, pas faire tourner toute la jambe raide vers l'avant (cf.
+    // CROUCH_HIP_BEND/CROUCH_KNEE_BEND dans updateVisuals).
+    const LEG_TOTAL_H = 0.775;
+    const THIGH_H = 0.39;
+    const SHIN_H = LEG_TOTAL_H - THIGH_H;
     [
-      [-0.13, 0.775],
-      [0.13, 0.775],
+      [-0.13, LEG_TOTAL_H],
+      [0.13, LEG_TOTAL_H],
     ].forEach(([lx, ly]) => {
-      const { pivot } = makeLimb(0.18, 0.775, 0.18, playerPantsMat, lx, ly, 0);
-      group.add(pivot);
-      legs.push(pivot);
+      const hip = new THREE.Group();
+      hip.position.set(lx, ly, 0);
+      const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.18, THIGH_H, 0.18), playerPantsMat);
+      thigh.position.y = -THIGH_H / 2;
+      thigh.castShadow = true;
+      hip.add(thigh);
+
+      const knee = new THREE.Group();
+      knee.position.y = -THIGH_H;
+      hip.add(knee);
+      const shin = new THREE.Mesh(new THREE.BoxGeometry(0.18, SHIN_H, 0.18), playerPantsMat);
+      shin.position.y = -SHIN_H / 2;
+      shin.castShadow = true;
+      knee.add(shin);
+
+      group.add(hip);
+      legs.push({ hip, knee });
     });
 
     // positions "debout" de repos, pour pouvoir revenir dessus en s'accroupissant
@@ -193,7 +214,12 @@ export function createPlayer({
   let crouchAmount = 0; // 0 = debout, 1 = accroupi -- lissé dans le temps, cf. updateVisuals
   const CROUCH_LOWER = 0.22; // combien le buste/la tête s'abaissent, en unités monde
   const CROUCH_LEAN = 0.35; // inclinaison avant du buste (radians)
-  const CROUCH_LEG_BEND = 0.55; // flexion des jambes au repos, en plus du balancier de marche
+  // Genou plié : la cuisse pivote vers l'avant (hanche) et le tibia replie vers
+  // l'arrière (genou, angle plus grand que la hanche pour que le pied ne parte
+  // pas trop loin vers l'avant) -- un vrai pli articulé plutôt qu'une jambe
+  // raide tournée d'un bloc (l'ancien CROUCH_LEG_BEND).
+  const CROUCH_HIP_BEND = 0.6;
+  const CROUCH_KNEE_BEND = 1.1;
   const CROUCH_LERP_SPEED = 10; // /s -- assez rapide pour rester réactif à la touche Maj
   function triggerHandSwing() {
     handSwing = 1;
@@ -227,17 +253,28 @@ export function createPlayer({
       crouchAmount * (CROUCH_LOWER * 0.5); // la vue FPS s'abaisse un peu aussi, plus discret que l'avatar
 
     // avatar 3e personne : jambes toujours animées, bras aussi (sauf pendant un swing d'attaque)
-    playerAvatar.legs.forEach((pivot, i) => {
+    playerAvatar.legs.forEach(({ hip, knee }, i) => {
       const bend = i % 2 === 0 ? walkSwing : -walkSwing;
-      pivot.rotation.x = bend + crouchAmount * CROUCH_LEG_BEND;
+      // Le point tourné (genou/pied) est SOUS le pivot (hanche), pas au-dessus comme
+      // pour le buste : sur un pivot dont le contenu pend en dessous, une rotation
+      // POSITIVE amène ce contenu vers l'avant (-z, cf. commentaire buste plus bas).
+      // J'avais inversé ça dans la version précédente -- la cuisse partait donc en
+      // arrière au lieu d'avancer. Le genou compense en NÉGATIF (dans le repère déjà
+      // tourné de la hanche) pour replier le tibia sous le corps, comme un vrai pli.
+      hip.rotation.x = bend + crouchAmount * CROUCH_HIP_BEND;
+      knee.rotation.x = -crouchAmount * CROUCH_KNEE_BEND;
     });
     playerAvatar.arms.forEach((pivot, i) => {
-      pivot.rotation.x = (i % 2 === 0 ? -walkSwing : walkSwing) * 0.6 - crouchAmount * 0.2;
+      // Contrairement au buste (qui part en avant), les bras doivent partir vers
+      // l'ARRIÈRE en s'accroupissant. La main pend sous le pivot épaule (comme la
+      // cuisse sous la hanche) : une rotation NÉGATIVE l'envoie donc vers l'arrière.
+      pivot.rotation.x = (i % 2 === 0 ? -walkSwing : walkSwing) * 0.6 - crouchAmount * CROUCH_LEAN;
     });
-    // buste + tête : s'abaissent et se penchent en avant -- c'est ce qui rend
+    // buste + tête : s'abaissent et se penchent en AVANT (rotation.x négative,
+    // cf. note ci-dessus sur le sens de rotation) -- c'est ce qui rend
     // l'accroupissement "visible" en 3e personne, pas juste une hitbox plus basse
     playerAvatar.body.position.y = playerAvatar.restY.body - crouchAmount * CROUCH_LOWER;
-    playerAvatar.body.rotation.x = crouchAmount * CROUCH_LEAN;
+    playerAvatar.body.rotation.x = -crouchAmount * CROUCH_LEAN;
     playerAvatar.head.position.y =
       playerAvatar.restY.head - crouchAmount * (CROUCH_LOWER + Math.sin(CROUCH_LEAN) * 0.35);
     playerAvatar.group.position.set(player.pos.x, player.pos.y, player.pos.z);
