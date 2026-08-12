@@ -108,7 +108,7 @@ export function createPlayer({
 
   function buildHeldItemMesh(type) {
     if (blockTypes[type]) {
-      return { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), materials[type]) };
+      return { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), materials[type]) };
     }
     const iconTex = toolTextures[type];
     if (iconTex) {
@@ -151,12 +151,17 @@ export function createPlayer({
     const built = buildHeldItemMesh(selectedBlock);
     if (built) {
       const { mesh, flat } = built;
+      // handMesh (le poing) est centré en (0, -0.22, 0) avec un rayon de 0.09 sur
+      // x/y/z (cf. plus haut) : le point de préhension doit donc rester proche de
+      // z≈0, pas s'en éloigner. Avant, les objets étaient posés à z=-0.32/-0.52,
+      // bien au-delà du poing (qui s'arrête à z=-0.09) : ils flottaient devant la
+      // main plutôt que d'être tenus dedans.
       if (flat) {
-        mesh.position.set(0.12, 0.06, -0.52);
+        mesh.position.set(0.1, 0.03, -0.18);
         mesh.rotation.set(0, 0, Math.PI / 4);
         heldItemParent = flatHolder;
       } else {
-        mesh.position.set(0, 0.08, -0.32);
+        mesh.position.set(0, 0.02, -0.06);
         mesh.rotation.set(0.2, 0.6, 0.1);
         heldItemParent = handPivot;
       }

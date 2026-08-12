@@ -924,6 +924,7 @@ function performSecondaryAction() {
   if (!(x === px && z === pz && (y === py0 || y === py1)) && !worldApi.getBlock(x, y, z)) {
     worldApi.setBlock(x, y, z, selectedBlock);
     triggerPlaceFeedback(x, y, z);
+    triggerHandSwing(); // un seul coup de main au moment de poser, pas de mouvement continu
     removeItem(slots, selectedBlock, 1);
     bus.emit('inventory:changed');
     sfx.playSound('place');
@@ -1296,6 +1297,11 @@ function animate() {
           if (breakTickTimer <= 0) {
             breakTickTimer = 0.15;
             sfx.playBreakTick(ratio);
+            // Anime la main en continu tant qu'on mine, au même rythme que le tic
+            // sonore ci-dessus, plutôt qu'un seul swing au clic qui se termine bien
+            // avant que le bloc ne casse (cf. performPrimaryAction : un seul
+            // triggerHandSwing() au mousedown ne suffit pas pour un minage qui dure).
+            triggerHandSwing();
           }
         }
       }

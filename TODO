@@ -76,7 +76,6 @@ NEW MAJ Mer. 5 août 12:14
 
 
 
- les monstres ne doivent pas pouvoir m'attaquer a travers les blocs si ils sont sur la meme coordonnée Y
 
  les cactus doivent nous faire des degats quand on est collé a eux)
 
@@ -92,13 +91,6 @@ NEW MAJ Mer. 5 août 12:14
 
  les nuages doivent spawn avec la génération et doivent apparaitre en blocs entiers
 
- les mobs doivent aussi pourvoir s'arreter quand ils veulent
-
- les points verts sur les cotés du bloc d'herbe doivent partir
-
- l'item qu'on tien doit se trouver DANS la main
-
- On doit pouvoir récupérer les objets drops au sol a 1 bloc de distance et avec une petite animation d’aspiration et un bruitage comme quoi on a ramassé un objet
 
 
 
