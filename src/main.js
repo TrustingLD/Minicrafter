@@ -1001,6 +1001,7 @@ if (touchMode) {
 const clock = new THREE.Clock();
 let footstepTimer = 0;
 let lavaDamageTimer = 0; // cooldown entre deux tics de dégâts tant qu'on reste dans la lave
+let cactusDamageTimer = 0; // même mécanique, tant qu'on reste collé à un cactus
 let hungerTickTimer = 4; // Phase 11 : dégâts de faim / régénération, au tic (4s), pas à la frame
 let drownDamageTimer = 0; // même mécanique que lavaDamageTimer, une fois le souffle à 0
 const hud = createHud({
@@ -1125,6 +1126,22 @@ function animate() {
       }
     } else {
       lavaDamageTimer = 0;
+    }
+
+    // dégâts en tic tant qu'on reste collé à un cactus -- même mécanique que la
+    // lave ci-dessus, mais moins punitif (1 point, comme dans Minecraft) : le
+    // cactus est un bloc solide, donc "être collé" = la boîte du joueur touche
+    // une cellule de cactus (cf. isTouchingCactus dans world/world.js).
+    if (worldApi.isTouchingCactus(player.pos.x, player.pos.y, player.pos.z, player.radius, player.height)) {
+      cactusDamageTimer -= dt;
+      if (cactusDamageTimer <= 0) {
+        player.health = Math.max(0, player.health - 1);
+        bus.emit('player:health');
+        sfx.playSound('hurt');
+        cactusDamageTimer = 0.5;
+      }
+    } else {
+      cactusDamageTimer = 0;
     }
 
     // Faim (Phase 11) : un taux continu (sprint > marche/idle) plus deux coûts

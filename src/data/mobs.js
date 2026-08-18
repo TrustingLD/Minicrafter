@@ -87,9 +87,12 @@ export const MOBS = {
       ],
       limbs: [
         {
+          // bras alignés sur le buste : même hauteur (0.9) et pivot au sommet du
+          // buste (1.05 + 0.9/2 = 1.5), donc le bas du bras retombe au niveau du
+          // bas du buste (0.6), comme pour le joueur (cf. entities/player.js).
           group: 'arms',
-          size: [0.18, 0.7, 0.18],
-          jointY: 1.4,
+          size: [0.18, 0.9, 0.18],
+          jointY: 1.5,
           positions: [
             [-0.39, 0],
             [0.39, 0],
@@ -166,9 +169,12 @@ export const MOBS = {
       ],
       limbs: [
         {
+          // bras alignés sur le buste : même hauteur (0.9) et pivot au sommet du
+          // buste (1.05 + 0.9/2 = 1.5), donc le bas du bras retombe au niveau du
+          // bas du buste (0.6), comme pour le joueur (cf. entities/player.js).
           group: 'arms',
-          size: [0.18, 0.7, 0.18],
-          jointY: 1.4,
+          size: [0.18, 0.9, 0.18],
+          jointY: 1.5,
           positions: [
             [-0.39, 0],
             [0.39, 0],

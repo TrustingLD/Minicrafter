@@ -70,11 +70,17 @@ export function createPlayer({
     head.castShadow = true;
     group.add(head);
 
+    // longueur et niveau des bras alignés sur le buste : le pivot (épaule) est
+    // placé au sommet du buste (body.position.y + moitié de sa hauteur) et le
+    // bras a la même hauteur que le buste, donc son bas retombe exactement au
+    // niveau du bas du buste.
+    const ARM_H = 0.75; // = hauteur du buste (0.5, 0.75, 0.28)
+    const ARM_JOINT_Y = 1.15 + 0.75 / 2; // = haut du buste
     [
-      [-0.34, 1.5],
-      [0.34, 1.5],
+      [-0.34, ARM_JOINT_Y],
+      [0.34, ARM_JOINT_Y],
     ].forEach(([ax, ay]) => {
-      const { pivot } = makeLimb(0.16, 0.7, 0.16, playerSkinMat, ax, ay, 0);
+      const { pivot } = makeLimb(0.16, ARM_H, 0.16, playerSkinMat, ax, ay, 0);
       group.add(pivot);
       arms.push(pivot);
     });
@@ -109,8 +115,13 @@ export function createPlayer({
     });
 
     // positions "debout" de repos, pour pouvoir revenir dessus en s'accroupissant
-    // (cf. crouchAmount dans updateVisuals) sans les re-calculer à chaque frame
-    const restY = { body: body.position.y, head: head.position.y };
+    // (cf. crouchAmount dans updateVisuals) sans les re-calculer à chaque frame.
+    // `arms` : le pivot épaule ne bougeait jusqu'ici QUE en rotation -- en
+    // s'accroupissant le buste/la tête descendaient (CROUCH_LOWER) mais pas
+    // l'épaule, qui restait plantée à sa hauteur d'origine : les bras se
+    // retrouvaient visuellement décrochés du buste, "flottant" au niveau du cou.
+    // On mémorise donc aussi sa hauteur de repos pour la faire descendre pareil.
+    const restY = { body: body.position.y, head: head.position.y, arm: ARM_JOINT_Y };
 
     return { group, legs, arms, body, head, restY };
   }
@@ -269,6 +280,10 @@ export function createPlayer({
       // l'ARRIÈRE en s'accroupissant. La main pend sous le pivot épaule (comme la
       // cuisse sous la hanche) : une rotation NÉGATIVE l'envoie donc vers l'arrière.
       pivot.rotation.x = (i % 2 === 0 ? -walkSwing : walkSwing) * 0.6 - crouchAmount * CROUCH_LEAN;
+      // épaule qui suit le buste vers le bas (cf. commentaire sur restY.arm plus
+      // haut) : sans ça les bras restaient au niveau du cou pendant que le reste
+      // du corps s'accroupissait dessous.
+      pivot.position.y = playerAvatar.restY.arm - crouchAmount * CROUCH_LOWER;
     });
     // buste + tête : s'abaissent et se penchent en AVANT (rotation.x négative,
     // cf. note ci-dessus sur le sens de rotation) -- c'est ce qui rend

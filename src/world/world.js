@@ -426,6 +426,30 @@ export function createWorld({
     return getBlock(Math.floor(x), Math.floor(y), Math.floor(z)) === 'water';
   }
 
+  // Contact avec un cactus (dégâts) : contrairement à isInLava/isInWater (un seul
+  // point), le cactus est un bloc SOLIDE — collidesAtBox empêche donc la boîte du
+  // joueur d'y pénétrer, elle s'arrête TOUJOURS à une distance non nulle de sa
+  // face (resolveHorizontalMove rejette carrément le déplacement de la frame,
+  // sans "glisser" jusqu'au contact exact -- l'écart restant peut donc être de
+  // plusieurs centimètres, jusqu'à ~0.1-0.2 en marchant, plus en sprintant). Un
+  // scan à ras (comme collidesAtBox) ne matcherait donc quasiment jamais : on
+  // élargit la boîte d'une marge de contact pour capter "collé contre" plutôt que
+  // "à l'intérieur de".
+  const CACTUS_TOUCH_MARGIN = 0.25;
+  function isTouchingCactus(x, y, z, radius, height) {
+    const r = radius + CACTUS_TOUCH_MARGIN;
+    const minX = Math.floor(x - r),
+      maxX = Math.floor(x + r);
+    const minZ = Math.floor(z - r),
+      maxZ = Math.floor(z + r);
+    const minY = Math.floor(y),
+      maxY = Math.floor(y + height);
+    for (let bx = minX; bx <= maxX; bx++)
+      for (let bz = minZ; bz <= maxZ; bz++)
+        for (let by = minY; by <= maxY; by++) if (getBlock(bx, by, bz) === 'cactus') return true;
+    return false;
+  }
+
   // collision boîte générique (utilisée par le joueur ET les mobs) : identique à
   // l'ancienne version, seule la source des blocs (getBlock au lieu de world{}) change.
   function collidesAtBox(x, y, z, radius, height) {
@@ -532,6 +556,7 @@ export function createWorld({
     isSolid,
     isInLava,
     isInWater,
+    isTouchingCactus,
     collidesAtBox,
     getGroundHeight,
     update,
