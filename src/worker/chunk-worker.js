@@ -21,7 +21,9 @@ import { LIQUID_IDS, BLOCK_ID } from '../data/blocks.js';
 export function buildChunkResult(cx, cz, uvByBlockId) {
   const { data } = generateChunk(cx, cz);
   const opaque = meshChunk(data, uvByBlockId, undefined, LIQUID_IDS);
-  const water = meshLiquid(data, BLOCK_ID.water, LIQUID_IDS);
+  // topOnly=true pour l'eau (cf. mesher.js meshLiquid) : pas de faces latérales,
+  // donc pas de bordure visible entre deux chunks d'eau voisins.
+  const water = meshLiquid(data, BLOCK_ID.water, LIQUID_IDS, undefined, true);
   const lava = meshLiquid(data, BLOCK_ID.lava, LIQUID_IDS);
   return { data, opaque, water, lava };
 }

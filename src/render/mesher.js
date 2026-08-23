@@ -341,7 +341,17 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
 // Face émise seulement si le voisin est de l'air ou un AUTRE liquide -- jamais contre
 // un bloc opaque (inutile, il dessine déjà sa propre face côté meshChunk, cf. plus
 // haut) ni contre le MÊME liquide (deux cellules d'eau collées n'ont rien à se montrer).
-export function meshLiquid(data, targetId, liquidIds, lightData) {
+//
+// `topOnly` (demandé pour l'eau) : ne génère QUE la face du dessus. Les faces
+// latérales utilisaient un mapping UV différent (basé sur y) qui donnait un rendu
+// visuellement distinct de la surface -- lu comme une "bordure" -- et, comme le
+// mesher ne connaît pas les chunks voisins (cf. commentaire en tête de fichier,
+// même limitation que meshChunk), CES faces latérales étaient TOUJOURS dessinées
+// à chaque bordure de chunk contenant de l'eau, même quand le chunk voisin
+// continue avec de l'eau : d'où une bordure visible entre chunks. La face du
+// dessus, elle, ne dépend que du voisin en Y (toujours dans le même chunk), donc
+// aucune des deux limitations ne s'applique -- eau uniforme, sans bordure.
+export function meshLiquid(data, targetId, liquidIds, lightData, topOnly) {
   function get(x, y, z) {
     if (x < 0 || x >= CHUNK_X || y < 0 || y >= CHUNK_Y || z < 0 || z >= CHUNK_Z) return 0;
     return data[idx(x, y, z)];
@@ -354,13 +364,14 @@ export function meshLiquid(data, targetId, liquidIds, lightData) {
     if (x < 0 || x >= CHUNK_X || y < 0 || y >= CHUNK_Y || z < 0 || z >= CHUNK_Z) return 15;
     return lightData[idx(x, y, z)];
   }
+  const facesToUse = topOnly ? FACES.filter((f) => f.n[1] === 1) : FACES;
 
   let faceCount = 0;
   for (let x = 0; x < CHUNK_X; x++)
     for (let y = 0; y < CHUNK_Y; y++)
       for (let z = 0; z < CHUNK_Z; z++) {
         if (get(x, y, z) !== targetId) continue;
-        for (const face of FACES) {
+        for (const face of facesToUse) {
           const [nx, ny, nz] = face.n;
           if (shouldDraw(get(x + nx, y + ny, z + nz))) faceCount++;
         }
@@ -384,7 +395,7 @@ export function meshLiquid(data, targetId, liquidIds, lightData) {
     for (let y = 0; y < CHUNK_Y; y++) {
       for (let z = 0; z < CHUNK_Z; z++) {
         if (get(x, y, z) !== targetId) continue;
-        for (const face of FACES) {
+        for (const face of facesToUse) {
           const [nx, ny, nz] = face.n;
           if (!shouldDraw(get(x + nx, y + ny, z + nz))) continue;
           const base = vertCount;

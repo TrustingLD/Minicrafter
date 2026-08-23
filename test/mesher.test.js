@@ -119,6 +119,36 @@ test('meshLiquid: the top face sits at y+0.875, not a full cube (shoreline reads
   assert.ok(!ys.some((y) => y > 5 + 0.875 + 1e-6)); // jamais au-dessus de 0.875
 });
 
+test('meshLiquid: topOnly emits only the top face, even surrounded by air on every side', () => {
+  const data = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
+  data[idx(5, 5, 5)] = WATER_ID;
+  const { positions, normals } = meshLiquid(data, WATER_ID, LIQUID_IDS, undefined, true);
+  assert.equal(positions.length / 3, 1 * 4); // une seule face -> 4 sommets
+  for (let i = 0; i < normals.length; i += 3) {
+    assert.deepEqual([normals[i], normals[i + 1], normals[i + 2]], [0, 1, 0]);
+  }
+});
+
+test('meshLiquid: topOnly still culls the top face against water/air above (unaffected by the flag)', () => {
+  const data = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
+  data[idx(5, 5, 5)] = WATER_ID;
+  data[idx(5, 6, 5)] = WATER_ID; // même liquide juste au-dessus -> pas de face à cet endroit
+  const { positions } = meshLiquid(data, WATER_ID, LIQUID_IDS, undefined, true);
+  assert.equal(positions.length / 3, 1 * 4); // seule la face du dessus de la cellule du haut reste
+});
+
+test('meshLiquid: topOnly avoids side faces at the chunk boundary (no border between adjacent chunks)', () => {
+  // Cellule d'eau collée au bord du chunk (x = CHUNK_X - 1) : sans topOnly, une
+  // face latérale serait TOUJOURS dessinée ici (voisin hors-chunk traité comme
+  // de l'air, cf. commentaire en tête du mesher), même si le chunk voisin
+  // continue avec de l'eau -> bordure visible. Avec topOnly, cette face latérale
+  // n'existe plus : seule la face du dessus (indépendante des chunks voisins) l'est.
+  const data = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
+  data[idx(CHUNK_X - 1, 5, 5)] = WATER_ID;
+  const { positions } = meshLiquid(data, WATER_ID, LIQUID_IDS, undefined, true);
+  assert.equal(positions.length / 3, 1 * 4);
+});
+
 // Formes réduites (`shape` dans data/blocks.js) : la torche n'est pas un cube plein
 // mais un bâtonnet. Deux propriétés indissociables — la boîte émise est plus petite
 // que la cellule, ET un tel bloc ne masque jamais la face de son voisin.

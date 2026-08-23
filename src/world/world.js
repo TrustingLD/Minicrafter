@@ -159,11 +159,14 @@ export function createWorld({
   }
 
   function buildLiquidGeometry(data, targetId, lightData) {
+    // topOnly pour l'eau uniquement (cf. mesher.js meshLiquid) : évite les faces
+    // latérales qui créaient une "bordure" visible à chaque bordure de chunk.
     const { positions, normals, uvs, colors, indices } = meshLiquid(
       data,
       targetId,
       LIQUID_IDS,
       lightData,
+      targetId === BLOCK_ID.water,
     );
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));

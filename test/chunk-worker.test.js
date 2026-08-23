@@ -24,7 +24,9 @@ test('buildChunkResult: produces the exact same block data as calling generateCh
 test('buildChunkResult: the opaque/water/lava geometries match calling the mesher directly on the same data', () => {
   const { data, opaque, water, lava } = buildChunkResult(1, 1, FAKE_UV);
   const expectedOpaque = meshChunk(data, FAKE_UV, undefined, LIQUID_IDS);
-  const expectedWater = meshLiquid(data, BLOCK_ID.water, LIQUID_IDS);
+  // topOnly=true pour l'eau : le worker (chunk-worker.js) applique le même réglage,
+  // cf. mesher.js meshLiquid.
+  const expectedWater = meshLiquid(data, BLOCK_ID.water, LIQUID_IDS, undefined, true);
   const expectedLava = meshLiquid(data, BLOCK_ID.lava, LIQUID_IDS);
   assert.deepEqual(Array.from(opaque.positions), Array.from(expectedOpaque.positions));
   assert.deepEqual(Array.from(water.positions), Array.from(expectedWater.positions));
