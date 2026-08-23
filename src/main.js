@@ -67,6 +67,15 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 scene.fog = new THREE.Fog(0x87ceeb, 25, 70);
 
+// Teinte sous l'eau : mêmes valeurs "à sec" que ci-dessus, réutilisées pour
+// restaurer le fog chaque frame où on n'est PAS sous l'eau (sky.js, lui, ne
+// touche qu'à la couleur du fog, jamais à near/far -- cf. isUnderwater plus bas).
+const FOG_NEAR_DRY = 25,
+  FOG_FAR_DRY = 70;
+const UNDERWATER_COLOR = new THREE.Color(0x1f4f8f);
+const UNDERWATER_FOG_NEAR = 0,
+  UNDERWATER_FOG_FAR = 18;
+
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 600);
 scene.add(camera); // nécessaire pour que les objets attachés à la caméra (main FPS) soient rendus
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1062,6 +1071,22 @@ function animate() {
   }
 
   skyApi.update(dt, player.pos);
+  // Teinte bleue sous l'eau : après skyApi.update (qui vient de poser la couleur
+  // jour/nuit sur scene.fog/scene.background), on écrase par un fog bleu très
+  // rapproché tant qu'on a la tête dans l'eau -- tout ce qu'on voit (terrain,
+  // mobs, ciel visible entre deux vagues) passe donc par ce fog et ressort teinté,
+  // comme la vue "trouble" sous l'eau de Minecraft. Hors de l'eau, on remet juste
+  // near/far à leurs valeurs normales (la couleur, elle, est déjà à jour via sky.js
+  // -- rien à restaurer de ce côté).
+  if (isUnderwater()) {
+    scene.fog.color.copy(UNDERWATER_COLOR);
+    scene.fog.near = UNDERWATER_FOG_NEAR;
+    scene.fog.far = UNDERWATER_FOG_FAR;
+    scene.background = UNDERWATER_COLOR;
+  } else {
+    scene.fog.near = FOG_NEAR_DRY;
+    scene.fog.far = FOG_FAR_DRY;
+  }
   worldApi.waterTexture.offset.x = (worldApi.waterTexture.offset.x + dt * 0.025) % 1;
   worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;
   worldApi.lavaTexture.offset.x = (worldApi.lavaTexture.offset.x + dt * 0.012) % 1;

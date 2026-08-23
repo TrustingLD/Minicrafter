@@ -107,11 +107,18 @@ export function createWorld({
   // PARTAGÉ entre tous les chunks -> animer .offset une fois dans main.js fait
   // défiler l'eau/la lave de tout le monde chargé sans avoir à les parcourir un par un.
   const waterTexture = texWater();
+  // side: DoubleSide -- l'eau n'a qu'une face (le dessus, cf. meshLiquid topOnly).
+  // En FrontSide (défaut), cette face n'est visible que d'au-dessus : vue d'en
+  // dessous (nager sous la surface et regarder vers le haut), le culling la
+  // rendait invisible -- on voyait à travers jusqu'au ciel/aux nuages. DoubleSide
+  // fait dessiner les deux côtés du même quad, donc la texture de l'eau reste
+  // visible qu'on la regarde du dessus ou du dessous.
   const waterMaterial = new THREE.MeshLambertMaterial({
     map: waterTexture,
     vertexColors: true,
     transparent: true,
     opacity: 0.7,
+    side: THREE.DoubleSide,
   });
   const lavaTexture = texLava();
   // MeshBasicMaterial (pas affectée par l'éclairage de la scène) : une mare de lave
