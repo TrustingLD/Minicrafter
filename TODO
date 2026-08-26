@@ -1,82 +1,11 @@
 
 
-NEW Lun 3 Aout 11:07
+NEW Mar 26 Aout 11:27
 
 
 
 - Multijoueur
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Difficulté	Tâche	Pourquoi ce niveau
-🟢 Facile	Historique de chat	Stocker les messages déjà envoyés (ui/chat.js) dans un tableau et les réafficher
-🟢 Facile	Régler le problème de FPS	J'ai déjà repéré la cause probable (fuite mémoire dans le cache de bruit Perlin) — fix ciblé, pas une refonte
-🟡 Moyen	Barre de bouffe (faim)	Même logique que la barre de vie (ui/health.js) qu'il suffit de dupliquer/adapter
-🟡 Moyen	Torches	Nouveau bloc + une vraie source de lumière (THREE.PointLight) à gérer par chunk
-🟡 Moyen	Four (crafting)	Extension du système de craft existant (ui/craft.js) avec une recette "cuisson" + timer
-🟡 Moyen	Meilleure animation de cassage de bloc	Effet visuel (shake, fissures progressives) sur le bloc ciblé
-🟡 Moyen	Grotte parfaite	Le système existe déjà, il faut retravailler les seuils de bruit pour des grottes plus fréquentes/lisibles
-🟡 Moyen	Terrain plus profond	Augmenter CHUNK_Y + adapter le générateur, attention à l'impact FPS
-🟡 Moyen	Nouveau mob : sheep	Modèle + IA de déplacement simple, sur la base du système mob.js existant
-🟡 Moyen	Spawn des mobs hors zone initiale	Logique de spawn périodique autour du joueur, à limiter en performance
-🟠 Difficile	Monstres qui attaquent à travers les blocs	Il faut un raycast de ligne de vue avant chaque attaque de mob
-🟠 Difficile	Hache/bloc tenu dans la main	Modèle 3D d'item attaché à la main du joueur en vue première personne, synchronisé avec la hotbar
-🟠 Difficile	Biomes	Plusieurs types de terrain/textures avec transitions propres, pas juste un mask
-🟠 Difficile	Inventaire avec drop au sol + ramassage	Nouveau système d'entités "item au sol" (physique simple, despawn, hitbox de ramassage) lié à l'inventaire
-🔴 Très difficile	Océan / rivière	Génération cohérente à grande échelle (au-delà d'un chunk), niveau d'eau variable, raccords entre chunks
-🔴 Très difficile	L'eau qui coule	Simulation de fluide (propagation, niveaux), coûteux en calcul et complexe à intégrer au système de blocs
-🔴 Très difficile	Multijoueur	Serveur, synchronisation d'état, gestion de la latence — gros chantier à part entière
-
-
-
-
-
-
-
-NEW MAJ Mer. 5 août 12:14
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- un tout petit peu plus de spawn de mob et les zombies doivent beaucoup spawn QUE pendant la nuit et si le jour QUE dans les caves
-
-
-
+meilleur menu
 
  systheme redstone
 
@@ -94,9 +23,11 @@ meilleur inventaire
 
 Pouvoir remonter a la surface de la lave et de l’eau
 
-Les zombies doivent spawn que la nuit et doivent bruler au soleil donc ajouter une animation de bruler genre le mob doit etre en feu et c’est pareil quand le joueur sort de la lave il doit etre en feu
+Les zombies doivent spawn que la nuit et si le jour QUE dans le grottes et doivent bruler au contact du soleil donc ajouter une animation de bruler genre le mob doit etre en feu et c’est pareil quand le joueur sort de la lave il doit etre en feu
 
 NETHER.
+
+plus d'ombres, plus shader
 
 
 
