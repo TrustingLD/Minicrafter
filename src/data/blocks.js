@@ -275,6 +275,33 @@ export const BLOCK_TYPES = {
     textures: { all: 'weeds' },
     drops: [],
   },
+  // Lit (2 blocs) : posé par tryPlaceBed (main.js) qui pose ces deux moitiés
+  // ENSEMBLE, jamais l'une sans l'autre. `shape: { width: 1, height: 0.5 }` = un
+  // bloc plein en largeur/profondeur mais tassé à mi-hauteur (façon dalle) --
+  // deux de ces demi-blocs posés côte à côte donnent un lit qui s'étend sur
+  // 2 blocs de long et un demi-bloc de haut, comme demandé. Casser une moitié
+  // casse l'autre et ne rend qu'UN item "lit" : logique spéciale dans
+  // breakBed() (main.js), pas dans `drops` ci-dessous (laissé vide exprès).
+  bed_foot: {
+    id: 25,
+    name: 'Lit (pied)',
+    hardness: 0.4,
+    tool: null,
+    solid: false, // comme tout bloc à `shape` custom (torche, herbes...) -- pas de collision fantôme au-dessus du demi-bloc visible
+    shape: { width: 1, height: 0.5 },
+    textures: { top: 'bedFoot', bottom: 'planks', side: 'bedSide' },
+    drops: [],
+  },
+  bed_head: {
+    id: 26,
+    name: 'Lit (tête)',
+    hardness: 0.4,
+    tool: null,
+    solid: false,
+    shape: { width: 1, height: 0.5 },
+    textures: { top: 'bedPillow', bottom: 'planks', side: 'bedSide' },
+    drops: [],
+  },
 };
 
 // tous les blocs liquides, avec leur id résolu — le mesher (faces séparées,

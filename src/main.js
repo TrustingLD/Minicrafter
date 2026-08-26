@@ -825,6 +825,10 @@ function breakTimeFor(type) {
 // apparaître ses `drops` (data/blocks.js) au sol, à ramasser comme n'importe quel
 // autre item. Le bonus d'outil double la quantité de chaque drop, comme avant.
 function breakBlockAt(x, y, z, type) {
+  if (type === 'bed_foot' || type === 'bed_head') {
+    breakBed(x, y, z, type);
+    return;
+  }
   const multiplier = hasRightToolFor(type) ? 2 : 1;
   const drops = BLOCK_TYPES[type]?.drops || [];
   drops.forEach(({ item, min, max }) => {
@@ -849,6 +853,32 @@ function breakBlockAt(x, y, z, type) {
   }
   bus.emit('block:broken', { x, y, z, type });
   player.hunger = Math.max(0, player.hunger - 0.005); // coût ponctuel (Phase 11)
+  bus.emit('player:hunger');
+  sfx.playSound('break');
+}
+
+// Casser une moitié de lit casse l'autre avec elle et ne rend qu'UN SEUL item
+// "lit" (pas deux) : recherche la moitié voisine (N/S/E/O) du bon type, plutôt
+// que de retenir une orientation stockée à part.
+function breakBed(x, y, z, type) {
+  const otherType = type === 'bed_foot' ? 'bed_head' : 'bed_foot';
+  const neighbors = [
+    [x + 1, y, z],
+    [x - 1, y, z],
+    [x, y, z + 1],
+    [x, y, z - 1],
+  ];
+  const pair = neighbors.find(([nx, ny, nz]) => worldApi.getBlock(nx, ny, nz) === otherType);
+  worldApi.setBlock(x, y, z, null);
+  particleSystem.burst(x + 0.5, y + 0.5, z + 0.5, type, 10);
+  if (pair) {
+    const [px, py, pz] = pair;
+    worldApi.setBlock(px, py, pz, null);
+    particleSystem.burst(px + 0.5, py + 0.5, pz + 0.5, otherType, 10);
+  }
+  itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, 'bed', 1);
+  bus.emit('block:broken', { x, y, z, type });
+  player.hunger = Math.max(0, player.hunger - 0.005);
   bus.emit('player:hunger');
   sfx.playSound('break');
 }
@@ -901,6 +931,58 @@ function tryShear() {
   return mobHit.mob.shear();
 }
 
+// Poser un lit (Phase 20) : pose 2 blocs (bed_foot + bed_head) d'un coup au lieu
+// d'un seul, dans le sens où le joueur regarde (arrondi à l'axe N/S/E/O le plus
+// proche). Appelée en amont du placement générique dans performSecondaryAction --
+// le lit n'est volontairement PAS dans BLOCK_TYPES (pas de placement 1-bloc générique
+// possible pour lui), donc NON_PLACEABLE le considère à tort comme "non posable" ;
+// c'est pour ça qu'on l'intercepte avant ce check plutôt que d'essayer de le contourner.
+function tryPlaceBed() {
+  if (countOf(slots, 'bed') <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place; // case vide où poser le pied du lit
+
+  const px = Math.floor(player.pos.x),
+    py0 = Math.floor(player.pos.y),
+    py1 = Math.floor(player.pos.y + player.height),
+    pz = Math.floor(player.pos.z);
+  const insidePlayer = (cx, cy, cz) => cx === px && cz === pz && (cy === py0 || cy === py1);
+
+  // direction horizontale regardée, arrondie à l'axe dominant (N/S/E/O) : la tête
+  // du lit se pose une case plus loin dans cette direction.
+  const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
+  let dx = 0,
+    dz = 0;
+  if (Math.abs(dir.x) > Math.abs(dir.z)) dx = Math.sign(dir.x);
+  else dz = Math.sign(dir.z);
+  const hx = x + dx,
+    hy = y,
+    hz = z + dz;
+
+  if (insidePlayer(x, y, z) || insidePlayer(hx, hy, hz)) return;
+  // les 2 cases doivent être libres, ET avoir un sol sous elles (sinon le lit flotte)
+  if (worldApi.getBlock(x, y, z) || worldApi.getBlock(hx, hy, hz)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  if (!worldApi.getBlock(x, y - 1, z) || !worldApi.getBlock(hx, hy - 1, hz)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+
+  worldApi.setBlock(x, y, z, 'bed_foot');
+  worldApi.setBlock(hx, hy, hz, 'bed_head');
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, 'bed', 1);
+  bus.emit('inventory:changed');
+  sfx.playSound('place');
+}
+
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
 function performSecondaryAction() {
   if (tryShear()) return;
@@ -915,6 +997,10 @@ function performSecondaryAction() {
   }
   if (targetedType === 'furnace') {
     openFurnace(tx, ty, tz);
+    return;
+  }
+  if (selectedBlock === 'bed') {
+    tryPlaceBed();
     return;
   }
   if (NON_PLACEABLE.has(selectedBlock)) {

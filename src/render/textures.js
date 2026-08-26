@@ -442,6 +442,59 @@ export function texWool() {
   speckle(ctx, ['#cfc7b0'], 25);
   return canvasToTexture(c);
 }
+// Lit (Phase 20) : couverture rouge + oreiller blanc, cf. data/blocks.js
+// (bed_foot/bed_head). Le dessus du pied = couverture rouge unie légèrement
+// texturée ; le dessus de la tête = oreiller blanc avec une petite couture ;
+// le côté = couverture rouge avec un bourrelet clair en haut (bord replié du
+// drap, comme dans Minecraft) pour bien lire "c'est un lit" même de profil.
+export function texBedFoot() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#b8302f';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#a52625', '#c94443'], 10, 2, 4);
+  speckle(ctx, ['#8f1f1e', '#d65a58'], 30);
+  // quelques plis de couverture
+  ctx.strokeStyle = 'rgba(90,20,20,0.35)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    const y = 8 + i * 8;
+    ctx.beginPath();
+    ctx.moveTo(2, y);
+    ctx.lineTo(TEX_SIZE - 2, y + 2);
+    ctx.stroke();
+  }
+  return canvasToTexture(c);
+}
+export function texBedPillow() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f4f1ea';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#e6e1d4', '#ffffff'], 10, 2, 4);
+  speckle(ctx, ['#d8d2c2'], 20);
+  // couture du coussin (contour)
+  ctx.strokeStyle = '#c9c2af';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(3, 3, TEX_SIZE - 6, TEX_SIZE - 6);
+  return canvasToTexture(c);
+}
+export function texBedSide() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#a8282a';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#8f1f1e', '#c04241'], 30);
+  // bord replié clair en haut de la couverture
+  ctx.fillStyle = '#e8e2d4';
+  ctx.fillRect(0, 0, TEX_SIZE, 5);
+  ctx.fillStyle = '#c9c2af';
+  ctx.fillRect(0, 5, TEX_SIZE, 1);
+  // pieds de lit en bois, tout en bas
+  ctx.fillStyle = '#6b4423';
+  ctx.fillRect(0, TEX_SIZE - 4, TEX_SIZE, 4);
+  return canvasToTexture(c);
+}
 // Sable. Avant : un aplat + du bruit uniforme, donc aucune structure — de loin ça
 // rendait comme une couleur plate. Le sable se lit à ses RIDES : des ondulations
 // douces laissées par le vent, plus quelques grains sombres épars.

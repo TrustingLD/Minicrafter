@@ -36,6 +36,7 @@ export const ITEM_NAMES = {
   sand: 'Sable',
   sandstone: 'Grès',
   cactus: 'Cactus',
+  bed: 'Lit',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
@@ -153,6 +154,16 @@ export const RECIPES = [
     need: { stone: 8 },
     give: { furnace: 1 },
     needsTable: false,
+  },
+  // Lit (occupe 2 cases au sol, cf. tryPlaceBed dans main.js) : pas un bloc simple
+  // dans BLOCK_TYPES -- 'bed' est l'item qu'on garde en poche, sa pose spéciale
+  // fait apparaître 2 blocs distincts (bed_foot/bed_head).
+  {
+    id: 'bed',
+    name: 'Lit',
+    need: { planks: 3, wool: 3 },
+    give: { bed: 1 },
+    needsTable: true,
   },
 ];
 

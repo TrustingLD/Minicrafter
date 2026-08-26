@@ -49,7 +49,10 @@ export function createBlockAssets() {
     tCactus = tex.texCactus(),
     tDeadBush = tex.texDeadBush(),
     tIce = tex.texIce(),
-    tWeeds = tex.texWeeds();
+    tWeeds = tex.texWeeds(),
+    tBedFoot = tex.texBedFoot(),
+    tBedPillow = tex.texBedPillow(),
+    tBedSide = tex.texBedSide();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -112,6 +115,24 @@ export function createBlockAssets() {
     ],
     ice: [mat(tIce), mat(tIce), mat(tIce), mat(tIce), mat(tIce), mat(tIce)],
     weeds: [mat(tWeeds), mat(tWeeds), mat(tWeeds), mat(tWeeds), mat(tWeeds), mat(tWeeds)],
+    // Le lit ("bed") tient dans un seul slot d'inventaire même s'il pose 2 blocs
+    // au sol (cf. data/blocks.js bed_foot/bed_head) : ici, juste un aperçu cube
+    // (couverture rouge dessus, côtés + pied de lit en bois) pour la hotbar/le
+    // craft/l'item lâché au sol — même simplification que la torche ci-dessus,
+    // qui est aussi un item "shape" affiché en cube plein dans ces aperçus.
+    bed: [mat(tBedSide), mat(tBedSide), mat(tBedFoot), mat(tPlanks), mat(tBedSide), mat(tBedSide)],
+    // mêmes matériaux pour les 2 moitiés réellement posées en jeu (bed_foot/bed_head)
+    // -- sert uniquement aux particules de cassage (particles.js), qui piochent par
+    // TYPE DE BLOC cassé, pas par item ; sans ça elles retomberaient sur le gris pierre.
+    bed_foot: [mat(tBedSide), mat(tBedSide), mat(tBedFoot), mat(tPlanks), mat(tBedSide), mat(tBedSide)],
+    bed_head: [
+      mat(tBedSide),
+      mat(tBedSide),
+      mat(tBedPillow),
+      mat(tPlanks),
+      mat(tBedSide),
+      mat(tBedSide),
+    ],
   };
 
   const toolTextures = {
@@ -165,6 +186,8 @@ export function createBlockAssets() {
         return tIce.image;
       case 'weeds':
         return tWeeds.image;
+      case 'bed':
+        return tBedFoot.image;
       case 'wood_sword':
         return tWoodSword.image;
       case 'wood_pickaxe':
@@ -240,6 +263,8 @@ export function createBlockAssets() {
         return { top: tCactus.image, left: tCactus.image, right: tCactus.image };
       case 'ice':
         return { top: tIce.image, left: tIce.image, right: tIce.image };
+      case 'bed':
+        return { top: tBedFoot.image, left: tBedSide.image, right: tBedSide.image };
       default:
         return null;
     }
