@@ -652,7 +652,7 @@ const SPRINT_TAP_WINDOW = 300; // ms
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') {
-    toggleCraftOrClose();
+    if (!gameOverOpen) toggleCraftOrClose();
     e.preventDefault();
     return;
   }
@@ -672,7 +672,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
-  if (craftOpen || furnaceOpen || chatUI.isOpen) return;
+  if (craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) return;
   if (e.code === 'KeyC') {
     zoomed = !zoomed;
     return;
@@ -727,7 +727,7 @@ const blocker = document.getElementById('blocker');
 renderer.domElement.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
-  if (!craftOpen && !furnaceOpen) renderer.domElement.requestPointerLock();
+  if (!craftOpen && !furnaceOpen && !gameOverOpen) renderer.domElement.requestPointerLock();
 });
 blocker.addEventListener('click', () => {
   sfx.resumeAudio();
@@ -738,7 +738,7 @@ document.addEventListener('pointerlockchange', () => {
   blocker.style.display =
     document.pointerLockElement === renderer.domElement
       ? 'none'
-      : craftOpen || furnaceOpen
+      : craftOpen || furnaceOpen || gameOverOpen
         ? 'none'
         : 'flex';
 });
@@ -975,11 +975,11 @@ if (touchMode) {
       pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
     },
     onBreakStart: () => {
-      if (!craftOpen && !furnaceOpen && !chatUI.isOpen) performPrimaryAction();
+      if (!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) performPrimaryAction();
     },
     onBreakEnd: stopBreaking,
     onPlace: () => {
-      if (!craftOpen && !furnaceOpen && !chatUI.isOpen) performSecondaryAction();
+      if (!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) performSecondaryAction();
     },
     onJump: (down) => {
       keys['Space'] = down;
@@ -1033,6 +1033,30 @@ function isUnderwater() {
 function isInLava() {
   return worldApi.isInLava(player.pos.x, player.pos.y, player.pos.z);
 }
+
+let gameOverOpen = false;
+const gameOverScreen = document.getElementById('gameOverScreen');
+const respawnBtn = document.getElementById('respawnBtn');
+
+// Mort = écran rouge "Game Over" + bouton "Respawn" (comme Minecraft), le jeu se
+// fige (cf. gameOverOpen dans la grosse condition de mise à jour joueur plus bas)
+// tant qu'on n'a pas cliqué -- le drop de l'inventaire au sol et le repositionnement
+// n'ont lieu qu'au clic (respawnPlayer), à l'endroit exact de la mort puisque rien
+// ne bouge plus entre-temps.
+function showGameOver() {
+  if (gameOverOpen) return;
+  gameOverOpen = true;
+  stopBreaking();
+  for (const k in keys) keys[k] = false;
+  document.exitPointerLock();
+  gameOverScreen.style.display = 'flex';
+}
+respawnBtn.addEventListener('click', () => {
+  gameOverOpen = false;
+  gameOverScreen.style.display = 'none';
+  respawnPlayer();
+  if (!touchMode) renderer.domElement.requestPointerLock();
+});
 
 function respawnPlayer() {
   // Mort = on drop tout l'inventaire (hotbar + sac à dos) au sol, à l'endroit
@@ -1128,12 +1152,12 @@ function animate() {
   }
 
   // joystick/visée tactiles coupés pendant craft/chat, comme le reste des contrôles
-  if (touchUI) touchUI.setActive(!craftOpen && !furnaceOpen && !chatUI.isOpen);
+  if (touchUI) touchUI.setActive(!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen);
 
   blockEntities.update(dt, SMELTING, FUELS);
   if (furnaceOpen) renderFurnace();
 
-  if (!craftOpen && !furnaceOpen && !chatUI.isOpen) {
+  if (!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) {
     let dx = touchMoveVec.x,
       dz = touchMoveVec.z;
     if (keys['KeyW'] || keys['ArrowUp']) dz -= 1;
@@ -1279,8 +1303,7 @@ function animate() {
       }
     }
 
-    if (player.pos.y < -10) respawnPlayer();
-    if (player.health <= 0) respawnPlayer();
+    if (player.pos.y < -10 || player.health <= 0) showGameOver();
 
     camera.rotation.order = 'YXZ';
     camera.rotation.y = yaw;
@@ -1315,6 +1338,7 @@ function animate() {
     craftOpen ||
     furnaceOpen ||
     chatUI.isOpen ||
+    gameOverOpen ||
     (!touchMode && document.pointerLockElement !== renderer.domElement);
   if (mustStopBreaking) {
     breakKey = null;
