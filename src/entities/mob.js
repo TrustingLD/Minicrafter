@@ -85,7 +85,7 @@ const KNOCKBACK_DURATION = 0.15; // s
 // à l'opposé du joueur pendant quelques secondes, plutôt que de continuer à errer
 // tranquillement juste à côté de celui qui vient de le frapper.
 const FLEE_DURATION = 3; // s
-const FLEE_SPEED_MULT = 1.8;
+const FLEE_SPEED_MULT = 3; // "vitesse x3 de la normale" pendant la fuite (retour utilisateur)
 function canSeeTarget(getBlock, from, to) {
   const dx = to.x - from.x,
     dy = to.y - from.y,
