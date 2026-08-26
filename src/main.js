@@ -1035,9 +1035,25 @@ function isInLava() {
 }
 
 function respawnPlayer() {
+  // Mort = on drop tout l'inventaire (hotbar + sac à dos) au sol, à l'endroit
+  // de la mort -- comme dans Minecraft, on ne perd rien "en fumée", tout reste
+  // ramassable (avec le même item magnet que n'importe quel autre drop).
+  const deathX = player.pos.x,
+    deathY = player.pos.y + player.height * 0.5,
+    deathZ = player.pos.z;
+  for (let i = 0; i < slots.length; i++) {
+    const stack = slots[i];
+    if (!stack) continue;
+    const dropped = itemSystem.spawn(deathX, deathY, deathZ, stack.item, stack.count);
+    if (dropped) {
+      // petite dispersion aléatoire pour ne pas empiler tous les drops au même endroit
+      dropped.velX = (Math.random() - 0.5) * 3;
+      dropped.velZ = (Math.random() - 0.5) * 3;
+    }
+    slots[i] = null;
+  }
+
   respawn(spawnPoint());
-  // Mort = on perd tout l'inventaire (hotbar + sac à dos), comme dans Minecraft.
-  slots.fill(null);
   selectedBlock = slots[selectedIndex]?.item ?? null;
   refreshHeldItem(selectedBlock);
   bus.emit('inventory:changed');
