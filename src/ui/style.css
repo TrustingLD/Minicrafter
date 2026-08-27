@@ -851,6 +851,103 @@ canvas {
 .invItem .blockIcon3d {
   margin-bottom: 4px;
 }
+/* ---------- Grille de craft 3x3 (Phase 18) ---------- */
+#craftArea {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+#craftGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 40px);
+  grid-template-rows: repeat(3, 40px);
+  gap: 4px;
+}
+/* .itemCell : apparence commune à toute case affichant un objet (grille de
+   craft, résultat, curseur flottant) -- .craftCell/#craftOutput/#craftCursor
+   n'ajoutent que ce qui leur est spécifique par-dessus. */
+.itemCell {
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #6b5a45;
+  border-radius: 4px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  user-select: none;
+}
+.itemCell.empty {
+  opacity: 0.5;
+}
+.itemCell img,
+.itemCell .ic {
+  width: 26px;
+  height: 26px;
+  image-rendering: pixelated;
+  border-radius: 2px;
+}
+.itemCell .cellCount {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 10px;
+  text-shadow: 1px 1px 1px #000;
+}
+.craftCell {
+  cursor: pointer;
+}
+.craftCell:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+#craftArrow {
+  font-size: 22px;
+  opacity: 0.8;
+}
+#craftOutput {
+  width: 46px;
+  height: 46px;
+  border: 2px solid #6b5a45;
+}
+#craftOutput.craftable {
+  border-color: #d4c05a;
+  box-shadow: 0 0 8px rgba(212, 192, 90, 0.6);
+  cursor: pointer;
+}
+#craftOutput.empty {
+  cursor: default;
+}
+
+/* objet "tenu" par la souris (curseur d'inventaire) -- suit ev.clientX/Y,
+   posé en dehors du flux (position fixed) pour ignorer tout scroll/overflow
+   du panneau, cf. ui/craft.js onMouseMoveTrackHead. */
+#craftCursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  transform: translate(-18px, -18px);
+  pointer-events: none;
+  z-index: 40;
+  display: none;
+  background: transparent;
+  border: none;
+}
+
+#recipeBookTitle {
+  font-size: 14px;
+  margin: 10px 0 6px;
+  opacity: 0.85;
+}
 .recipe {
   display: flex;
   align-items: center;
@@ -860,30 +957,42 @@ canvas {
   border-radius: 4px;
   padding: 6px 10px;
   margin-bottom: 6px;
+  gap: 10px;
 }
 .recipe .rname {
   font-weight: bold;
+  font-size: 12px;
+  flex: 1;
 }
-.recipe .rneed {
-  font-size: 11px;
-  color: #d8c9a8;
+/* mini-grille 3x3 en aperçu, dans le panneau de référence : montre la FORME
+   attendue plutôt qu'une liste "besoin: x, y" -- c'est tout le sens de la
+   grille réelle à côté, autant que le joueur apprenne à lire l'une comme
+   l'autre. */
+.recipeShape {
+  display: grid;
+  grid-template-columns: repeat(3, 16px);
+  grid-template-rows: repeat(3, 16px);
+  gap: 2px;
+  flex-shrink: 0;
 }
-.recipe button {
-  background: #6b8e3d;
-  border: none;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
+.recipeShapeCell {
+  width: 16px;
+  height: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.recipe button:disabled {
-  background: #555;
-  cursor: not-allowed;
-  opacity: 0.6;
+.recipeShapeCell.empty {
+  background: rgba(0, 0, 0, 0.15);
 }
-.recipe.locked {
-  opacity: 0.5;
+.recipeShapeCell img,
+.recipeShapeCell .ic {
+  width: 12px;
+  height: 12px;
+  image-rendering: pixelated;
+  border-radius: 1px;
 }
 #furnacePanel {
   position: fixed;

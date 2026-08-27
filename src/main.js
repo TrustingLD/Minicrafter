@@ -37,7 +37,6 @@ import {
   addItem,
   removeItem,
   countOf,
-  moveSlot,
   swapArmor,
   HOTBAR_SLOTS,
 } from './entities/inventory.js';
@@ -238,6 +237,9 @@ const craftUI = createCraftUI({
     charHead: document.querySelector('.charHead'),
     recipeList: document.getElementById('recipeList'),
     craftTitle: document.getElementById('craftTitle'),
+    craftGridEls: Array.from(document.querySelectorAll('.craftCell')),
+    craftOutputEl: document.getElementById('craftOutput'),
+    cursorEl: document.getElementById('craftCursor'),
   },
   RECIPES,
   itemNames: ITEM_NAMES,
@@ -245,15 +247,14 @@ const craftUI = createCraftUI({
   iconFaces3D: blockAssets.iconFaces3D,
   playSound: sfx.playSound,
   onCrafted: () => bus.emit('inventory:changed'),
-  // cliquer une case du sac à dos l'échange avec le slot hotbar sélectionné —
-  // "équiper depuis l'inventaire" (E) devient un moveSlot plutôt qu'une sélection
-  // par nom, cohérent avec le reste du système à slots.
-  onSlotClick: (backpackIndex) => {
-    moveSlot(slots, backpackIndex, selectedIndex);
+  // le sac à dos/la hotbar utilisent désormais le patron "curseur" (ramasser/
+  // poser/fusionner à la souris, cf. ui/craft.js) au lieu d'un simple échange
+  // avec le slot sélectionné -- onSlotClick n'est plus qu'un signal générique
+  // ("l'inventaire vient de changer") pour resynchroniser l'objet en main.
+  onSlotClick: () => {
     selectedBlock = slots[selectedIndex]?.item ?? null;
     refreshHeldItem(selectedBlock);
     bus.emit('inventory:changed');
-    craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
   },
   // cliquer une case de la hotbar dupliquée dans le panneau = changer la
   // sélection active, sans fermer l'inventaire.
