@@ -122,12 +122,41 @@
     </div>
 
     <script>
-      // Titre "MINICRAFTER" en blocs de pierre -- construit ici en JS classique
-      // (hors module, avant src/main.js) pour rester une pure décoration de menu,
-      // isolée de la logique de jeu : une police bitmap 5x7 très simple (façon
-      // afficheur rétro) suffit à donner un rendu "pixel art" cohérent avec le
-      // reste du jeu, chaque pixel allumé devenant un petit bloc texturé pierre.
+      // Décor du menu façon Minecraft Beta 1.1 (fond terre + titre en blocs avec
+      // ombre portée) -- en JS classique hors module, avant src/main.js, pour
+      // rester une pure décoration isolée de la logique de jeu.
       (function () {
+        // ---- 1. Fond "terre" carrelé : mini canvas généré au vol (mêmes idées
+        // que blotches()/speckle() de src/render/textures.js, dupliquées ici en
+        // simple 2D canvas pour ne pas dépendre de Three.js dans ce script hors
+        // module) puis répété en tuile via CSS avec un rendu pixelisé net.
+        var TILE = 32;
+        var c = document.createElement('canvas');
+        c.width = TILE;
+        c.height = TILE;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#6b4423';
+        ctx.fillRect(0, 0, TILE, TILE);
+        var blotchColors = ['#5a3a1e', '#7d5330', '#4a2f18'];
+        for (var i = 0; i < 20; i++) {
+          ctx.fillStyle = blotchColors[Math.floor(Math.random() * blotchColors.length)];
+          var r = 1.5 + Math.random() * 3;
+          var bx = Math.random() * TILE,
+            by = Math.random() * TILE;
+          ctx.beginPath();
+          ctx.arc(bx, by, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        for (var j = 0; j < 40; j++) {
+          ctx.fillStyle = Math.random() < 0.5 ? '#3a2410' : '#8a5a34';
+          ctx.fillRect(Math.floor(Math.random() * TILE), Math.floor(Math.random() * TILE), 1, 1);
+        }
+        var blocker = document.getElementById('blocker');
+        blocker.style.backgroundImage = 'url(' + c.toDataURL() + ')';
+
+        // ---- 2. Titre "MINICRAFTER" en blocs, avec ombre portée décalée façon
+        // logo Minecraft (une police bitmap 5x7 très simple façon afficheur
+        // rétro suffit à donner un rendu "pixel art" cohérent avec le jeu).
         var FONT = {
           M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
           I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
@@ -142,23 +171,38 @@
         var WORD = 'MINICRAFTER';
         var container = document.getElementById('minicrafterTitle');
         var frag = document.createDocumentFragment();
-        WORD.split('').forEach(function (ch) {
-          var glyph = FONT[ch];
-          var letterEl = document.createElement('div');
-          letterEl.className = 'titleLetter';
+
+        function buildGlyphCells(glyph, cellClass) {
+          var cellsFrag = document.createDocumentFragment();
           glyph.forEach(function (row, r) {
-            row.split('').forEach(function (bit, c) {
+            row.split('').forEach(function (bit, col) {
               if (bit !== '1') return;
               var cell = document.createElement('div');
-              // deux nuances de gris alternées (façon speckle de la texture
-              // pierre déjà utilisée en jeu) plutôt qu'un aplat uniforme
-              cell.className = 'stoneCell' + ((r + c) % 2 === 0 ? ' alt' : '');
-              cell.style.gridColumn = c + 1;
+              cell.className = cellClass;
+              cell.style.gridColumn = col + 1;
               cell.style.gridRow = r + 1;
-              letterEl.appendChild(cell);
+              cellsFrag.appendChild(cell);
             });
           });
-          frag.appendChild(letterEl);
+          return cellsFrag;
+        }
+
+        WORD.split('').forEach(function (ch) {
+          var glyph = FONT[ch];
+          var wrap = document.createElement('div');
+          wrap.className = 'titleLetterWrap';
+          // ombre : même grille, décalée en bas-à-droite, derrière (z-index plus
+          // bas) -- c'est ce décalage qui donne le relief "façon logo Minecraft"
+          var shadow = document.createElement('div');
+          shadow.className = 'titleLetter titleLetterShadow';
+          shadow.appendChild(buildGlyphCells(glyph, 'stoneCell shadowCell'));
+          // face avant, par-dessus
+          var front = document.createElement('div');
+          front.className = 'titleLetter titleLetterFront';
+          front.appendChild(buildGlyphCells(glyph, 'stoneCell'));
+          wrap.appendChild(shadow);
+          wrap.appendChild(front);
+          frag.appendChild(wrap);
         });
         container.appendChild(frag);
       })();
