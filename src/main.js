@@ -392,8 +392,16 @@ const playerCtrl = createPlayer({
   getBlock: worldApi.getBlock,
   spawnPos: spawnPoint(),
 });
-const { player, updateVisuals, refreshHeldItem, toggleThirdPerson, triggerHandSwing, respawn } =
-  playerCtrl;
+const {
+  player,
+  playerAvatar,
+  handPivot,
+  updateVisuals,
+  refreshHeldItem,
+  toggleThirdPerson,
+  triggerHandSwing,
+  respawn,
+} = playerCtrl;
 healthUI.render(player);
 hungerUI.render(player);
 breathUI.render(player);
@@ -622,6 +630,7 @@ bus.on('chat:message', (text) => {
 document.addEventListener('keydown', (e) => {
   if (e.code === 'F5') {
     e.preventDefault();
+    if (sleeping) return; // le lit impose déjà sa propre vue -- pas de bascule pendant qu'on dort
     toggleThirdPerson();
     // le viseur (croix centrale) n'a de sens que quand la caméra regarde dans la
     // direction visée -- en vue selfie elle regarde le joueur, donc on la masque.
@@ -652,7 +661,7 @@ const SPRINT_TAP_WINDOW = 300; // ms
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') {
-    if (!gameOverOpen) toggleCraftOrClose();
+    if (!sleeping && !gameOverOpen) toggleCraftOrClose();
     e.preventDefault();
     return;
   }
@@ -672,7 +681,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
-  if (craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) return;
+  if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) return;
   if (e.code === 'KeyC') {
     zoomed = !zoomed;
     return;
@@ -727,7 +736,8 @@ const blocker = document.getElementById('blocker');
 renderer.domElement.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
-  if (!craftOpen && !furnaceOpen && !gameOverOpen) renderer.domElement.requestPointerLock();
+  if (!sleeping && !craftOpen && !furnaceOpen && !gameOverOpen)
+    renderer.domElement.requestPointerLock();
 });
 blocker.addEventListener('click', () => {
   sfx.resumeAudio();
@@ -738,7 +748,7 @@ document.addEventListener('pointerlockchange', () => {
   blocker.style.display =
     document.pointerLockElement === renderer.domElement
       ? 'none'
-      : craftOpen || furnaceOpen || gameOverOpen
+      : sleeping || craftOpen || furnaceOpen || gameOverOpen
         ? 'none'
         : 'flex';
 });
@@ -883,6 +893,82 @@ function breakBed(x, y, z, type) {
   sfx.playSound('break');
 }
 
+/* ---------- Dormir (clic droit sur un lit) ---------- */
+// Fige le joueur, pose l'avatar allongé en travers du lit et place la caméra
+// façon "selfie" (F5 x2) fixe pour qu'il se voie couché -- jusqu'au clic sur
+// #leaveBedBtn. `player.pos` n'est volontairement PAS déplacé (seul l'avatar
+// visuel + la caméra bougent) : pas besoin de mémoriser/restaurer une position
+// debout, et la physique reste simplement gelée pendant le sommeil (cf. le
+// `!sleeping` ajouté à la grosse condition de mise à jour dans animate()).
+let sleeping = false;
+const sleepOverlay = document.getElementById('sleepOverlay');
+function trySleep(x, y, z, type) {
+  if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) return;
+  // même recherche de la moitié jumelle que breakBed() : le lit est toujours
+  // posé en paire adjacente (N/S/E/O), jamais stocké comme une seule entité.
+  const otherType = type === 'bed_foot' ? 'bed_head' : 'bed_foot';
+  const neighbors = [
+    [x + 1, y, z],
+    [x - 1, y, z],
+    [x, y, z + 1],
+    [x, y, z - 1],
+  ];
+  const pair = neighbors.find(([nx, ny, nz]) => worldApi.getBlock(nx, ny, nz) === otherType);
+  if (!pair) return; // lit incomplet (ne devrait pas arriver) -- on ignore plutôt que de planter
+  const foot = type === 'bed_foot' ? { x, y, z } : { x: pair[0], y: pair[1], z: pair[2] };
+  const head = type === 'bed_head' ? { x, y, z } : { x: pair[0], y: pair[1], z: pair[2] };
+  const dx = head.x - foot.x,
+    dz = head.z - foot.z;
+  // même convention que getAimDirection() (forward = (0,0,-1).applyEuler(yaw)) --
+  // inversée ici pour retrouver le yaw qui pointe du pied vers la tête du lit.
+  const bedYaw = Math.atan2(-dx, -dz);
+
+  sleeping = true;
+
+  // avatar couché : on réutilise le groupe 3e personne (habituellement caché en
+  // vue 1ère personne) plutôt que de créer un modèle dédié -- une rotation de
+  // 90° autour de l'axe X local (après le lacet vers la tête de lit) suffit à
+  // coucher toute la hiérarchie articulée (torse/tête/bras/jambes) d'un coup.
+  playerAvatar.group.visible = true;
+  handPivot.visible = false;
+  playerAvatar.group.position.set(foot.x + 0.5, foot.y + 0.56, foot.z + 0.5);
+  playerAvatar.group.rotation.order = 'YXZ';
+  playerAvatar.group.rotation.y = bedYaw;
+  playerAvatar.group.rotation.x = -Math.PI / 2;
+
+  // caméra fixe, en retrait et légèrement au-dessus du lit, tournée vers le
+  // joueur couché -- le même principe que la vue selfie (F5 x2) mais figé sur
+  // le lit plutôt que suivant la visée en direct (le pointeur est relâché
+  // pendant le sommeil, yaw/pitch ne bougent plus de toute façon).
+  const camDist = 3;
+  camera.position.set(
+    foot.x + 0.5 + Math.sin(bedYaw) * camDist,
+    foot.y + 2.2,
+    foot.z + 0.5 + Math.cos(bedYaw) * camDist,
+  );
+  camera.rotation.order = 'YXZ';
+  camera.lookAt(foot.x + 0.5 + dx * 0.5, foot.y + 0.7, foot.z + 0.5 + dz * 0.5);
+
+  const crosshair = document.getElementById('crosshair');
+  if (crosshair) crosshair.style.display = 'none';
+  document.exitPointerLock();
+  sleepOverlay.style.display = 'flex';
+}
+function leaveBed() {
+  if (!sleeping) return;
+  sleeping = false;
+  sleepOverlay.style.display = 'none';
+  // pas de repositionnement à faire : le prochain appel à updateVisuals (débloqué
+  // dès que `sleeping` repasse à false) replace avatar/caméra/main selon le mode
+  // de vue (F5) et la position réelle du joueur, exactement comme à chaque frame
+  // normale -- cf. le `!sleeping` dans la grosse condition de animate().
+  const crosshair = document.getElementById('crosshair');
+  if (crosshair) crosshair.style.display = playerCtrl.viewMode !== 0 ? 'none' : '';
+  if (!touchMode && document.pointerLockElement !== renderer.domElement)
+    blocker.style.display = 'flex';
+}
+sleepOverlay.querySelector('#leaveBedBtn').addEventListener('click', leaveBed);
+
 let leftMouseDown = false;
 let breakKey = null;
 let breakProgress = 0;
@@ -991,6 +1077,10 @@ function performSecondaryAction() {
   if (!blockHit) return;
   const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
   const targetedType = worldApi.getBlock(tx, ty, tz);
+  if (targetedType === 'bed_foot' || targetedType === 'bed_head') {
+    trySleep(tx, ty, tz, targetedType);
+    return;
+  }
   if (targetedType === 'crafting_table') {
     openCraft();
     return;
@@ -1027,7 +1117,8 @@ function performSecondaryAction() {
 }
 
 renderer.domElement.addEventListener('mousedown', (e) => {
-  if (document.pointerLockElement !== renderer.domElement || craftOpen || furnaceOpen) return;
+  if (document.pointerLockElement !== renderer.domElement || sleeping || craftOpen || furnaceOpen)
+    return;
   if (e.button === 0) performPrimaryAction();
   else if (e.button === 2) performSecondaryAction();
 });
@@ -1061,11 +1152,13 @@ if (touchMode) {
       pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
     },
     onBreakStart: () => {
-      if (!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) performPrimaryAction();
+      if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen)
+        performPrimaryAction();
     },
     onBreakEnd: stopBreaking,
     onPlace: () => {
-      if (!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) performSecondaryAction();
+      if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen)
+        performSecondaryAction();
     },
     onJump: (down) => {
       keys['Space'] = down;
@@ -1133,6 +1226,14 @@ function showGameOver() {
   if (gameOverOpen) return;
   gameOverOpen = true;
   stopBreaking();
+  if (sleeping) {
+    // le lit n'a plus de sens une fois mort -- referme sa vue dédiée pour que
+    // seul l'écran "Game Over" reste visible (et pour débloquer la grosse
+    // condition de mise à jour joueur, qui sinon resterait gelée par `sleeping`
+    // en plus de `gameOverOpen`).
+    sleeping = false;
+    sleepOverlay.style.display = 'none';
+  }
   for (const k in keys) keys[k] = false;
   document.exitPointerLock();
   gameOverScreen.style.display = 'flex';
@@ -1238,12 +1339,13 @@ function animate() {
   }
 
   // joystick/visée tactiles coupés pendant craft/chat, comme le reste des contrôles
-  if (touchUI) touchUI.setActive(!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen);
+  if (touchUI)
+    touchUI.setActive(!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen);
 
   blockEntities.update(dt, SMELTING, FUELS);
   if (furnaceOpen) renderFurnace();
 
-  if (!craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) {
+  if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) {
     let dx = touchMoveVec.x,
       dz = touchMoveVec.z;
     if (keys['KeyW'] || keys['ArrowUp']) dz -= 1;
@@ -1421,6 +1523,7 @@ function animate() {
   // sinon casser un bloc en bout de portée devient quasi impossible dans les faits.
   const mustStopBreaking =
     !leftMouseDown ||
+    sleeping ||
     craftOpen ||
     furnaceOpen ||
     chatUI.isOpen ||

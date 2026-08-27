@@ -479,6 +479,26 @@ export function texBedPillow() {
   ctx.strokeRect(3, 3, TEX_SIZE - 6, TEX_SIZE - 6);
   return canvasToTexture(c);
 }
+// Côté de la tête de lit : gris clair (façon cadre/tissu du sommier), pas rouge --
+// c'est ce qui, dans l'image de référence, distingue visuellement l'extrémité
+// "oreiller" du reste de la couverture. Même structure que texBedSide (bourrelet
+// clair en haut + pieds en bois en bas) pour rester cohérent en silhouette.
+export function texBedHeadSide() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#aab2b8';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#8f979d', '#c3cace'], 30);
+  // bord replié clair en haut, comme le côté rouge
+  ctx.fillStyle = '#eef1f2';
+  ctx.fillRect(0, 0, TEX_SIZE, 5);
+  ctx.fillStyle = '#c9ced1';
+  ctx.fillRect(0, 5, TEX_SIZE, 1);
+  // pieds de lit en bois, tout en bas (identique au côté rouge)
+  ctx.fillStyle = '#6b4423';
+  ctx.fillRect(0, TEX_SIZE - 4, TEX_SIZE, 4);
+  return canvasToTexture(c);
+}
 export function texBedSide() {
   const c = newCanvas();
   const ctx = c.getContext('2d');

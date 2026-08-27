@@ -52,7 +52,8 @@ export function createBlockAssets() {
     tWeeds = tex.texWeeds(),
     tBedFoot = tex.texBedFoot(),
     tBedPillow = tex.texBedPillow(),
-    tBedSide = tex.texBedSide();
+    tBedSide = tex.texBedSide(),
+    tBedHeadSide = tex.texBedHeadSide();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -126,12 +127,12 @@ export function createBlockAssets() {
     // TYPE DE BLOC cassé, pas par item ; sans ça elles retomberaient sur le gris pierre.
     bed_foot: [mat(tBedSide), mat(tBedSide), mat(tBedFoot), mat(tPlanks), mat(tBedSide), mat(tBedSide)],
     bed_head: [
-      mat(tBedSide),
-      mat(tBedSide),
+      mat(tBedHeadSide),
+      mat(tBedHeadSide),
       mat(tBedPillow),
       mat(tPlanks),
-      mat(tBedSide),
-      mat(tBedSide),
+      mat(tBedHeadSide),
+      mat(tBedHeadSide),
     ],
   };
 

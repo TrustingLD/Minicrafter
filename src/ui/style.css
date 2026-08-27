@@ -483,6 +483,36 @@ canvas {
   background: #444;
 }
 
+/* Vue "allongé dans le lit" (clic droit sur un lit) : pas de fond plein comme
+   #gameOverScreen -- on veut justement VOIR le joueur couché derrière, donc le
+   conteneur est transparent et ne capte pas les clics ; seul le bouton est cliquable. */
+#sleepOverlay {
+  position: fixed;
+  inset: 0;
+  display: none; /* affiché via JS à l'entrée dans le lit */
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8%;
+  pointer-events: none;
+  z-index: 35; /* au-dessus du HUD, sous #gameOverScreen (40) */
+}
+#leaveBedBtn {
+  pointer-events: auto;
+  padding: 12px 32px;
+  font-size: 1.1em;
+  color: white;
+  background: rgba(50, 50, 50, 0.85);
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#leaveBedBtn:hover {
+  background: rgba(70, 70, 70, 0.9);
+}
+#leaveBedBtn:active {
+  background: rgba(40, 40, 40, 0.9);
+}
+
 #blocker {
   position: fixed;
   inset: 0;

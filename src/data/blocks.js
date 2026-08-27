@@ -299,7 +299,10 @@ export const BLOCK_TYPES = {
     tool: null,
     solid: false,
     shape: { width: 1, height: 0.5 },
-    textures: { top: 'bedPillow', bottom: 'planks', side: 'bedSide' },
+    // côté gris clair (et non rouge) pour la moitié tête -- cf. texBedHeadSide,
+    // c'est ce qui donne au lit son extrémité "sommier/oreiller" bien visible
+    // même de profil, comme dans l'image de référence.
+    textures: { top: 'bedPillow', bottom: 'planks', side: 'bedHeadSide' },
     drops: [],
   },
 };
