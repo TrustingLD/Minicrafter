@@ -25,11 +25,15 @@ Pouvoir remonter a la surface de la lave et de l’eau
 
 Les zombies doivent spawn que la nuit et si le jour QUE dans le grottes et doivent bruler au contact du soleil donc ajouter une animation de bruler genre le mob doit etre en feu et c’est pareil quand le joueur sort de la lave il doit etre en feu
 
-NETHER.
+NETHER. END.
+
+couleurs plus saturées
 
 plus d'ombres, plus shader
 
+aut que la table de craft soit un tableau de 3x3 cases ou l'on met les items pour fabriquer l'objet par rapport a ca forme / logique comme dans minecraft
 
+on va améliorer tout le menu du début : mettre MINICRAFTER en haut en mettant des blocs de pierre pour faire les lettres et un peu en perspective profondeur et deux boutons en dessous : Solo, Multijoueur, Options. pour l'instant je te demande de faire des boutons qui ne servent a rien pour multijoueur et options mais quand on clique solo le jeu doit se lancer quoi
 
 
 
