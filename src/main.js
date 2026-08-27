@@ -958,7 +958,12 @@ function leaveBed() {
   if (!sleeping) return;
   sleeping = false;
   sleepOverlay.style.display = 'none';
-  // pas de repositionnement à faire : le prochain appel à updateVisuals (débloqué
+  // updateVisuals() ne remet jamais group.rotation.x à zéro (il ne pose que
+  // .rotation.y, cf. player.js) -- sans ce reset explicite le joueur restait
+  // visuellement couché pour toujours après avoir quitté le lit, y compris en
+  // vue F5/selfie.
+  playerAvatar.group.rotation.x = 0;
+  // pas de repositionnement à faire par ailleurs : le prochain appel à updateVisuals (débloqué
   // dès que `sleeping` repasse à false) replace avatar/caméra/main selon le mode
   // de vue (F5) et la position réelle du joueur, exactement comme à chaque frame
   // normale -- cf. le `!sleeping` dans la grosse condition de animate().
@@ -1233,6 +1238,7 @@ function showGameOver() {
     // en plus de `gameOverOpen`).
     sleeping = false;
     sleepOverlay.style.display = 'none';
+    playerAvatar.group.rotation.x = 0; // idem leaveBed() : éviter un avatar figé couché
   }
   for (const k in keys) keys[k] = false;
   document.exitPointerLock();
