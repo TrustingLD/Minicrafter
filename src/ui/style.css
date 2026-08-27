@@ -524,34 +524,40 @@ canvas {
   image-rendering: pixelated;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* le titre doit être HAUT dans le menu, pas centré verticalement */
   flex-direction: column;
+  padding-top: 8%;
   color: white;
   z-index: 20;
   text-align: center;
 }
-/* Titre "MINICRAFTER" façon logo Minecraft : blocs plats + copie sombre
-   décalée en dessous/à droite pour l'ombre portée (cf. script inline). Pas de
-   perspective/inclinaison ici -- le modèle Beta 1.1 est bien plat. */
-#minicrafterTitle {
-  display: flex;
-  gap: 5px;
-  margin-bottom: 2px;
+/* Bloc titre + sous-titre "Javascript Edition" : conteneur commun pour que le
+   sous-titre puisse se positionner en absolu PAR RAPPORT AUX LETTRES (et donc
+   mordre dessus), peu importe leur taille. */
+#titleBlock {
+  position: relative;
+  margin-bottom: 26px;
 }
-#editionSubtitle {
-  margin: 0 0 24px;
-  font-size: 0.85em;
-  font-style: italic;
-  color: #e0d200;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+/* Titre "MINICRAFTER" façon logo Minecraft : blocs plats + copie sombre
+   décalée en dessous/à droite pour l'ombre portée (cf. script inline), plus
+   une vraie perspective/inclinaison 3D sur l'ensemble du mot (un seul plan,
+   un seul point de fuite -- cf. #title3d ci-dessous). */
+#minicrafterTitle {
+  perspective: 900px;
+}
+#title3d {
+  display: flex;
+  gap: 7px;
+  transform: rotateX(32deg);
+  transform-style: preserve-3d;
 }
 .titleLetterWrap {
   position: relative;
 }
 .titleLetter {
   display: grid;
-  grid-template-columns: repeat(5, 11px);
-  grid-template-rows: repeat(7, 11px);
+  grid-template-columns: repeat(5, 16px);
+  grid-template-rows: repeat(7, 16px);
   /* pas de gap : les blocs doivent être collés les uns aux autres (façon
      lettres pleines), contrairement aux grilles à petits carreaux espacés
      utilisées ailleurs (ex. la texture du menu de craft) */
@@ -559,8 +565,8 @@ canvas {
 }
 .titleLetterShadow {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  top: 6px;
+  left: 6px;
   z-index: 0;
 }
 .titleLetterFront {
@@ -568,12 +574,24 @@ canvas {
   z-index: 1;
 }
 .stoneCell {
-  width: 11px;
-  height: 11px;
+  width: 16px;
+  height: 16px;
   background: #dcdcdc;
 }
 .stoneCell.shadowCell {
   background: #2b2b2b;
+}
+#editionSubtitle {
+  /* "mord" sur le bas des lettres, au premier plan par-dessus -- d'où le
+     z-index élevé et la remontée par margin négatif plutôt qu'un flux normal */
+  position: relative;
+  z-index: 5;
+  margin: -14px 6px 0 0;
+  text-align: right;
+  font-size: 0.85em;
+  font-style: italic;
+  color: #e0d200;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 #menuButtons {
   display: flex;

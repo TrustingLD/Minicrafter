@@ -103,8 +103,10 @@
     </div>
 
     <div id="blocker">
-      <div id="minicrafterTitle"></div>
-      <p id="editionSubtitle">Javascript Edition</p>
+      <div id="titleBlock">
+        <div id="minicrafterTitle"></div>
+        <p id="editionSubtitle">Javascript Edition</p>
+      </div>
       <div id="menuButtons">
         <button id="soloBtn" class="menuBtn">Solo</button>
         <button id="multiBtn" class="menuBtn">Multijoueur</button>
@@ -171,6 +173,10 @@
         };
         var WORD = 'MINICRAFTER';
         var container = document.getElementById('minicrafterTitle');
+        // toutes les lettres tournent ENSEMBLE (un seul plan 3D, un seul point
+        // de fuite cohérent) plutôt que chacune indépendamment
+        var row3d = document.createElement('div');
+        row3d.id = 'title3d';
         var frag = document.createDocumentFragment();
 
         function buildGlyphCells(glyph, cellClass) {
@@ -205,7 +211,8 @@
           wrap.appendChild(front);
           frag.appendChild(wrap);
         });
-        container.appendChild(frag);
+        row3d.appendChild(frag);
+        container.appendChild(row3d);
       })();
     </script>
 
