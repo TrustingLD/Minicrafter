@@ -103,17 +103,66 @@
     </div>
 
     <div id="blocker">
-      <h1>Minicrafter</h1>
+      <div id="minicrafterTitle"></div>
+      <div id="menuButtons">
+        <button id="soloBtn" class="menuBtn">Solo</button>
+        <button id="multiBtn" class="menuBtn">Multijoueur</button>
+        <button id="optionsBtn" class="menuBtn">Options</button>
+      </div>
       <p id="blockerSubtitle">Inspiré de Minecraft</p>
-      <p>Clique pour jouer</p>
-      <p>ZQSD / WASD : se déplacer — Espace : sauter</p>
-      <p>Clic gauche : casser / attaquer — Clic droit : poser</p>
-      <p>Clic droit sur un lit : dormir (vue sur soi-même, bouton pour se relever)</p>
-      <p>Molette ou 1-9 : choisir l'objet — E : inventaire / craft</p>
-      <p>Pioche/hache équipées = bonus de récolte sur pierre/bois</p>
-      <p>M : couper/remettre la musique — F5 : vue 3e personne</p>
-      <p>C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat</p>
+      <div id="blockerHelp">
+        <p>ZQSD / WASD : se déplacer — Espace : sauter</p>
+        <p>Clic gauche : casser / attaquer — Clic droit : poser</p>
+        <p>Clic droit sur un lit : dormir (vue sur soi-même, bouton pour se relever)</p>
+        <p>Molette ou 1-9 : choisir l'objet — E : inventaire / craft</p>
+        <p>Pioche/hache équipées = bonus de récolte sur pierre/bois</p>
+        <p>M : couper/remettre la musique — F5 : vue 3e personne</p>
+        <p>C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat</p>
+      </div>
     </div>
+
+    <script>
+      // Titre "MINICRAFTER" en blocs de pierre -- construit ici en JS classique
+      // (hors module, avant src/main.js) pour rester une pure décoration de menu,
+      // isolée de la logique de jeu : une police bitmap 5x7 très simple (façon
+      // afficheur rétro) suffit à donner un rendu "pixel art" cohérent avec le
+      // reste du jeu, chaque pixel allumé devenant un petit bloc texturé pierre.
+      (function () {
+        var FONT = {
+          M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
+          I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
+          N: ['10001', '11001', '10101', '10101', '10011', '10001', '10001'],
+          C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
+          R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+          A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+          F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
+          T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+          E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+        };
+        var WORD = 'MINICRAFTER';
+        var container = document.getElementById('minicrafterTitle');
+        var frag = document.createDocumentFragment();
+        WORD.split('').forEach(function (ch) {
+          var glyph = FONT[ch];
+          var letterEl = document.createElement('div');
+          letterEl.className = 'titleLetter';
+          glyph.forEach(function (row, r) {
+            row.split('').forEach(function (bit, c) {
+              if (bit !== '1') return;
+              var cell = document.createElement('div');
+              // deux nuances de gris alternées (façon speckle de la texture
+              // pierre déjà utilisée en jeu) plutôt qu'un aplat uniforme
+              cell.className = 'stoneCell' + ((r + c) % 2 === 0 ? ' alt' : '');
+              cell.style.gridColumn = c + 1;
+              cell.style.gridRow = r + 1;
+              letterEl.appendChild(cell);
+            });
+          });
+          frag.appendChild(letterEl);
+        });
+        container.appendChild(frag);
+      })();
+    </script>
 
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }

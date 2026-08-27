@@ -523,8 +523,71 @@ canvas {
   flex-direction: column;
   color: white;
   z-index: 20;
-  cursor: pointer;
   text-align: center;
+}
+/* Titre "MINICRAFTER" en blocs de pierre (cf. script inline dans index.html) --
+   perspective légère façon écran-titre, chaque lettre étant une grille 5x7 de
+   petits blocs texturés. */
+#minicrafterTitle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+  padding: 10px;
+  perspective: 700px; /* la "profondeur" vient de l'inclinaison ci-dessous, pas de cette valeur seule */
+}
+.titleLetter {
+  display: grid;
+  grid-template-columns: repeat(5, 6px);
+  grid-template-rows: repeat(7, 6px);
+  gap: 1px;
+  /* légère bascule vers l'arrière + tassement vertical (scaleY) pour simuler
+     un point de fuite -- un vrai rendu 3D serait too much pour un menu HTML */
+  transform: rotateX(28deg) scaleY(0.85);
+  transform-style: preserve-3d;
+}
+.stoneCell {
+  width: 6px;
+  height: 6px;
+  background: #8d8d8d;
+  /* même esprit de biseau clair/sombre que les blocs texturés du jeu (cf.
+     speckle() dans textures.js) : donne un petit relief 3D à chaque pixel */
+  box-shadow:
+    inset -1px -1px 0 rgba(0, 0, 0, 0.4),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.25);
+}
+.stoneCell.alt {
+  background: #7a7a7a;
+}
+#menuButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.menuBtn {
+  width: 220px;
+  padding: 12px 0;
+  font-size: 1.05em;
+  color: white;
+  background: rgba(60, 60, 60, 0.85);
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.menuBtn:hover {
+  background: rgba(85, 85, 85, 0.9);
+}
+.menuBtn:active {
+  background: rgba(45, 45, 45, 0.9);
+}
+#soloBtn {
+  /* bouton principal du menu -- légèrement mis en avant par rapport aux deux
+     autres (Multijoueur/Options), qui ne font rien pour l'instant */
+  background: rgba(70, 110, 60, 0.85);
+  border-color: #2f4a28;
+}
+#soloBtn:hover {
+  background: rgba(90, 140, 78, 0.9);
 }
 #blocker h1 {
   margin-bottom: 10px;

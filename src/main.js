@@ -733,16 +733,20 @@ document.addEventListener(
 let yaw = 0,
   pitch = 0;
 const blocker = document.getElementById('blocker');
+const soloBtn = document.getElementById('soloBtn');
 renderer.domElement.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
   if (!sleeping && !craftOpen && !furnaceOpen && !gameOverOpen)
     renderer.domElement.requestPointerLock();
 });
-blocker.addEventListener('click', () => {
+// Seul "Solo" lance/reprend la partie -- Multijoueur et Options n'ont
+// délibérément aucun gestionnaire pour l'instant (boutons de menu inertes).
+soloBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
-  renderer.domElement.requestPointerLock();
+  if (touchMode) blocker.style.display = 'none'; // pas de pointer lock sur tactile
+  else renderer.domElement.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
   blocker.style.display =
@@ -1151,7 +1155,9 @@ window.addEventListener('blur', stopBreaking);
 let touchMoveVec = { x: 0, z: 0 };
 let touchUI = null; // référencé dans animate() pour désactiver joystick/visée pendant craft/chat
 if (touchMode) {
-  blocker.style.display = 'none'; // pas de pointer lock sur tactile : on démarre directement
+  // le menu (#blocker) reste affiché jusqu'au tap sur "Solo" -- cf. le
+  // gestionnaire de soloBtn plus haut, qui masque le blocker sans pointer
+  // lock sur tactile.
 
   touchUI = createTouchUI({
     onMove: (dx, dz) => {
