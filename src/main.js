@@ -963,6 +963,13 @@ function leaveBed() {
   // visuellement couché pour toujours après avoir quitté le lit, y compris en
   // vue F5/selfie.
   playerAvatar.group.rotation.x = 0;
+  // .visible n'est lui non plus jamais touché par updateVisuals -- seul
+  // toggleThirdPerson() le fait (cf. player.js). trySleep() l'avait forcé à
+  // `true` (+ handPivot à `false`) pour qu'on se voie couché même en vue 1ère
+  // personne ; sans ce reset, en vue 1ère personne on restait ensuite avec
+  // l'avatar (buste bleu) planté dans la caméra au lieu de la main tenue.
+  playerAvatar.group.visible = playerCtrl.thirdPerson;
+  handPivot.visible = !playerCtrl.thirdPerson;
   // pas de repositionnement à faire par ailleurs : le prochain appel à updateVisuals (débloqué
   // dès que `sleeping` repasse à false) replace avatar/caméra/main selon le mode
   // de vue (F5) et la position réelle du joueur, exactement comme à chaque frame
@@ -1239,6 +1246,8 @@ function showGameOver() {
     sleeping = false;
     sleepOverlay.style.display = 'none';
     playerAvatar.group.rotation.x = 0; // idem leaveBed() : éviter un avatar figé couché
+    playerAvatar.group.visible = playerCtrl.thirdPerson; // idem leaveBed() : éviter le buste planté en vue 1ère personne
+    handPivot.visible = !playerCtrl.thirdPerson;
   }
   for (const k in keys) keys[k] = false;
   document.exitPointerLock();
