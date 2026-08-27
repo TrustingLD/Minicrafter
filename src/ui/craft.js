@@ -35,10 +35,10 @@ export function createCraftUI({
   iconCanvas,
   iconFaces3D,
   playSound,
+  armorItems,
   onCrafted,
   onSlotClick,
   onHotbarSlotClick,
-  onArmorSlotClick,
 }) {
   const {
     craftPanel,
@@ -233,9 +233,29 @@ export function createCraftUI({
     renderAll();
   }
 
+  // Emplacements d'armure (casque/plastron/jambières/bottes) : même geste
+  // "curseur" que le reste des grilles -- clic pour ramasser/poser/échanger,
+  // clic droit pour une unité (armorItems : items.js ARMOR_ITEMS, item -> {slot}).
+  // Seule restriction : on refuse de POSER un objet qui n'est pas la pièce
+  // d'armure attendue pour ce slot (un casque ne rentre pas dans "bottes") --
+  // le RETRAIT (poser le curseur vide, ou ramasser ce qui est déjà équipé)
+  // n'est lui jamais bloqué.
+  function armorSlotClick(i, right) {
+    if (cursor && (!armorItems[cursor.item] || armorItems[cursor.item].slot !== i)) return;
+    pickupOrPlace(
+      () => lastArmorSlots[i],
+      (v) => (lastArmorSlots[i] = v),
+      right,
+    );
+    onCrafted(); // même signal que craftOutputClick : prévient main.js (bus 'inventory:changed')
+    renderAll();
+  }
+
   // à la fermeture du panneau : on ne veut JAMAIS perdre les objets posés dans
   // la grille ou tenus par le curseur -- tout repart dans l'inventaire (sac à
-  // dos, puis hotbar si besoin, via addItem).
+  // dos, puis hotbar si besoin, via addItem). L'armure ÉQUIPÉE (armorSlots),
+  // elle, reste sciemment en place -- fermer l'inventaire ne déshabille pas
+  // le joueur, exactement comme dans Minecraft.
   function flushToInventory(slots) {
     if (!slots) return;
     for (let i = 0; i < GRID_CELLS; i++) {
@@ -448,12 +468,17 @@ export function createCraftUI({
     });
   }
 
-  // écouteurs des 4 cases d'armure : posés une seule fois (les éléments sont
-  // statiques dans le DOM, seul leur contenu change à chaque render()).
-  if (armorSlotEls && onArmorSlotClick) {
+  // écouteurs des 4 cases d'armure : même patron clic gauche/droit que la grille
+  // de craft (armorSlotClick, cf. plus haut) -- posés une seule fois (les
+  // éléments sont statiques dans le DOM, seul leur contenu change à chaque render()).
+  if (armorSlotEls) {
     armorSlotEls.forEach((el, i) => {
       el.dataset.placeholder = el.innerHTML; // pictogramme d'origine, pour le ré-afficher quand la case se vide
-      el.addEventListener('click', () => onArmorSlotClick(i));
+      el.addEventListener('click', () => armorSlotClick(i, false));
+      el.addEventListener('contextmenu', (ev) => {
+        ev.preventDefault();
+        armorSlotClick(i, true);
+      });
     });
   }
 

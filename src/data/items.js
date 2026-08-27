@@ -37,6 +37,20 @@ export const ITEM_NAMES = {
   sandstone: 'Grès',
   cactus: 'Cactus',
   bed: 'Lit',
+  gold_ingot: "Lingot d'or",
+  diamond: 'Diamant',
+  iron_helmet: 'Casque en fer',
+  iron_chestplate: 'Plastron en fer',
+  iron_leggings: 'Jambières en fer',
+  iron_boots: 'Bottes en fer',
+  gold_helmet: "Casque en or",
+  gold_chestplate: "Plastron en or",
+  gold_leggings: "Jambières en or",
+  gold_boots: "Bottes en or",
+  diamond_helmet: 'Casque en diamant',
+  diamond_chestplate: 'Plastron en diamant',
+  diamond_leggings: 'Jambières en diamant',
+  diamond_boots: 'Bottes en diamant',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
@@ -74,6 +88,36 @@ export const TOOL_CATEGORY = {
 //     ce motif -- il matche à n'importe quelle position dans la grille, exactement
 //     comme dans Minecraft (une pioche fonctionne posée en haut, au milieu ou en
 //     bas de la grille, tant que la forme relative est respectée).
+// Armures (Phase 19) : item -> { slot, material }. `slot` correspond à l'index
+// dans armorSlots (0 casque, 1 plastron, 2 jambières, 3 bottes, cf.
+// entities/inventory.js ARMOR_NAMES) -- c'est ce qui empêche de glisser un
+// casque dans l'emplacement des bottes (cf. ui/craft.js armorSlotClick).
+export const ARMOR_ITEMS = {
+  iron_helmet: { slot: 0, material: 'iron' },
+  iron_chestplate: { slot: 1, material: 'iron' },
+  iron_leggings: { slot: 2, material: 'iron' },
+  iron_boots: { slot: 3, material: 'iron' },
+  gold_helmet: { slot: 0, material: 'gold' },
+  gold_chestplate: { slot: 1, material: 'gold' },
+  gold_leggings: { slot: 2, material: 'gold' },
+  gold_boots: { slot: 3, material: 'gold' },
+  diamond_helmet: { slot: 0, material: 'diamond' },
+  diamond_chestplate: { slot: 1, material: 'diamond' },
+  diamond_leggings: { slot: 2, material: 'diamond' },
+  diamond_boots: { slot: 3, material: 'diamond' },
+};
+
+// Réduction de dégâts pour un SET COMPLET (4 pièces) du matériau donné. Chaque
+// pièce équipée contribue à parts égales (cf. computeArmorReduction dans
+// main.js) : un plastron en diamant seul donne 0.60/4 = 15%, un set complet
+// en diamant donne bien 60% comme demandé. Mélanger les matériaux fonctionne
+// aussi (ex: casque diamant + le reste en fer).
+export const ARMOR_MATERIAL_REDUCTION = {
+  iron: 0.2,
+  gold: 0.3,
+  diamond: 0.6,
+};
+
 export const RECIPES = [
   {
     id: 'planks',
@@ -206,6 +250,108 @@ export const RECIPES = [
     pattern: ['WWW', 'PPP'],
     key: { W: 'wool', P: 'planks' },
     give: { bed: 1 },
+    needsTable: true,
+  },
+  // Armures (Phase 19) : 4 pièces par matériau (fer/or/diamant), mêmes formes
+  // que dans Minecraft -- seul le matériau (M) change d'une recette à l'autre.
+  // Casque : arceau (3 en haut, 2 sur les côtés, centre vide).
+  // Plastron : épaulettes + torse plein.
+  // Jambières : ceinture pleine + 2 jambes.
+  // Bottes : juste 2 pieds (2 cases en bas de chaque colonne).
+  {
+    id: 'iron_helmet',
+    name: 'Casque en fer',
+    pattern: ['MMM', 'M.M'],
+    key: { M: 'iron_ingot' },
+    give: { iron_helmet: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'iron_chestplate',
+    name: 'Plastron en fer',
+    pattern: ['M.M', 'MMM', 'MMM'],
+    key: { M: 'iron_ingot' },
+    give: { iron_chestplate: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'iron_leggings',
+    name: 'Jambières en fer',
+    pattern: ['MMM', 'M.M', 'M.M'],
+    key: { M: 'iron_ingot' },
+    give: { iron_leggings: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'iron_boots',
+    name: 'Bottes en fer',
+    pattern: ['M.M', 'M.M'],
+    key: { M: 'iron_ingot' },
+    give: { iron_boots: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'gold_helmet',
+    name: 'Casque en or',
+    pattern: ['MMM', 'M.M'],
+    key: { M: 'gold_ingot' },
+    give: { gold_helmet: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'gold_chestplate',
+    name: 'Plastron en or',
+    pattern: ['M.M', 'MMM', 'MMM'],
+    key: { M: 'gold_ingot' },
+    give: { gold_chestplate: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'gold_leggings',
+    name: 'Jambières en or',
+    pattern: ['MMM', 'M.M', 'M.M'],
+    key: { M: 'gold_ingot' },
+    give: { gold_leggings: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'gold_boots',
+    name: 'Bottes en or',
+    pattern: ['M.M', 'M.M'],
+    key: { M: 'gold_ingot' },
+    give: { gold_boots: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'diamond_helmet',
+    name: 'Casque en diamant',
+    pattern: ['MMM', 'M.M'],
+    key: { M: 'diamond' },
+    give: { diamond_helmet: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'diamond_chestplate',
+    name: 'Plastron en diamant',
+    pattern: ['M.M', 'MMM', 'MMM'],
+    key: { M: 'diamond' },
+    give: { diamond_chestplate: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'diamond_leggings',
+    name: 'Jambières en diamant',
+    pattern: ['MMM', 'M.M', 'M.M'],
+    key: { M: 'diamond' },
+    give: { diamond_leggings: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'diamond_boots',
+    name: 'Bottes en diamant',
+    pattern: ['M.M', 'M.M'],
+    key: { M: 'diamond' },
+    give: { diamond_boots: 1 },
     needsTable: true,
   },
 ];

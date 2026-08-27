@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { matchRecipe, consumeForRecipe } from '../src/data/crafting.js';
 import { RECIPES } from '../src/data/items.js';
+import { SMELTING } from '../src/data/recipes.js';
 
 // grille 3x3 à partir d'une liste [index, item, count?]
 function grid9(cells) {
@@ -137,4 +138,67 @@ test('matchRecipe: lit (3 laines en haut, 3 planches en bas)', () => {
     [5, 'planks'],
   ]);
   assert.equal(matchRecipe(g, RECIPES, true)?.id, 'bed');
+});
+
+test('matchRecipe: casque en fer (arceau MMM / M.M)', () => {
+  const g = grid9([
+    [0, 'iron_ingot'],
+    [1, 'iron_ingot'],
+    [2, 'iron_ingot'],
+    [3, 'iron_ingot'],
+    [5, 'iron_ingot'],
+  ]);
+  assert.equal(matchRecipe(g, RECIPES, true)?.id, 'iron_helmet');
+});
+
+test('matchRecipe: plastron en or (M.M / MMM / MMM)', () => {
+  const g = grid9([
+    [0, 'gold_ingot'],
+    [2, 'gold_ingot'],
+    [3, 'gold_ingot'],
+    [4, 'gold_ingot'],
+    [5, 'gold_ingot'],
+    [6, 'gold_ingot'],
+    [7, 'gold_ingot'],
+    [8, 'gold_ingot'],
+  ]);
+  assert.equal(matchRecipe(g, RECIPES, true)?.id, 'gold_chestplate');
+});
+
+test('matchRecipe: jambières en diamant (MMM / M.M / M.M)', () => {
+  const g = grid9([
+    [0, 'diamond'],
+    [1, 'diamond'],
+    [2, 'diamond'],
+    [3, 'diamond'],
+    [5, 'diamond'],
+    [6, 'diamond'],
+    [8, 'diamond'],
+  ]);
+  assert.equal(matchRecipe(g, RECIPES, true)?.id, 'diamond_leggings');
+});
+
+test('matchRecipe: bottes en fer (M.M / M.M)', () => {
+  const g = grid9([
+    [0, 'iron_ingot'],
+    [2, 'iron_ingot'],
+    [3, 'iron_ingot'],
+    [5, 'iron_ingot'],
+  ]);
+  assert.equal(matchRecipe(g, RECIPES, true)?.id, 'iron_boots');
+});
+
+test('matchRecipe: armures ignorées sans table à proximité', () => {
+  const g = grid9([
+    [0, 'iron_ingot'],
+    [2, 'iron_ingot'],
+    [3, 'iron_ingot'],
+    [5, 'iron_ingot'],
+  ]);
+  assert.equal(matchRecipe(g, RECIPES, false), null);
+});
+
+test('SMELTING: minerai d\'or et de diamant se fondent bien', () => {
+  assert.equal(SMELTING.gold_ore, 'gold_ingot');
+  assert.equal(SMELTING.diamond_ore, 'diamond');
 });

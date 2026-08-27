@@ -11,7 +11,15 @@ import { COMMANDS } from './data/commands.js';
 import { createBlockAssets } from './render/block-assets.js';
 import { texCrackStage } from './render/textures.js';
 import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
-import { ITEM_NAMES, RECIPES, NON_PLACEABLE, TOOL_CATEGORY, FOOD } from './data/items.js';
+import {
+  ITEM_NAMES,
+  RECIPES,
+  NON_PLACEABLE,
+  TOOL_CATEGORY,
+  FOOD,
+  ARMOR_ITEMS,
+  ARMOR_MATERIAL_REDUCTION,
+} from './data/items.js';
 import { SMELTING, FUELS } from './data/recipes.js';
 import { createBlockEntitySystem } from './world/block-entities.js';
 import { SEA_LEVEL, getHeight, getBiome, findSpawnColumn } from './world/generator.js';
@@ -24,6 +32,7 @@ import { createMusic } from './audio/music.js';
 import { createMobTextures, createMobSystem } from './entities/mob.js';
 import { createPlayer } from './entities/player.js';
 import { createParticleSystem } from './entities/particles.js';
+import { computeArmorReduction as armorComputeReduction } from './entities/armor.js';
 import {
   resolveHorizontalMove,
   resolveVerticalPhysics,
@@ -37,7 +46,6 @@ import {
   addItem,
   removeItem,
   countOf,
-  swapArmor,
   HOTBAR_SLOTS,
 } from './entities/inventory.js';
 import { createItemEntitySystem } from './entities/item-entity.js';
@@ -179,6 +187,23 @@ function triggerPlaceFeedback(x, y, z) {
 const slots = createSlots();
 const armorSlots = createArmorSlots(); // 4 emplacements casque/plastron/jambières/bottes (cf. E)
 
+// Réduction de dégâts (Phase 19) : pur import depuis entities/armor.js
+// (testable), voir ce module pour le détail du calcul.
+function computeArmorReduction() {
+  return armorComputeReduction(armorSlots, ARMOR_ITEMS, ARMOR_MATERIAL_REDUCTION);
+}
+
+// Applique l'armure puis retire les points de vie -- centralise ce que faisaient
+// jusqu'ici plusieurs `player.health = Math.max(0, player.health - dmg)` séparés
+// (mobs, lave, cactus, chute), pour que l'armure s'applique UNIFORMÉMENT à toutes
+// ces sources. Comme dans Minecraft, la faim et la noyade ignorent l'armure --
+// ces deux-là continuent d'appeler player.health directement, sans passer par ici.
+function damagePlayer(amount) {
+  const reduced = amount * (1 - computeArmorReduction());
+  player.health = Math.max(0, player.health - reduced);
+  bus.emit('player:health');
+}
+
 let selectedIndex = 0;
 let selectedBlock = slots[selectedIndex]?.item ?? null;
 
@@ -246,11 +271,12 @@ const craftUI = createCraftUI({
   iconCanvas: blockAssets.iconCanvas,
   iconFaces3D: blockAssets.iconFaces3D,
   playSound: sfx.playSound,
+  armorItems: ARMOR_ITEMS,
   onCrafted: () => bus.emit('inventory:changed'),
-  // le sac à dos/la hotbar utilisent désormais le patron "curseur" (ramasser/
-  // poser/fusionner à la souris, cf. ui/craft.js) au lieu d'un simple échange
-  // avec le slot sélectionné -- onSlotClick n'est plus qu'un signal générique
-  // ("l'inventaire vient de changer") pour resynchroniser l'objet en main.
+  // le sac à dos/la hotbar/les emplacements d'armure utilisent tous le même
+  // patron "curseur" (ramasser/poser/fusionner à la souris, cf. ui/craft.js) --
+  // onSlotClick n'est plus qu'un signal générique ("l'inventaire vient de
+  // changer") pour resynchroniser l'objet en main.
   onSlotClick: () => {
     selectedBlock = slots[selectedIndex]?.item ?? null;
     refreshHeldItem(selectedBlock);
@@ -260,14 +286,6 @@ const craftUI = createCraftUI({
   // sélection active, sans fermer l'inventaire.
   onHotbarSlotClick: (hotbarIndex) => {
     selectSlot(hotbarIndex);
-    craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
-  },
-  // cliquer une case d'armure échange son contenu avec le slot hotbar sélectionné.
-  onArmorSlotClick: (armorIndex) => {
-    swapArmor(armorSlots, slots, armorIndex, selectedIndex);
-    selectedBlock = slots[selectedIndex]?.item ?? null;
-    refreshHeldItem(selectedBlock);
-    bus.emit('inventory:changed');
     craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
   },
 });
@@ -524,8 +542,7 @@ const mobSystem = createMobSystem({
   itemSystem,
   playSound: sfx.playSound,
   onPlayerHurt: (dmg) => {
-    player.health = Math.max(0, player.health - dmg);
-    bus.emit('player:health');
+    damagePlayer(dmg);
   },
   spawnHalf: MOB_SPAWN_HALF,
   seaLevel: SEA_LEVEL,
@@ -1394,8 +1411,7 @@ function animate() {
     if (inLava) {
       lavaDamageTimer -= dt;
       if (lavaDamageTimer <= 0) {
-        player.health = Math.max(0, player.health - 4);
-        bus.emit('player:health');
+        damagePlayer(4);
         sfx.playSound('hurt');
         lavaDamageTimer = 0.5;
       }
@@ -1410,8 +1426,7 @@ function animate() {
     if (worldApi.isTouchingCactus(player.pos.x, player.pos.y, player.pos.z, player.radius, player.height)) {
       cactusDamageTimer -= dt;
       if (cactusDamageTimer <= 0) {
-        player.health = Math.max(0, player.health - 1);
-        bus.emit('player:health');
+        damagePlayer(1);
         sfx.playSound('hurt');
         cactusDamageTimer = 0.5;
       }
@@ -1433,6 +1448,8 @@ function animate() {
     if (hungerTickTimer <= 0) {
       hungerTickTimer = 4;
       if (player.hunger <= 0) {
+        // pas d'armure ici : la famine ignore la réduction de dégâts (cf.
+        // damagePlayer plus haut), comme dans Minecraft.
         player.health = Math.max(0, player.health - 1);
         bus.emit('player:health');
       } else if (player.hunger >= 20 && player.health < 20) {
@@ -1452,6 +1469,8 @@ function animate() {
       if (player.breath <= 0) {
         drownDamageTimer -= dt;
         if (drownDamageTimer <= 0) {
+          // pas d'armure ici non plus : la noyade ignore la réduction de
+          // dégâts, comme dans Minecraft (cf. damagePlayer plus haut).
           player.health = Math.max(0, player.health - 1);
           bus.emit('player:health');
           sfx.playSound('drown');
@@ -1500,8 +1519,7 @@ function animate() {
         if (fallDistance > FALL_DAMAGE_FREE_BLOCKS) {
           const excessBlocks = Math.floor(fallDistance - FALL_DAMAGE_FREE_BLOCKS);
           if (excessBlocks > 0) {
-            player.health = Math.max(0, player.health - excessBlocks * HALF_HEART);
-            bus.emit('player:health');
+            damagePlayer(excessBlocks * HALF_HEART);
             sfx.playSound('hurt');
           }
         }

@@ -728,6 +728,94 @@ export function texIronIngot() {
   ctx.fillRect(TEX_SIZE * 0.25, TEX_SIZE * 0.38, TEX_SIZE * 0.5, TEX_SIZE * 0.1);
   return canvasToTexture(c);
 }
+// Lingot d'or : même silhouette (trapèze) que le lingot de fer, teintes dorées.
+export function texGoldIngot() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e0a800';
+  ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.35, TEX_SIZE * 0.6, TEX_SIZE * 0.3);
+  ctx.fillStyle = '#ffe066';
+  ctx.fillRect(TEX_SIZE * 0.25, TEX_SIZE * 0.38, TEX_SIZE * 0.5, TEX_SIZE * 0.1);
+  return canvasToTexture(c);
+}
+// Diamant brut : un losange (facette claire en haut-gauche, facette sombre en
+// bas-droite) plutôt que le trapèze des lingots -- assez différent au premier
+// coup d'oeil pour ne pas se confondre avec un lingot dans la hotbar.
+export function texDiamond() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#4dd9d0';
+  ctx.beginPath();
+  ctx.moveTo(TEX_SIZE * 0.5, TEX_SIZE * 0.14);
+  ctx.lineTo(TEX_SIZE * 0.82, TEX_SIZE * 0.4);
+  ctx.lineTo(TEX_SIZE * 0.5, TEX_SIZE * 0.86);
+  ctx.lineTo(TEX_SIZE * 0.18, TEX_SIZE * 0.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#c8fbf8';
+  ctx.beginPath();
+  ctx.moveTo(TEX_SIZE * 0.5, TEX_SIZE * 0.14);
+  ctx.lineTo(TEX_SIZE * 0.66, TEX_SIZE * 0.36);
+  ctx.lineTo(TEX_SIZE * 0.5, TEX_SIZE * 0.5);
+  ctx.lineTo(TEX_SIZE * 0.34, TEX_SIZE * 0.36);
+  ctx.closePath();
+  ctx.fill();
+  return canvasToTexture(c);
+}
+
+// Armures (Phase 19) : silhouette pixel-art partagée entre les 3 matériaux (fer/
+// or/diamant), seule la couleur change -- même principe que texWoodSword/
+// texIronSword ci-dessus. Grille conceptuelle 16x16 (s = TEX_SIZE/16), 4 pièces :
+// casque (arceau), plastron (épaulettes + torse), jambières (2 jambes), bottes
+// (2 pieds). `piece` : 'helmet' | 'chestplate' | 'leggings' | 'boots'.
+export function texArmorPiece(piece, baseColor, highlightColor) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const s = TEX_SIZE / 16;
+  ctx.fillStyle = baseColor;
+  if (piece === 'helmet') {
+    ctx.fillRect(3 * s, 2 * s, 10 * s, 3 * s); // sommet
+    ctx.fillRect(3 * s, 5 * s, 3 * s, 5 * s); // flanc gauche
+    ctx.fillRect(10 * s, 5 * s, 3 * s, 5 * s); // flanc droit
+    ctx.fillStyle = highlightColor;
+    ctx.fillRect(4 * s, 3 * s, 8 * s, 1 * s);
+  } else if (piece === 'chestplate') {
+    ctx.fillRect(3 * s, 2 * s, 3 * s, 3 * s); // épaulette gauche
+    ctx.fillRect(10 * s, 2 * s, 3 * s, 3 * s); // épaulette droite
+    ctx.fillRect(3 * s, 4 * s, 10 * s, 8 * s); // torse
+    ctx.fillStyle = highlightColor;
+    ctx.fillRect(4 * s, 5 * s, 2 * s, 6 * s);
+  } else if (piece === 'leggings') {
+    ctx.fillRect(3 * s, 2 * s, 10 * s, 4 * s); // ceinture
+    ctx.fillRect(3 * s, 6 * s, 4 * s, 8 * s); // jambe gauche
+    ctx.fillRect(9 * s, 6 * s, 4 * s, 8 * s); // jambe droite
+    ctx.fillStyle = highlightColor;
+    ctx.fillRect(4 * s, 7 * s, 1 * s, 6 * s);
+  } else {
+    // boots
+    ctx.fillRect(3 * s, 8 * s, 4 * s, 6 * s); // pied gauche
+    ctx.fillRect(9 * s, 8 * s, 4 * s, 6 * s); // pied droit
+    ctx.fillStyle = highlightColor;
+    ctx.fillRect(3 * s, 12 * s, 4 * s, 2 * s);
+    ctx.fillRect(9 * s, 12 * s, 4 * s, 2 * s);
+  }
+  return canvasToTexture(c);
+}
+const IRON_ARMOR_COLOR = ['#d9d3c8', '#efe9de'];
+const GOLD_ARMOR_COLOR = ['#e0a800', '#ffe066'];
+const DIAMOND_ARMOR_COLOR = ['#4dd9d0', '#c8fbf8'];
+export const texIronHelmet = () => texArmorPiece('helmet', ...IRON_ARMOR_COLOR);
+export const texIronChestplate = () => texArmorPiece('chestplate', ...IRON_ARMOR_COLOR);
+export const texIronLeggings = () => texArmorPiece('leggings', ...IRON_ARMOR_COLOR);
+export const texIronBoots = () => texArmorPiece('boots', ...IRON_ARMOR_COLOR);
+export const texGoldHelmet = () => texArmorPiece('helmet', ...GOLD_ARMOR_COLOR);
+export const texGoldChestplate = () => texArmorPiece('chestplate', ...GOLD_ARMOR_COLOR);
+export const texGoldLeggings = () => texArmorPiece('leggings', ...GOLD_ARMOR_COLOR);
+export const texGoldBoots = () => texArmorPiece('boots', ...GOLD_ARMOR_COLOR);
+export const texDiamondHelmet = () => texArmorPiece('helmet', ...DIAMOND_ARMOR_COLOR);
+export const texDiamondChestplate = () => texArmorPiece('chestplate', ...DIAMOND_ARMOR_COLOR);
+export const texDiamondLeggings = () => texArmorPiece('leggings', ...DIAMOND_ARMOR_COLOR);
+export const texDiamondBoots = () => texArmorPiece('boots', ...DIAMOND_ARMOR_COLOR);
 export function texBedrock() {
   const c = newCanvas();
   const ctx = c.getContext('2d');

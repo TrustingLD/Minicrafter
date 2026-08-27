@@ -43,6 +43,20 @@ export function createBlockAssets() {
     tTorch = tex.texTorchStick(),
     tFurnace = tex.texFurnace(),
     tIronIngot = tex.texIronIngot(),
+    tGoldIngot = tex.texGoldIngot(),
+    tDiamond = tex.texDiamond(),
+    tIronHelmet = tex.texIronHelmet(),
+    tIronChestplate = tex.texIronChestplate(),
+    tIronLeggings = tex.texIronLeggings(),
+    tIronBoots = tex.texIronBoots(),
+    tGoldHelmet = tex.texGoldHelmet(),
+    tGoldChestplate = tex.texGoldChestplate(),
+    tGoldLeggings = tex.texGoldLeggings(),
+    tGoldBoots = tex.texGoldBoots(),
+    tDiamondHelmet = tex.texDiamondHelmet(),
+    tDiamondChestplate = tex.texDiamondChestplate(),
+    tDiamondLeggings = tex.texDiamondLeggings(),
+    tDiamondBoots = tex.texDiamondBoots(),
     tWool = tex.texWool(),
     tSand = tex.texSand(),
     tSandstone = tex.texSandstone(),
@@ -173,6 +187,34 @@ export function createBlockAssets() {
         return tFurnace.image;
       case 'iron_ingot':
         return tIronIngot.image;
+      case 'gold_ingot':
+        return tGoldIngot.image;
+      case 'diamond':
+        return tDiamond.image;
+      case 'iron_helmet':
+        return tIronHelmet.image;
+      case 'iron_chestplate':
+        return tIronChestplate.image;
+      case 'iron_leggings':
+        return tIronLeggings.image;
+      case 'iron_boots':
+        return tIronBoots.image;
+      case 'gold_helmet':
+        return tGoldHelmet.image;
+      case 'gold_chestplate':
+        return tGoldChestplate.image;
+      case 'gold_leggings':
+        return tGoldLeggings.image;
+      case 'gold_boots':
+        return tGoldBoots.image;
+      case 'diamond_helmet':
+        return tDiamondHelmet.image;
+      case 'diamond_chestplate':
+        return tDiamondChestplate.image;
+      case 'diamond_leggings':
+        return tDiamondLeggings.image;
+      case 'diamond_boots':
+        return tDiamondBoots.image;
       case 'wool':
         return tWool.image;
       case 'sand':

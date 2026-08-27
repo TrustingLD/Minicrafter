@@ -6,6 +6,8 @@
 
 export const SMELTING = {
   iron_ore: 'iron_ingot',
+  gold_ore: 'gold_ingot',
+  diamond_ore: 'diamond',
   meat: 'cooked_meat',
 };
 
