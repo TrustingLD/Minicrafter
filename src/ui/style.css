@@ -535,22 +535,32 @@ canvas {
    perspective/inclinaison ici -- le modèle Beta 1.1 est bien plat. */
 #minicrafterTitle {
   display: flex;
-  gap: 6px;
-  margin-bottom: 28px;
+  gap: 5px;
+  margin-bottom: 2px;
+}
+#editionSubtitle {
+  margin: 0 0 24px;
+  font-size: 0.85em;
+  font-style: italic;
+  color: #e0d200;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 .titleLetterWrap {
   position: relative;
 }
 .titleLetter {
   display: grid;
-  grid-template-columns: repeat(5, 7px);
-  grid-template-rows: repeat(7, 7px);
-  gap: 1px;
+  grid-template-columns: repeat(5, 11px);
+  grid-template-rows: repeat(7, 11px);
+  /* pas de gap : les blocs doivent être collés les uns aux autres (façon
+     lettres pleines), contrairement aux grilles à petits carreaux espacés
+     utilisées ailleurs (ex. la texture du menu de craft) */
+  gap: 0;
 }
 .titleLetterShadow {
   position: absolute;
-  top: 3px;
-  left: 3px;
+  top: 4px;
+  left: 4px;
   z-index: 0;
 }
 .titleLetterFront {
@@ -558,8 +568,8 @@ canvas {
   z-index: 1;
 }
 .stoneCell {
-  width: 7px;
-  height: 7px;
+  width: 11px;
+  height: 11px;
   background: #dcdcdc;
 }
 .stoneCell.shadowCell {
