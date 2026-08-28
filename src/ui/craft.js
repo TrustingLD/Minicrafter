@@ -45,7 +45,6 @@ export function createCraftUI({
     invGrid,
     hotbarGrid,
     armorSlotEls,
-    charHead,
     craftTitle,
     craftGridEls, // tableau de 9 <div> (cases de la grille de craft)
     craftOutputEl, // <div> unique (résultat)
@@ -97,37 +96,26 @@ export function createCraftUI({
     }
   }
 
-  // la tête du personnage tourne vers le curseur tant que l'inventaire est
-  // ouvert (cf. #charDoll / .charHead dans style.css). On limite l'amplitude
-  // pour que ça reste crédible (pas de tête à 360°).
-  const MAX_TURN_Y = 35; // degrés, gauche/droite
-  const MAX_TURN_X = 20; // degrés, haut/bas
-  let trackingHead = false;
-  function onMouseMoveTrackHead(ev) {
-    if (charHead) {
-      const rect = charHead.parentElement.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height * 0.35;
-      const dx = ev.clientX - cx;
-      const dy = ev.clientY - cy;
-      const turnY = Math.max(-MAX_TURN_Y, Math.min(MAX_TURN_Y, (dx / rect.width) * 90));
-      const turnX = Math.max(-MAX_TURN_X, Math.min(MAX_TURN_X, -(dy / rect.height) * 60));
-      charHead.style.transform = `rotateY(${turnY}deg) rotateX(${turnX}deg)`;
-    }
-    // l'objet "tenu" (cursor) suit la souris, comme dans l'inventaire de Minecraft.
+  // objet "tenu" (cursor) qui suit la souris tant que l'inventaire est ouvert,
+  // comme dans l'inventaire de Minecraft. La rotation "tête vers le curseur" de
+  // l'avatar, elle, est désormais gérée en 3D par ui/char-preview.js (le même
+  // avatar que l'avatar en jeu, cf. entities/player-model.js) -- ce module ne
+  // s'occupe plus que du curseur flottant.
+  let tracking = false;
+  function onMouseMoveTrackCursor(ev) {
     if (cursorEl) {
       cursorEl.style.left = `${ev.clientX}px`;
       cursorEl.style.top = `${ev.clientY}px`;
     }
   }
-  function startHeadTracking() {
-    if (trackingHead) return;
-    trackingHead = true;
-    document.addEventListener('mousemove', onMouseMoveTrackHead);
+  function startCursorTracking() {
+    if (tracking) return;
+    tracking = true;
+    document.addEventListener('mousemove', onMouseMoveTrackCursor);
   }
-  function stopHeadTracking() {
-    trackingHead = false;
-    document.removeEventListener('mousemove', onMouseMoveTrackHead);
+  function stopCursorTracking() {
+    tracking = false;
+    document.removeEventListener('mousemove', onMouseMoveTrackCursor);
   }
 
   function renderCursor() {
@@ -484,7 +472,7 @@ export function createCraftUI({
 
   function show() {
     craftPanel.style.display = 'flex';
-    startHeadTracking();
+    startCursorTracking();
   }
   function hide() {
     // tout ce qui traîne dans la grille de craft ou sous le curseur retourne
@@ -495,7 +483,7 @@ export function createCraftUI({
     flushToInventory(lastSlots);
     onCrafted && onCrafted();
     craftPanel.style.display = 'none';
-    stopHeadTracking();
+    stopCursorTracking();
     renderCursor();
   }
 

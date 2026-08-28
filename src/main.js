@@ -53,6 +53,7 @@ import { createHotbarUI } from './ui/hotbar.js';
 import { createHealthUI } from './ui/health.js';
 import { createHungerUI, createBreathUI } from './ui/hunger.js';
 import { createCraftUI } from './ui/craft.js';
+import { createCharPreview } from './ui/char-preview.js';
 import { createFurnaceUI } from './ui/furnace.js';
 import { createChatUI } from './ui/chat.js';
 import { isTouchDevice, createTouchUI } from './ui/touch.js';
@@ -259,7 +260,6 @@ const craftUI = createCraftUI({
     invGrid: document.getElementById('invGrid'),
     hotbarGrid: document.getElementById('invHotbarGrid'),
     armorSlotEls: Array.from(document.querySelectorAll('.armorSlot')),
-    charHead: document.querySelector('.charHead'),
     recipeList: document.getElementById('recipeList'),
     craftTitle: document.getElementById('craftTitle'),
     craftGridEls: Array.from(document.querySelectorAll('.craftCell')),
@@ -293,12 +293,14 @@ let craftOpen = false;
 function openCraft() {
   craftOpen = true;
   craftUI.show();
+  charPreview.show();
   document.exitPointerLock();
   craftUI.render(slots, worldApi.getBlock, player.pos, selectedIndex, armorSlots);
 }
 function closeCraft() {
   craftOpen = false;
   craftUI.hide();
+  charPreview.hide();
   // le pointeur a été relâché à l'ouverture : on invite le joueur à re-cliquer
   // pour reprendre le contrôle de la caméra (sinon la souris semblait "morte").
   // Non pertinent sur tactile : il n'y a jamais eu de pointer lock à reprendre.
@@ -420,11 +422,43 @@ const {
   toggleThirdPerson,
   triggerHandSwing,
   respawn,
+  setArmor,
+  buildAvatar,
 } = playerCtrl;
 healthUI.render(player);
 hungerUI.render(player);
 breathUI.render(player);
 refreshHeldItem(selectedBlock);
+
+// Aperçu 3D de l'inventaire (Phase 20) : un second exemplaire du MÊME avatar
+// (buildAvatar réutilise les matériaux/textures de playerCtrl, cf.
+// entities/player-model.js) rendu dans le petit canvas du panneau de craft.
+const charPreview = createCharPreview({
+  canvas: document.getElementById('charPreviewCanvas'),
+  buildAvatar,
+});
+
+// Réduction de dégâts + affichage de l'armure (Phase 19/20) : dérive, à partir
+// des 4 emplacements d'armure, l'objet { helmet, chest, legs, feet } attendu
+// par setArmor -- réutilisé pour l'avatar en jeu (F5) ET l'aperçu d'inventaire,
+// pour qu'ils affichent toujours la même chose.
+const ARMOR_SLOT_KEY = ['helmet', 'chest', 'legs', 'feet'];
+function computeArmorVisual() {
+  const visual = {};
+  armorSlots.forEach((cell, i) => {
+    if (!cell) return;
+    const meta = ARMOR_ITEMS[cell.item];
+    if (meta) visual[ARMOR_SLOT_KEY[i]] = meta.material;
+  });
+  return visual;
+}
+function refreshArmorVisual() {
+  const visual = computeArmorVisual();
+  setArmor(visual);
+  charPreview.setArmor(visual);
+}
+refreshArmorVisual(); // état initial (rien d'équipé au démarrage, mais garde les 2 avatars synchronisés dès le départ)
+bus.on('inventory:changed', refreshArmorVisual);
 
 function selectSlot(i) {
   if (i !== selectedIndex) sfx.playSound('equip');

@@ -1,9 +1,12 @@
 // État du joueur, avatar 3e personne (F5), main + objet tenu en 1ère personne.
 
 import * as THREE from 'three';
-import { makeLimb } from './limb.js';
-import { texMobSkin, texPlayerFace } from '../render/textures.js';
 import { voxelRaycast } from '../core/raycast.js';
+import {
+  createPlayerMaterials,
+  createArmorMaterials,
+  buildPlayerAvatar,
+} from './player-model.js';
 
 export function createPlayer({
   scene,
@@ -32,102 +35,33 @@ export function createPlayer({
   };
   camera.position.copy(player.pos);
 
-  const tPlayerSkin = texMobSkin('#f9b87e', '#dd8e53');
-  const tPlayerShirt = texMobSkin('#2068b4', '#16467a');
-  const tPlayerPants = texMobSkin('#353537', '#19191b');
-  const playerSkinMat = new THREE.MeshLambertMaterial({ map: tPlayerSkin });
-  const playerShirtMat = new THREE.MeshLambertMaterial({ map: tPlayerShirt });
-  const playerPantsMat = new THREE.MeshLambertMaterial({ map: tPlayerPants });
-  const playerFaceMat = new THREE.MeshLambertMaterial({ map: texPlayerFace() });
-  // ordre des matériaux d'un BoxGeometry : [+x, -x, +y, -y, +z, -z]. L'avatar tourne
-  // avec `yaw` (cf. updateVisuals) selon la même convention que camForward -- à yaw=0
-  // le joueur regarde vers -z monde, donc c'est la face locale -z (index 5) qui pointe
-  // dans la direction visée. En vue selfie (F5 x2) la caméra est placée devant le
-  // joueur dans cette même direction et retournée vers lui : la face -z, donc le
-  // visage, se retrouve naturellement face à la caméra, quel que soit le yaw.
-  const headMaterials = [
-    playerSkinMat,
-    playerSkinMat,
-    playerSkinMat,
-    playerSkinMat,
-    playerSkinMat,
-    playerFaceMat,
-  ];
+  // Matériaux du modèle 3D (corps + armure) : construits UNE fois ici et
+  // réutilisés tels quels pour l'aperçu de l'inventaire (cf. buildAvatar plus
+  // bas et ui/char-preview.js) -- garantit que l'avatar en jeu et celui de
+  // l'inventaire sont, au sens propre, LE MÊME modèle.
+  const playerMats = createPlayerMaterials();
+  const armorMats = createArmorMaterials();
+  const playerSkinMat = playerMats.skinMat; // réutilisé plus bas pour le poing (handMesh)
 
   // avatar visible uniquement à la 3e personne (F5) - construit comme les mobs, avec des pivots articulés
-  function buildPlayerAvatar() {
-    const group = new THREE.Group();
-    const legs = [],
-      arms = [];
-
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.28), playerShirtMat);
-    body.position.y = 1.15;
-    body.castShadow = true;
-    group.add(body);
-
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), headMaterials);
-    head.position.y = 1.775;
-    head.castShadow = true;
-    group.add(head);
-
-    // longueur et niveau des bras alignés sur le buste : le pivot (épaule) est
-    // placé au sommet du buste (body.position.y + moitié de sa hauteur) et le
-    // bras a la même hauteur que le buste, donc son bas retombe exactement au
-    // niveau du bas du buste.
-    const ARM_H = 0.75; // = hauteur du buste (0.5, 0.75, 0.28)
-    const ARM_JOINT_Y = 1.15 + 0.75 / 2; // = haut du buste
-    [
-      [-0.34, ARM_JOINT_Y],
-      [0.34, ARM_JOINT_Y],
-    ].forEach(([ax, ay]) => {
-      const { pivot } = makeLimb(0.16, ARM_H, 0.16, playerSkinMat, ax, ay, 0);
-      group.add(pivot);
-      arms.push(pivot);
-    });
-    // Jambes en deux segments (cuisse + tibia, articulés au genou) plutôt qu'un
-    // seul bloc rigide pivoté à la hanche : un accroupissement doit PLIER le
-    // genou, pas faire tourner toute la jambe raide vers l'avant (cf.
-    // CROUCH_HIP_BEND/CROUCH_KNEE_BEND dans updateVisuals).
-    const LEG_TOTAL_H = 0.775;
-    const THIGH_H = 0.39;
-    const SHIN_H = LEG_TOTAL_H - THIGH_H;
-    [
-      [-0.13, LEG_TOTAL_H],
-      [0.13, LEG_TOTAL_H],
-    ].forEach(([lx, ly]) => {
-      const hip = new THREE.Group();
-      hip.position.set(lx, ly, 0);
-      const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.18, THIGH_H, 0.18), playerPantsMat);
-      thigh.position.y = -THIGH_H / 2;
-      thigh.castShadow = true;
-      hip.add(thigh);
-
-      const knee = new THREE.Group();
-      knee.position.y = -THIGH_H;
-      hip.add(knee);
-      const shin = new THREE.Mesh(new THREE.BoxGeometry(0.18, SHIN_H, 0.18), playerPantsMat);
-      shin.position.y = -SHIN_H / 2;
-      shin.castShadow = true;
-      knee.add(shin);
-
-      group.add(hip);
-      legs.push({ hip, knee });
-    });
-
-    // positions "debout" de repos, pour pouvoir revenir dessus en s'accroupissant
-    // (cf. crouchAmount dans updateVisuals) sans les re-calculer à chaque frame.
-    // `arms` : le pivot épaule ne bougeait jusqu'ici QUE en rotation -- en
-    // s'accroupissant le buste/la tête descendaient (CROUCH_LOWER) mais pas
-    // l'épaule, qui restait plantée à sa hauteur d'origine : les bras se
-    // retrouvaient visuellement décrochés du buste, "flottant" au niveau du cou.
-    // On mémorise donc aussi sa hauteur de repos pour la faire descendre pareil.
-    const restY = { body: body.position.y, head: head.position.y, arm: ARM_JOINT_Y };
-
-    return { group, legs, arms, body, head, restY };
-  }
-  const playerAvatar = buildPlayerAvatar();
+  const playerAvatar = buildPlayerAvatar(playerMats, armorMats);
   playerAvatar.group.visible = false;
   scene.add(playerAvatar.group);
+
+  // fabrique un second avatar INDÉPENDANT (mesh/group propres, donc utilisable
+  // dans une autre scène simultanément) mais partageant les mêmes matériaux --
+  // c'est ce que ui/char-preview.js appelle pour peupler l'aperçu 3D du
+  // panneau d'inventaire avec littéralement le même modèle.
+  function buildAvatar() {
+    return buildPlayerAvatar(playerMats, armorMats);
+  }
+
+  // reflète l'armure équipée (armorSlots + data/items.js ARMOR_ITEMS, résolus
+  // côté main.js) sur l'avatar en jeu -- cf. setArmor dans player-model.js
+  // pour le format attendu de `visual`.
+  function setArmor(visual) {
+    playerAvatar.setArmor(visual);
+  }
 
   // main + objet tenu, attachés à la caméra (vue 1ère personne uniquement)
   const handPivot = new THREE.Group();
@@ -355,6 +289,8 @@ export function createPlayer({
     updateVisuals,
     collidesAt,
     respawn,
+    setArmor,
+    buildAvatar,
     get thirdPerson() {
       return viewMode !== VIEW_FIRST;
     },

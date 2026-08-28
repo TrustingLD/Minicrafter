@@ -738,74 +738,16 @@ canvas {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  perspective: 300px; /* pour que la rotation 3D de la tête (cf. .charHead) ait du relief */
 }
 
-/* petit "doll" du joueur, en CSS pur : la tête tourne vers le curseur de la
-   souris (cf. ui/craft.js) tant que l'inventaire est ouvert. */
-#charDoll {
-  position: relative;
-  width: 70px;
-  height: 150px;
-  transform-style: preserve-3d;
-}
-.charHead {
-  position: absolute;
-  top: 0;
-  left: 15px;
-  width: 40px;
-  height: 40px;
-  background: #f9b87e;
-  border-radius: 4px;
-  transition: transform 0.05s linear;
-  transform-origin: center 60%;
-}
-.charEye {
-  position: absolute;
-  top: 16px;
-  width: 5px;
-  height: 5px;
-  background: #241a12;
-  border-radius: 50%;
-}
-.charEye.left {
-  left: 9px;
-}
-.charEye.right {
-  right: 9px;
-}
-.charBody {
-  position: absolute;
-  top: 42px;
-  left: 12px;
-  width: 46px;
-  height: 55px;
-  background: #2068b4;
-  border-radius: 3px;
-}
-.charArm {
-  position: absolute;
-  top: 42px;
-  width: 14px;
-  height: 55px;
-  background: #f9b87e;
-  border-radius: 3px;
-}
-.charArm.left {
-  left: -2px;
-}
-.charArm.right {
-  right: -2px;
-}
-.charLegs {
-  position: absolute;
-  top: 97px;
-  left: 15px;
-  width: 40px;
-  height: 50px;
-  background: #353537;
-  border-radius: 0 0 3px 3px;
-  background-image: linear-gradient(to right, transparent 49%, #2b2b2b 49%, #2b2b2b 51%, transparent 51%);
+/* aperçu 3D du joueur (Phase 20) : un <canvas> rendu par ui/char-preview.js,
+   littéralement le même modèle (mêmes matériaux/textures) que l'avatar en jeu
+   à la 3e personne (F5) -- la tête suit le curseur tant que l'inventaire est
+   ouvert, cf. char-preview.js. */
+#charPreviewCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .invGrid {
@@ -927,7 +869,7 @@ canvas {
 
 /* objet "tenu" par la souris (curseur d'inventaire) -- suit ev.clientX/Y,
    posé en dehors du flux (position fixed) pour ignorer tout scroll/overflow
-   du panneau, cf. ui/craft.js onMouseMoveTrackHead. */
+   du panneau, cf. ui/craft.js onMouseMoveTrackCursor. */
 #craftCursor {
   position: fixed;
   top: 0;
