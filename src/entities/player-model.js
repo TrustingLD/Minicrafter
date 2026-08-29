@@ -122,9 +122,74 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
   // z-fighting), enfant direct du mesh concerné -- il hérite donc gratuitement
   // de toutes ses animations (balancier de marche, accroupissement, swing).
   // Masqués par défaut (visible=false) tant que rien n'est équipé sur ce slot.
-  const helmetMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), armorMats.iron);
-  helmetMesh.visible = false;
-  head.add(helmetMesh);
+  // Casque : seulement la moitié supérieure du visage (comme dans Minecraft),
+  // pas toute la tête -- une boîte pleine cachait complètement le visage,
+  // texture comprise. HEAD_H = hauteur de `head` (0.45) : la moitié haute va
+  // donc de y=0 (ligne médiane) à y=+0.225, plus un léger débord vers le haut
+  // pour flotter sur le sommet du crâne sans z-fighting.
+  // Casque : construit à partir de PLUSIEURS boîtes (dôme + flanc gauche +
+  // flanc droit + arrière) plutôt qu'un seul pavé plein, pour laisser une
+  // vraie encoche à l'avant, à hauteur des yeux -- sinon le bas du casque
+  // (qui tombait pile sur la ligne des yeux, cf. texPlayerFace) cachait le
+  // regard du personnage. Le dôme couvre le dessus/sourcils, les flancs et
+  // l'arrière couvrent le tour de tête à hauteur des yeux, et seul le
+  // centre-avant reste ouvert (zone des yeux dans texPlayerFace : x environ
+  // [-0.135, 0.135] en coordonnées locales de `head`).
+  const HEAD_H = 0.45;
+  const EYE_LINE = 0.06; // limite haute de l'encoche : juste au-dessus des sourcils
+  const BAND_BOTTOM = 0; // bas du casque, ligne médiane de la tête (comme avant)
+  const EYES_HALF_W = 0.135; // demi-largeur de la zone des yeux
+  const OVERHANG = 0.25; // demi-largeur/profondeur du casque (0.5 total, contre 0.45 pour la tête, pour flotter sans z-fighting)
+
+  const helmetGroup = new THREE.Group();
+  const helmetPieces = [];
+  function addHelmetPiece(w, h, d, x, y, z) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), armorMats.iron);
+    mesh.position.set(x, y, z);
+    helmetGroup.add(mesh);
+    helmetPieces.push(mesh);
+  }
+  // dôme : tout le dessus de la tête, jusqu'au-dessus des sourcils.
+  addHelmetPiece(
+    OVERHANG * 2,
+    HEAD_H / 2 - EYE_LINE,
+    OVERHANG * 2,
+    0,
+    (EYE_LINE + HEAD_H / 2) / 2,
+    0,
+  );
+  // flanc gauche et flanc droit : de l'extérieur de la tête jusqu'au bord de
+  // la zone des yeux, sur toute la profondeur (avant-arrière).
+  const sideW = OVERHANG - EYES_HALF_W;
+  addHelmetPiece(
+    sideW,
+    EYE_LINE - BAND_BOTTOM,
+    OVERHANG * 2,
+    -(EYES_HALF_W + sideW / 2),
+    (BAND_BOTTOM + EYE_LINE) / 2,
+    0,
+  );
+  addHelmetPiece(
+    sideW,
+    EYE_LINE - BAND_BOTTOM,
+    OVERHANG * 2,
+    EYES_HALF_W + sideW / 2,
+    (BAND_BOTTOM + EYE_LINE) / 2,
+    0,
+  );
+  // arrière : referme le tour de tête à hauteur des yeux, côté nuque
+  // uniquement (z positif) -- le centre-avant (z négatif = face) reste
+  // ouvert, c'est l'encoche des yeux.
+  addHelmetPiece(
+    EYES_HALF_W * 2,
+    EYE_LINE - BAND_BOTTOM,
+    OVERHANG,
+    0,
+    (BAND_BOTTOM + EYE_LINE) / 2,
+    OVERHANG / 2,
+  );
+  helmetGroup.visible = false;
+  head.add(helmetGroup);
 
   const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.8, 0.36), armorMats.iron);
   chestMesh.visible = false;
@@ -158,10 +223,21 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
     }
   }
 
+  // Variante pour le casque (plusieurs meshes à mettre à jour ensemble) : la
+  // visibilité se pilote sur le groupe, le matériau sur chaque morceau.
+  function applyGroupPiece(group, pieces, material) {
+    if (material && armorMats[material]) {
+      group.visible = true;
+      pieces.forEach((mesh) => (mesh.material = armorMats[material]));
+    } else {
+      group.visible = false;
+    }
+  }
+
   // `visual` : { helmet, chest, legs, feet } où chaque valeur est
   // 'iron' | 'gold' | 'diamond' | null|undefined (rien d'équipé sur ce slot).
   function setArmor(visual = {}) {
-    applyPiece(helmetMesh, visual.helmet);
+    applyGroupPiece(helmetGroup, helmetPieces, visual.helmet);
     applyPiece(chestMesh, visual.chest);
     legArmor.forEach(({ leggingsMesh, bootsMesh }) => {
       applyPiece(leggingsMesh, visual.legs);

@@ -7,6 +7,51 @@
 
 const GRAVITY = 20;
 
+// Knockback subi par le joueur (coup de zombie, cf. entities/mob.js update()) :
+// même principe et mêmes valeurs que le knockback infligé aux mobs par le joueur
+// (KNOCKBACK_DISTANCE/KNOCKBACK_DURATION dans entities/mob.js) -- une vitesse
+// horizontale constante appliquée pendant une courte durée, qui s'ajoute au
+// déplacement normal du joueur sans le remplacer, et respecte toujours les
+// collisions (cf. resolveKnockback ci-dessous, appelé depuis main.js à chaque frame).
+const PLAYER_KNOCKBACK_DISTANCE = 1; // bloc
+const PLAYER_KNOCKBACK_DURATION = 0.15; // s
+
+// Arme le knockback du joueur : direction horizontale attaquant -> joueur,
+// normalisée. `player` doit porter `knockbackTimer`/`knockbackVX`/`knockbackVZ`
+// (initialisés à 0 dans entities/player.js). Si le joueur et l'attaquant sont
+// exactement à la même position (cas limite), pousse dans une direction
+// aléatoire plutôt que de ne rien faire.
+export function applyPlayerKnockback(player, fromX, fromZ) {
+  let dx = player.pos.x - fromX;
+  let dz = player.pos.z - fromZ;
+  const len = Math.hypot(dx, dz);
+  if (len > 1e-4) {
+    dx /= len;
+    dz /= len;
+  } else {
+    const a = Math.random() * Math.PI * 2;
+    dx = Math.sin(a);
+    dz = Math.cos(a);
+  }
+  player.knockbackVX = dx * (PLAYER_KNOCKBACK_DISTANCE / PLAYER_KNOCKBACK_DURATION);
+  player.knockbackVZ = dz * (PLAYER_KNOCKBACK_DISTANCE / PLAYER_KNOCKBACK_DURATION);
+  player.knockbackTimer = PLAYER_KNOCKBACK_DURATION;
+}
+
+// À appeler chaque frame (avant ou après resolveHorizontalMove, peu importe
+// l'ordre) : fait avancer le knockback en cours, s'il y en a un, en respectant
+// les collisions -- ne fait rien si aucun knockback n'est actif.
+export function resolveKnockback(player, dt, collidesAtBox) {
+  if (!player.knockbackTimer || player.knockbackTimer <= 0) return;
+  player.knockbackTimer -= dt;
+  const nx = player.pos.x + player.knockbackVX * dt;
+  if (!collidesAtBox(nx, player.pos.y, player.pos.z, player.radius, player.height))
+    player.pos.x = nx;
+  const nz = player.pos.z + player.knockbackVZ * dt;
+  if (!collidesAtBox(player.pos.x, player.pos.y, nz, player.radius, player.height))
+    player.pos.z = nz;
+}
+
 // dx/dz : axes d'intention -1..1 (pas forcément normalisés — normalisé ici).
 // yaw : direction caméra. Ne bouge PAS si dx=dz=0 (rien à normaliser).
 export function resolveHorizontalMove(player, dx, dz, yaw, speed, dt, crouching, collidesAtBox) {

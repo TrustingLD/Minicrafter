@@ -113,7 +113,7 @@ function hasClearMeleePath(getBlock, mobPos, playerPos) {
 
 export class Mob extends Entity {
   // ctx: { scene, mobAssets, collidesAtBox, getGroundHeight, itemSystem,
-  //        playSound, onPlayerHurt, onDeath }
+  //        playSound, onPlayerHurt(dmg, attackerPos), onDeath }
   constructor(type, x, z, ctx) {
     const data = MOBS[type];
     super(x, ctx.getGroundHeight(x, z), z, {
@@ -139,7 +139,7 @@ export class Mob extends Entity {
     // matériaux (matFor() en crée une neuve à chaque appel, cf. model.js) : les
     // modifier ici ne touche donc jamais les autres mobs du même type.
     this.flashMaterials = built.parts.flatMap((p) =>
-      Array.isArray(p.material) ? p.material : [p.material]
+      Array.isArray(p.material) ? p.material : [p.material],
     );
     this.flashTimer = 0;
     // Knockback en cours (cf. hit()) : vitesse constante appliquée pendant
@@ -287,7 +287,7 @@ export class Mob extends Entity {
           this.canSeePlayer &&
           hasClearMeleePath(this.ctx.getBlock, this.pos, playerPos)
         ) {
-          onPlayerHurt(1);
+          onPlayerHurt(1, this.pos);
           this.hitCooldown = 1.0;
           playSound('hurt');
         }

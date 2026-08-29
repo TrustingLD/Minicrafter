@@ -2,11 +2,7 @@
 
 import * as THREE from 'three';
 import { voxelRaycast } from '../core/raycast.js';
-import {
-  createPlayerMaterials,
-  createArmorMaterials,
-  buildPlayerAvatar,
-} from './player-model.js';
+import { createPlayerMaterials, createArmorMaterials, buildPlayerAvatar } from './player-model.js';
 
 export function createPlayer({
   scene,
@@ -32,6 +28,12 @@ export function createPlayer({
     maxBreath: 15,
     flying: false, // /fly (Phase 15) : gravité coupée, Espace/Maj montent/descendent
     flySpeedMultiplier: 1, // /speedfly : multiplie player.speed, mais seulement pendant le vol
+    // Knockback (coup de zombie, cf. world/physics.js applyPlayerKnockback/
+    // resolveKnockback et entities/mob.js) : vitesse horizontale constante
+    // appliquée pendant knockbackTimer secondes, puis retombe à 0.
+    knockbackTimer: 0,
+    knockbackVX: 0,
+    knockbackVZ: 0,
   };
   camera.position.copy(player.pos);
 

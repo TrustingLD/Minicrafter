@@ -38,6 +38,8 @@ import {
   resolveVerticalPhysics,
   tryJump,
   resolveFlyingVertical,
+  applyPlayerKnockback,
+  resolveKnockback,
 } from './world/physics.js';
 import { createHud } from './ui/hud.js';
 import {
@@ -108,7 +110,16 @@ scene.add(sun.target);
 /* ---------- Audio ---------- */
 const sfx = createSfx();
 const musicHintEl = document.getElementById('musicHint');
-const music = createMusic(['./luft-mini.mp3', './minicrafter_theme_final.mp3', './nightpersonas.mp3', './mini-hands.mp3', './mini-city3.mp3'], musicHintEl);
+const music = createMusic(
+  [
+    './luft-mini.mp3',
+    './minicrafter_theme_final.mp3',
+    './nightpersonas.mp3',
+    './mini-hands.mp3',
+    './mini-city3.mp3',
+  ],
+  musicHintEl,
+);
 document.getElementById('musicHint').addEventListener('click', music.toggleBgmMute);
 document.getElementById('musicNextBtn').addEventListener('click', music.nextTrack);
 
@@ -575,8 +586,11 @@ const mobSystem = createMobSystem({
   renderDistance,
   itemSystem,
   playSound: sfx.playSound,
-  onPlayerHurt: (dmg) => {
+  onPlayerHurt: (dmg, attackerPos) => {
     damagePlayer(dmg);
+    // Knockback (retour utilisateur) : le joueur recule quand un zombie le
+    // touche, comme les mobs reculent déjà quand le joueur les frappe.
+    if (attackerPos) applyPlayerKnockback(player, attackerPos.x, attackerPos.z);
   },
   spawnHalf: MOB_SPAWN_HALF,
   seaLevel: SEA_LEVEL,
@@ -797,7 +811,8 @@ renderer.domElement.addEventListener('click', () => {
 soloBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
-  if (touchMode) blocker.style.display = 'none'; // pas de pointer lock sur tactile
+  if (touchMode)
+    blocker.style.display = 'none'; // pas de pointer lock sur tactile
   else renderer.domElement.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
@@ -1457,7 +1472,15 @@ function animate() {
     // lave ci-dessus, mais moins punitif (1 point, comme dans Minecraft) : le
     // cactus est un bloc solide, donc "être collé" = la boîte du joueur touche
     // une cellule de cactus (cf. isTouchingCactus dans world/world.js).
-    if (worldApi.isTouchingCactus(player.pos.x, player.pos.y, player.pos.z, player.radius, player.height)) {
+    if (
+      worldApi.isTouchingCactus(
+        player.pos.x,
+        player.pos.y,
+        player.pos.z,
+        player.radius,
+        player.height,
+      )
+    ) {
       cactusDamageTimer -= dt;
       if (cactusDamageTimer <= 0) {
         damagePlayer(1);
@@ -1530,6 +1553,10 @@ function animate() {
         }
       }
     }
+
+    // Knockback (coup de zombie, cf. onPlayerHurt plus haut) : s'ajoute au
+    // déplacement normal ci-dessus, qu'on soit en train de bouger ou non.
+    resolveKnockback(player, dt, worldApi.collidesAtBox);
 
     if (player.flying) {
       const vertical = (keys['Space'] ? 1 : 0) - (crouching ? 1 : 0);
