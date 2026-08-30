@@ -43,10 +43,18 @@
         <h2 id="craftTitle">Inventaire</h2>
         <div id="invTop">
           <div id="armorSlots">
-            <div class="armorSlot" data-armor="0" title="Casque"><span class="armorIcon">⛑</span></div>
-            <div class="armorSlot" data-armor="1" title="Plastron"><span class="armorIcon">👕</span></div>
-            <div class="armorSlot" data-armor="2" title="Jambières"><span class="armorIcon">👖</span></div>
-            <div class="armorSlot" data-armor="3" title="Bottes"><span class="armorIcon">👢</span></div>
+            <div class="armorSlot" data-armor="0" title="Casque">
+              <span class="armorIcon">⛑</span>
+            </div>
+            <div class="armorSlot" data-armor="1" title="Plastron">
+              <span class="armorIcon">👕</span>
+            </div>
+            <div class="armorSlot" data-armor="2" title="Jambières">
+              <span class="armorIcon">👖</span>
+            </div>
+            <div class="armorSlot" data-armor="3" title="Bottes">
+              <span class="armorIcon">👢</span>
+            </div>
           </div>
           <div id="charPreview">
             <canvas id="charPreviewCanvas"></canvas>
@@ -131,6 +139,11 @@
         <p>M : couper/remettre la musique — F5 : vue 3e personne</p>
         <p>C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat</p>
       </div>
+      <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
+           place du menu principal ci-dessus quand on a juste perdu le pointer
+           lock en pleine partie (fermeture inventaire/fourneau/chat, sortie de
+           lit) -- pas question de revoir le titre et les boutons Solo/Multi. -->
+      <p id="resumeHint">Cliquez pour reprendre</p>
     </div>
 
     <script>

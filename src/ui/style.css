@@ -415,7 +415,6 @@ canvas {
 }
 .drumstick.empty::before {
   background: #333;
-
 }
 .drumstick.empty::after {
   background: #444;
@@ -644,6 +643,27 @@ canvas {
   margin: 4px 0;
   color: #eee;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* Écran "reprise" (perte du pointer lock en pleine partie, cf.
+   showResumeBlocker() dans main.js) : on masque le menu principal (titre,
+   boutons Solo/Multi/Options, sous-titre) et on n'affiche qu'un message
+   court -- fermer l'inventaire (E) ne doit pas donner l'impression de
+   revenir au menu principal. */
+#blocker.paused #titleBlock,
+#blocker.paused #menuButtons,
+#blocker.paused #blockerSubtitle {
+  display: none;
+}
+#resumeHint {
+  display: none;
+  margin-top: 12%;
+  font-size: 1.3em;
+  color: #eee;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+#blocker.paused #resumeHint {
+  display: block;
 }
 
 #hint {

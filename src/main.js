@@ -312,11 +312,10 @@ function closeCraft() {
   craftOpen = false;
   craftUI.hide();
   charPreview.hide();
-  // le pointeur a été relâché à l'ouverture : on invite le joueur à re-cliquer
-  // pour reprendre le contrôle de la caméra (sinon la souris semblait "morte").
+  // On vient de fermer le panneau nous-mêmes (touche E) : on redemande le
+  // pointer lock tout de suite, sans écran intermédiaire.
   // Non pertinent sur tactile : il n'y a jamais eu de pointer lock à reprendre.
-  if (!touchMode && document.pointerLockElement !== renderer.domElement)
-    blocker.style.display = 'flex';
+  resumePointerLock();
 }
 document.getElementById('closeCraft').addEventListener('click', closeCraft);
 
@@ -337,8 +336,7 @@ const furnaceUI = createFurnaceUI({
   iconCanvas: blockAssets.iconCanvas,
   iconFaces3D: blockAssets.iconFaces3D,
   onClose: () => {
-    if (!touchMode && document.pointerLockElement !== renderer.domElement)
-      blocker.style.display = 'flex';
+    resumePointerLock();
   },
 });
 let furnaceOpen = false;
@@ -606,8 +604,7 @@ const chatUI = createChatUI({
   inputEl: document.getElementById('chatInput'),
   onSend: (text) => bus.emit('chat:message', text),
   onClose: () => {
-    if (!touchMode && document.pointerLockElement !== renderer.domElement)
-      blocker.style.display = 'flex';
+    resumePointerLock();
   },
 });
 
@@ -800,6 +797,31 @@ let yaw = 0,
   pitch = 0;
 const blocker = document.getElementById('blocker');
 const soloBtn = document.getElementById('soloBtn');
+// `false` tant qu'on est sur l'écran-titre initial, `true` dès qu'on a cliqué
+// "Solo" (ou qu'on est en tactile) -- distingue le TOUT PREMIER affichage du
+// #blocker (vrai menu principal) d'un éventuel réaffichage plus tard (perte
+// de pointer lock imprévue, cf. showResumeBlocker() ci-dessous).
+let gameStarted = false;
+// Redemande directement le pointer lock (ZQSD/souris repris tout de suite,
+// sans écran intermédiaire) -- appelé depuis les endroits où on VIENT de
+// fermer un panneau nous-mêmes (E pour l'inventaire, bouton fermer du
+// fourneau, fermeture du chat, sortie de lit) : dans tous ces cas on est
+// dans le handler d'un vrai geste utilisateur (touche ou clic), donc le
+// navigateur autorise requestPointerLock() sans autre interaction. Retour
+// utilisateur : "on doit juste cliquer sur E ... et reprendre la partie
+// direct", pas de "cliquez pour reprendre".
+function resumePointerLock() {
+  if (!touchMode) renderer.domElement.requestPointerLock();
+}
+// Filet de sécurité pour les pertes de pointer lock qu'on ne contrôle PAS
+// nous-mêmes (Echap, alt-tab, perte de focus) : là on n'est dans aucun
+// handler de geste utilisateur, impossible de relock directement -- il faut
+// un vrai clic, donc on affiche un écran minimal "cliquez pour reprendre"
+// (jamais le menu principal complet une fois la partie commencée).
+function showResumeBlocker() {
+  if (gameStarted) blocker.classList.add('paused');
+  blocker.style.display = 'flex';
+}
 renderer.domElement.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
@@ -811,17 +833,48 @@ renderer.domElement.addEventListener('click', () => {
 soloBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
+  gameStarted = true;
   if (touchMode)
     blocker.style.display = 'none'; // pas de pointer lock sur tactile
   else renderer.domElement.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
-  blocker.style.display =
-    document.pointerLockElement === renderer.domElement
-      ? 'none'
-      : sleeping || craftOpen || furnaceOpen || gameOverOpen
-        ? 'none'
-        : 'flex';
+  if (document.pointerLockElement === renderer.domElement) {
+    blocker.style.display = 'none';
+  } else if (sleeping || craftOpen || furnaceOpen || gameOverOpen) {
+    blocker.style.display = 'none';
+  } else {
+    showResumeBlocker();
+  }
+});
+// L'écran "cliquez pour reprendre" recouvre tout l'écran (donc bloque bien
+// les clics vers le canvas en dessous, cf. #blocker en position fixed) --
+// mais SANS ce gestionnaire, cliquer dessus ne faisait littéralement rien,
+// puisque seul `soloBtn` (à l'intérieur) avait un listener : impossible de
+// reprendre la partie après un Echap. On ne réagit qu'en mode "reprise"
+// (`.paused`) : sur l'écran-titre initial, seul le bouton Solo doit lancer
+// la partie.
+blocker.addEventListener('click', () => {
+  if (blocker.classList.contains('paused')) resumePointerLock();
+});
+// Juste après un Echap (le geste de déverrouillage "par défaut" du
+// navigateur), Chrome/Firefox refusent tout requestPointerLock() pendant un
+// court délai de sécurité -- MÊME avec un vrai clic (cf. MDN, section
+// "Security" de requestPointerLock() : "If calling requestPointerLock()
+// immediately after releasing the pointer lock via the default unlock
+// gesture [...] the call will fail, even if a transient activation is
+// available"). Ce n'est pas contournable en JS, d'où les clics qui semblent
+// ne "rien faire" juste après un Echap. On programme donc UNE tentative
+// automatique un peu plus tard (l'activation du clic reste valide quelques
+// secondes côté navigateur), pour éviter d'avoir à recliquer plusieurs fois.
+let pointerLockRetryTimer = null;
+document.addEventListener('pointerlockerror', () => {
+  if (blocker.classList.contains('paused') && !pointerLockRetryTimer) {
+    pointerLockRetryTimer = setTimeout(() => {
+      pointerLockRetryTimer = null;
+      resumePointerLock();
+    }, 1300);
+  }
 });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== renderer.domElement) return;
@@ -1047,8 +1100,7 @@ function leaveBed() {
   // normale -- cf. le `!sleeping` dans la grosse condition de animate().
   const crosshair = document.getElementById('crosshair');
   if (crosshair) crosshair.style.display = playerCtrl.viewMode !== 0 ? 'none' : '';
-  if (!touchMode && document.pointerLockElement !== renderer.domElement)
-    blocker.style.display = 'flex';
+  if (!touchMode && document.pointerLockElement !== renderer.domElement) resumePointerLock();
 }
 sleepOverlay.querySelector('#leaveBedBtn').addEventListener('click', leaveBed);
 

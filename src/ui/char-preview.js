@@ -15,11 +15,8 @@ const TURN_LERP = 0.3; // vitesse de rattrapage vers la cible, par frame
 export function createCharPreview({ canvas, buildAvatar }) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 10);
-  // L'avatar fait face à -z par convention (cf. player-model.js, même repère
-  // que l'avatar en jeu) : une caméra placée du côté -z et regardant vers +z
-  // se retrouve donc naturellement face au personnage.
-  camera.position.set(0, 1.05, -2.3);
-  camera.lookAt(0, 1.05, 0);
+  // Le cadrage (position, lookAt) est calculé dynamiquement dans resize(),
+  // à partir de la boîte englobante réelle de l'avatar -- voir plus bas.
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
   renderer.setClearColor(0x000000, 0);
@@ -32,6 +29,20 @@ export function createCharPreview({ canvas, buildAvatar }) {
   const avatar = buildAvatar();
   avatar.group.visible = true;
   scene.add(avatar.group);
+
+  // Cadrage caméra calculé à partir de la vraie boîte englobante de l'avatar
+  // plutôt qu'une position fixe tâtonnée à la main -- Box3.setFromObject
+  // inclut TOUTE la géométrie, y compris les pièces d'armure actuellement
+  // invisibles (elle ne filtre pas sur `.visible`), donc ça capture d'emblée
+  // le pire cas (casque + plastron/épaulettes + jambières + bottes) et
+  // évite que le perso déborde du cadre dès qu'on équipe une armure --
+  // c'était le bug remonté ("le personnage ne rentre plus dans l'espace").
+  // Recalculé à chaque resize() pour s'adapter à l'aspect ratio du panneau.
+  const bounds = new THREE.Box3().setFromObject(avatar.group);
+  const boundsSize = bounds.getSize(new THREE.Vector3());
+  const boundsCenter = bounds.getCenter(new THREE.Vector3());
+  const FIT_MARGIN = 1.15; // un peu d'air autour du perso, pas collé aux bords
+  const targetY = boundsCenter.y + boundsSize.y * 0.03; // très légèrement au-dessus du centre, pour privilégier le visage
 
   const baseHeadX = avatar.head.rotation.x;
   const baseHeadY = avatar.head.rotation.y;
@@ -60,6 +71,23 @@ export function createCharPreview({ canvas, buildAvatar }) {
     renderer.setSize(rect.width, rect.height, false);
     camera.aspect = rect.width / rect.height;
     camera.updateProjectionMatrix();
+
+    // distance nécessaire pour que toute la boîte englobante tienne dans le
+    // champ de vision, à la fois en hauteur ET en largeur (le facteur qui
+    // demande le plus de recul l'emporte) -- indispensable pour les panneaux
+    // très larges/bas comme la table de craft, où c'est la hauteur qui
+    // manque le plus.
+    const vFov = (camera.fov * Math.PI) / 180;
+    const distForHeight = boundsSize.y / 2 / Math.tan(vFov / 2);
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+    const distForWidth = boundsSize.x / 2 / Math.tan(hFov / 2);
+    const dist = Math.max(distForHeight, distForWidth) * FIT_MARGIN + boundsSize.z / 2;
+
+    // L'avatar fait face à -z par convention (cf. player-model.js) : une
+    // caméra placée du côté -z et regardant vers +z se retrouve donc
+    // naturellement face au personnage.
+    camera.position.set(boundsCenter.x, targetY, boundsCenter.z - dist);
+    camera.lookAt(boundsCenter.x, targetY, boundsCenter.z);
   }
 
   function renderFrame() {

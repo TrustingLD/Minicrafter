@@ -251,11 +251,30 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
 
     // bottes : juste le bas du tibia (le pied), pas tout le mollet.
     const bootsMesh = new THREE.Mesh(new THREE.BoxGeometry(0.23, BOOT_H, 0.23), armorMats.iron);
+    const bootTop = -SHIN_H / 2 + BOOT_H; // repère local à `shin`, haut de la botte
     bootsMesh.position.y = -SHIN_H / 2 + BOOT_H / 2;
     bootsMesh.visible = false;
     shin.add(bootsMesh);
 
-    return { leggingsMesh, bootsMesh };
+    // jambières (suite) : la cuisse s'arrête au genou, mais le mollet
+    // continuait à nu jusqu'aux bottes -- retour utilisateur "les jambières
+    // doivent aller jusqu'au niveau des bottes". On ajoute donc un second
+    // morceau, attaché à `shin` (pas à `thigh`) pour qu'il suive la bonne
+    // rotation quand le genou plie (accroupi) plutôt que de se détacher
+    // visuellement de la jambe -- il comble tout l'espace entre le genou et
+    // le haut de la botte, avec un léger chevauchement des deux côtés pour
+    // qu'aucune jointure ne soit visible.
+    const shinLeggingsTop = SHIN_H / 2 + 0.03; // chevauche la jambière de cuisse, sous le genou
+    const shinLeggingsBottom = bootTop - 0.02; // chevauche le haut de la botte
+    const shinLeggingsMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.23, shinLeggingsTop - shinLeggingsBottom, 0.23),
+      armorMats.iron,
+    );
+    shinLeggingsMesh.position.y = (shinLeggingsTop + shinLeggingsBottom) / 2;
+    shinLeggingsMesh.visible = false;
+    shin.add(shinLeggingsMesh);
+
+    return { leggingsMesh, shinLeggingsMesh, bootsMesh };
   });
 
   function applyPiece(mesh, material) {
@@ -283,8 +302,9 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
   function setArmor(visual = {}) {
     applyGroupPiece(helmetGroup, helmetPieces, visual.helmet);
     applyGroupPiece(chestGroup, chestPieces, visual.chest);
-    legArmor.forEach(({ leggingsMesh, bootsMesh }) => {
+    legArmor.forEach(({ leggingsMesh, shinLeggingsMesh, bootsMesh }) => {
       applyPiece(leggingsMesh, visual.legs);
+      applyPiece(shinLeggingsMesh, visual.legs);
       applyPiece(bootsMesh, visual.feet);
     });
   }
