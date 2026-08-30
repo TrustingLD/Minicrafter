@@ -10,7 +10,7 @@ import { parseCommand } from './core/commands.js';
 import { COMMANDS } from './data/commands.js';
 import { createBlockAssets } from './render/block-assets.js';
 import { texCrackStage } from './render/textures.js';
-import { BLOCK_TYPES, TOOL_FOR_BLOCK } from './data/blocks.js';
+import { BLOCK_TYPES, TOOL_FOR_BLOCK, STAIRS_VARIANTS } from './data/blocks.js';
 import {
   ITEM_NAMES,
   RECIPES,
@@ -1204,6 +1204,46 @@ function tryPlaceBed() {
   sfx.playSound('place');
 }
 
+// Poser un escalier (bois ou pierre) : comme tryPlaceBed ci-dessus, un seul
+// item en poche ('stairs_wood'/'stairs_stone') mais 4 blocs réels possibles
+// selon l'orientation -- ici, la direction regardée par le joueur (arrondie à
+// l'axe N/S/E/O dominant, même calcul que le lit) devient `facing` : la marche
+// basse s'ouvre du côté par lequel on regarde, donc on peut avancer et monter
+// directement dessus dans la foulée. Un seul bloc posé (pas 2 comme le lit),
+// donc appelée en amont du placement générique, sur le même principe.
+function tryPlaceStairs(item) {
+  if (countOf(slots, item) <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place;
+
+  const px = Math.floor(player.pos.x),
+    py0 = Math.floor(player.pos.y),
+    py1 = Math.floor(player.pos.y + player.height),
+    pz = Math.floor(player.pos.z);
+  if (x === px && z === pz && (y === py0 || y === py1)) return;
+  if (worldApi.getBlock(x, y, z)) return;
+
+  // `dir` pointe du joueur vers le bloc posé (même calcul que tryPlaceBed) --
+  // la marche basse doit s'ouvrir du côté le plus proche du joueur (celui par
+  // lequel il vient de s'approcher), donc `facing` prend le sens INVERSE de
+  // `dir` : si le joueur regarde vers +z (il est du côté -z, "nord"), la marche
+  // basse doit être au nord.
+  const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
+  const facing =
+    Math.abs(dir.x) > Math.abs(dir.z) ? (dir.x > 0 ? 'west' : 'east') : dir.z > 0 ? 'north' : 'south';
+
+  worldApi.setBlock(x, y, z, STAIRS_VARIANTS[item][facing]);
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, item, 1);
+  bus.emit('inventory:changed');
+  sfx.playSound('place');
+}
+
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
 function performSecondaryAction() {
   if (tryShear()) return;
@@ -1226,6 +1266,10 @@ function performSecondaryAction() {
   }
   if (selectedBlock === 'bed') {
     tryPlaceBed();
+    return;
+  }
+  if (selectedBlock === 'stairs_wood' || selectedBlock === 'stairs_stone') {
+    tryPlaceStairs(selectedBlock);
     return;
   }
   if (NON_PLACEABLE.has(selectedBlock)) {

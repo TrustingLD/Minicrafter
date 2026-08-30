@@ -305,6 +305,120 @@ export const BLOCK_TYPES = {
     textures: { top: 'bedPillow', bottom: 'planks', side: 'bedHeadSide' },
     drops: [],
   },
+
+  // Escaliers : comme le lit, ce n'est PAS l'item qu'on garde en poche qui est un
+  // bloc du monde -- l'item ('stairs_wood'/'stairs_stone', cf. data/items.js) est
+  // posé via tryPlaceStairs() (main.js), qui choisit lui-même l'une de ces 4
+  // variantes selon la direction regardée par le joueur (même principe que
+  // tryPlaceBed). 4 orientations x 2 matériaux = 8 blocs distincts, chacun avec
+  // sa propre entrée ici, car le chunk ne stocke qu'un seul octet d'id par case
+  // (Uint8Array, Phase 4a) -- pas de champ "rotation" à part.
+  //
+  // `shape: { stairs: true, facing }` : forme dédiée gérée par render/mesher.js
+  // (deux boîtes empilées en décalage = profil en L, cf. son commentaire pour le
+  // détail des 2 boîtes). `facing` = le côté vers lequel s'ouvre la marche basse
+  // (le côté par lequel on aborde l'escalier pour monter) ; convention purement
+  // interne au moteur : 'north'/'south' = axe Z (-z/+z), 'east'/'west' = axe X
+  // (+x/-x) -- ne correspond à aucun point cardinal réel, juste un nom pour les
+  // 4 rotations. Comme tout bloc à `shape`, ce n'est pas un cube plein pour
+  // l'affichage (le mesher ne masque jamais les faces des voisins derrière la
+  // partie "marche"), MAIS on garde `solid` par défaut (true) : la collision du
+  // jeu est binaire par cellule entière (cf. world/world.js isSolid), il n'y a
+  // pas de système de boîte de collision partielle façon vraies marches -- un
+  // escalier bloque donc le joueur comme n'importe quel bloc plein (il faut
+  // sauter pour monter dessus), seul l'ASPECT visuel change. Même compromis
+  // assumé que le lit/la torche (formes réduites) mais dans l'autre sens
+  // (solide plutôt que traversable), documenté ici pour que ça ne surprenne pas.
+  stairs_wood_north: {
+    id: 27,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'north' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_wood_south: {
+    id: 28,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'south' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_wood_east: {
+    id: 29,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'east' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_wood_west: {
+    id: 30,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'west' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_stone_north: {
+    id: 31,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'north' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+  stairs_stone_south: {
+    id: 32,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'south' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+  stairs_stone_east: {
+    id: 33,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'east' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+  stairs_stone_west: {
+    id: 34,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'west' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+};
+
+// les 4 variantes (une par orientation) pour chaque matériau d'escalier --
+// pratique pour tryPlaceStairs (main.js), qui choisit laquelle poser selon le
+// regard du joueur sans avoir à connaître les noms exacts.
+export const STAIRS_VARIANTS = {
+  stairs_wood: {
+    north: 'stairs_wood_north',
+    south: 'stairs_wood_south',
+    east: 'stairs_wood_east',
+    west: 'stairs_wood_west',
+  },
+  stairs_stone: {
+    north: 'stairs_stone_north',
+    south: 'stairs_stone_south',
+    east: 'stairs_stone_east',
+    west: 'stairs_stone_west',
+  },
 };
 
 // tous les blocs liquides, avec leur id résolu — le mesher (faces séparées,

@@ -37,6 +37,8 @@ export const ITEM_NAMES = {
   sandstone: 'Grès',
   cactus: 'Cactus',
   bed: 'Lit',
+  stairs_wood: 'Escalier en bois',
+  stairs_stone: 'Escalier en pierre',
   gold_ingot: "Lingot d'or",
   diamond: 'Diamant',
   iron_helmet: 'Casque en fer',
@@ -250,6 +252,27 @@ export const RECIPES = [
     pattern: ['WWW', 'PPP'],
     key: { W: 'wool', P: 'planks' },
     give: { bed: 1 },
+    needsTable: true,
+  },
+  // Escaliers : comme le lit, 'stairs_wood'/'stairs_stone' sont de simples items
+  // en poche (NON_PLACEABLE, cf. plus bas) -- la pose choisit elle-même la bonne
+  // orientation parmi les 4 blocs réels de data/blocks.js (cf. tryPlaceStairs
+  // dans main.js). Même motif que le vrai jeu : un escalier de marches qui
+  // montent de gauche à droite, ligne du bas pleine.
+  {
+    id: 'stairs_wood',
+    name: 'Escalier en bois',
+    pattern: ['P..', 'PP.', 'PPP'],
+    key: { P: 'planks' },
+    give: { stairs_wood: 4 },
+    needsTable: true,
+  },
+  {
+    id: 'stairs_stone',
+    name: 'Escalier en pierre',
+    pattern: ['S..', 'SS.', 'SSS'],
+    key: { S: 'stone' },
+    give: { stairs_stone: 4 },
     needsTable: true,
   },
   // Armures (Phase 19) : 4 pièces par matériau (fer/or/diamant), mêmes formes

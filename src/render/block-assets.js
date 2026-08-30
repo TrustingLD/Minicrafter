@@ -148,7 +148,20 @@ export function createBlockAssets() {
       mat(tBedHeadSide),
       mat(tBedHeadSide),
     ],
+    // Escaliers : même simplification que le lit -- l'item tenu/lâché au sol
+    // (item-entity.js) et les particules de cassage (particles.js, une par
+    // ORIENTATION réellement posée) affichent un cube plein texturé plutôt que
+    // le vrai profil en L, purement pour ces aperçus rapides. `stairs_wood`/
+    // `stairs_stone` couvrent l'item en poche ; les 8 entrées `stairs_*_*`
+    // couvrent les particules quand on casse le bloc réellement posé (son nom
+    // exact dépend de l'orientation, cf. data/blocks.js).
+    stairs_wood: [mat(tPlanks), mat(tPlanks), mat(tPlanks), mat(tPlanks), mat(tPlanks), mat(tPlanks)],
+    stairs_stone: [mat(tStone), mat(tStone), mat(tStone), mat(tStone), mat(tStone), mat(tStone)],
   };
+  for (const dir of ['north', 'south', 'east', 'west']) {
+    materials[`stairs_wood_${dir}`] = materials.stairs_wood;
+    materials[`stairs_stone_${dir}`] = materials.stairs_stone;
+  }
 
   const toolTextures = {
     wood_sword: tWoodSword,
@@ -231,6 +244,10 @@ export function createBlockAssets() {
         return tWeeds.image;
       case 'bed':
         return tBedFoot.image;
+      case 'stairs_wood':
+        return tPlanks.image;
+      case 'stairs_stone':
+        return tStone.image;
       case 'wood_sword':
         return tWoodSword.image;
       case 'wood_pickaxe':
@@ -308,6 +325,10 @@ export function createBlockAssets() {
         return { top: tIce.image, left: tIce.image, right: tIce.image };
       case 'bed':
         return { top: tBedFoot.image, left: tBedSide.image, right: tBedSide.image };
+      case 'stairs_wood':
+        return { top: tPlanks.image, left: tPlanks.image, right: tPlanks.image };
+      case 'stairs_stone':
+        return { top: tStone.image, left: tStone.image, right: tStone.image };
       default:
         return null;
     }

@@ -78,6 +78,34 @@ function faceSlot(nx, ny) {
   return 'side';
 }
 
+// Escaliers : profil en L décomposé en 2 boîtes SANS chevauchement (donc pas de
+// géométrie interne dupliquée à gérer) :
+//  - une boîte "arrière" pleine hauteur (0..1) sur la moitié de l'empreinte
+//    opposée à `facing` -- c'est le dossier vertical de la marche haute ;
+//  - une boîte "avant" mi-hauteur (0..0.5) sur la moitié de l'empreinte du
+//    côté `facing` -- c'est la marche basse, celle par laquelle on monte.
+// Les deux se touchent exactement sur y:[0,0.5] à la ligne de partage : aucun
+// vide, aucun chevauchement. Chaque entrée est [x0,x1,y0,y1,z0,z1] (fractions
+// 0..1 de la cellule). Cf. data/blocks.js pour la convention de `facing`.
+const STAIR_BOXES = {
+  north: [
+    [0, 1, 0, 1, 0.5, 1], // arrière (dossier), côté +z
+    [0, 1, 0, 0.5, 0, 0.5], // avant (marche basse), côté -z = facing
+  ],
+  south: [
+    [0, 1, 0, 1, 0, 0.5], // arrière, côté -z
+    [0, 1, 0, 0.5, 0.5, 1], // avant, côté +z = facing
+  ],
+  east: [
+    [0, 0.5, 0, 1, 0, 1], // arrière, côté -x
+    [0.5, 1, 0, 0.5, 0, 1], // avant, côté +x = facing
+  ],
+  west: [
+    [0.5, 1, 0, 1, 0, 1], // arrière, côté +x
+    [0, 0.5, 0, 0.5, 0, 1], // avant, côté -x = facing
+  ],
+};
+
 // niveau de lumière (0-15, cf. world/light.js) -> facteur RGB multiplié sur la
 // texture. Plancher à 0.06 plutôt que 0 : à lumière nulle un sommet à (0,0,0) donne
 // un noir total qui plaque la face en silhouette pure, illisible ; un vrai voxel game
@@ -168,7 +196,8 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
         // forme "croix" (herbe haute) : 2 plans diagonaux, chacun dessiné recto-verso
         // (4 quads au total) — cf. bloc de remplissage plus bas pour le détail.
         if (shapes[id]) {
-          faceCount += shapes[id].cross ? 4 : 6;
+          // escalier : 2 boîtes sans chevauchement (cf. STAIR_BOXES) = 12 faces.
+          faceCount += shapes[id].stairs ? 12 : shapes[id].cross ? 4 : 6;
           continue;
         }
         for (const face of FACES) {
@@ -194,6 +223,48 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
     uOff = 0,
     cOff = 0,
     iOff = 0;
+
+  // Émet les 6 faces d'une boîte quelconque (bornes en fractions 0..1 de la
+  // cellule (x,y,z)) avec la même texture `rect` sur toutes les faces -- ferme
+  // sur les tableaux/offsets ci-dessus comme le reste de meshChunk. Utilisée
+  // uniquement pour les escaliers (cf. STAIR_BOXES) : les blocs bois/pierre sont
+  // texturés `{ all: ... }` (même texture sur les 6 faces), donc une seule UV
+  // rect suffit, pas besoin de résoudre top/bottom/side séparément par boîte.
+  function emitBox(x, y, z, x0, x1, y0, y1, z0, z1, rect, factor) {
+    for (const face of FACES) {
+      const [nx, ny, nz] = face.n;
+      const base = vertCount;
+      for (const corner of face.v) {
+        positions[pOff++] = x + (corner[0] ? x1 : x0);
+        positions[pOff++] = y + (corner[1] ? y1 : y0);
+        positions[pOff++] = z + (corner[2] ? z1 : z0);
+        normals[nOff++] = nx;
+        normals[nOff++] = ny;
+        normals[nOff++] = nz;
+        colors[cOff++] = factor;
+        colors[cOff++] = factor;
+        colors[cOff++] = factor;
+        let s, t;
+        if (ny !== 0) {
+          s = corner[0];
+          t = corner[2];
+        } else {
+          t = 1 - corner[1];
+          s = nx !== 0 ? corner[2] : corner[0];
+        }
+        uvs[uOff++] = rect[0] + s * (rect[2] - rect[0]);
+        uvs[uOff++] = rect[1] + t * (rect[3] - rect[1]);
+      }
+      indices[iOff++] = base;
+      indices[iOff++] = base + 1;
+      indices[iOff++] = base + 2;
+      indices[iOff++] = base;
+      indices[iOff++] = base + 2;
+      indices[iOff++] = base + 3;
+      vertCount += 4;
+    }
+  }
+
   for (let x = 0; x < CHUNK_X; x++) {
     for (let y = 0; y <= yLimit; y++) {
       for (let z = 0; z < CHUNK_Z; z++) {
@@ -210,6 +281,14 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
         // TOUT l'atlas en double-face (coûteux, et inutile pour les cubes pleins) —
         // on duplique donc chaque plan en sens inverse (recto + verso), d'où les 4
         // faces comptées plus haut (2 plans x 2 côtés) au lieu de 6.
+        if (shape && shape.stairs) {
+          const rect = uv.side; // texture `{ all: ... }` -> top/bottom/side identiques
+          const factor = lightFactor(getLight(x, y, z));
+          for (const [x0, x1, y0, y1, z0, z1] of STAIR_BOXES[shape.facing]) {
+            emitBox(x, y, z, x0, x1, y0, y1, z0, z1, rect, factor);
+          }
+          continue;
+        }
         if (shape && shape.cross) {
           const rect = uv.side;
           const h = shape.height;
