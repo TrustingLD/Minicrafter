@@ -191,9 +191,53 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
   helmetGroup.visible = false;
   head.add(helmetGroup);
 
-  const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.8, 0.36), armorMats.iron);
-  chestMesh.visible = false;
-  body.add(chestMesh);
+  // Plastron : torse + 2 épaulettes qui débordent sur le côté, vers le haut des
+  // bras (retour utilisateur : "doit aller un peu sur les épaules") -- un
+  // simple pavé calé sur `body` s'arrêtait pile au bord du torse et ne
+  // débordait jamais sur l'épaule comme un vrai plastron.
+  // ATTENTION : le haut du torse (y local = +0.4) est exactement calé sur le
+  // bas de la tête (head bottom = 1.55 monde = 0.4 en local de `body`, cf.
+  // HEAD_H/head.position.y plus haut) -- les épaulettes ne doivent JAMAIS
+  // dépasser cette hauteur, sinon elles rentrent dans le cube de la tête et
+  // ça z-fight (c'était le bug du screenshot : bande trop large + artefacts
+  // noirs près du cou). Elles débordent donc en LARGEUR (vers l'épaule/le
+  // bras), pas en hauteur.
+  const chestGroup = new THREE.Group();
+  const chestPieces = [];
+  function addChestPiece(w, h, d, x, y, z) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), armorMats.iron);
+    mesh.position.set(x, y, z);
+    chestGroup.add(mesh);
+    chestPieces.push(mesh);
+  }
+  // torse : comme avant, légèrement plus grand que `body` pour flotter dessus
+  // sans z-fighting.
+  addChestPiece(0.58, 0.8, 0.36, 0, 0, 0);
+  // épaulettes : un petit bloc de chaque côté, accolé au bord du torse (pas de
+  // chevauchement en X avec le torse -> pas de z-fighting sur la face du haut)
+  // et qui déborde vers l'extérieur jusqu'au bout de l'épaule/du bras (retour
+  // utilisateur : "faut que ça aille jusqu'au bout des épaules"), avec un
+  // petit surplomb (comme les autres pièces d'armure) pour flotter sans
+  // z-fighting avec le bras. Plafonné à y=+0.4 (haut du torse), jamais plus
+  // haut (cf. note ci-dessus sur la tête).
+  const TORSO_EDGE = 0.29; // bord du torse (0.58 / 2)
+  const ARM_OUTER_EDGE = 0.34 + 0.16 / 2; // bord extérieur du bras (ax=0.34, largeur 0.16)
+  const SHOULDER_OUTER = ARM_OUTER_EDGE + 0.02; // léger surplomb, comme le torse sur `body`
+  const SHOULDER_W = SHOULDER_OUTER - TORSO_EDGE;
+  const SHOULDER_BOTTOM = 0.18;
+  const SHOULDER_TOP = 0.4; // <= haut du torse, ne remonte jamais dans la tête
+  [-1, 1].forEach((side) => {
+    addChestPiece(
+      SHOULDER_W,
+      SHOULDER_TOP - SHOULDER_BOTTOM,
+      0.4,
+      side * (TORSO_EDGE + SHOULDER_W / 2),
+      (SHOULDER_BOTTOM + SHOULDER_TOP) / 2,
+      0,
+    );
+  });
+  chestGroup.visible = false;
+  body.add(chestGroup);
 
   const BOOT_H = SHIN_H * 0.55;
   const legArmor = legs.map(({ thigh, shin }) => {
@@ -238,7 +282,7 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
   // 'iron' | 'gold' | 'diamond' | null|undefined (rien d'équipé sur ce slot).
   function setArmor(visual = {}) {
     applyGroupPiece(helmetGroup, helmetPieces, visual.helmet);
-    applyPiece(chestMesh, visual.chest);
+    applyGroupPiece(chestGroup, chestPieces, visual.chest);
     legArmor.forEach(({ leggingsMesh, bootsMesh }) => {
       applyPiece(leggingsMesh, visual.legs);
       applyPiece(bootsMesh, visual.feet);
