@@ -418,6 +418,8 @@ const playerCtrl = createPlayer({
   materials: blockAssets.materials,
   blockTypes: blockAssets.blockTypes,
   toolTextures: blockAssets.toolTextures,
+  stairsGeometry: blockAssets.stairsGeometry,
+  stairsMaterials: blockAssets.stairsMaterials,
   collidesAtBox: worldApi.collidesAtBox,
   getBlock: worldApi.getBlock,
   spawnPos: spawnPoint(),

@@ -7,6 +7,59 @@ import * as tex from './textures.js';
 
 export const BLOCK_SIZE = 1;
 
+// Géométrie en L de l'escalier, réutilisée telle quelle pour l'item lâché au sol
+// (item-entity.js, InstancedMesh) ET l'objet tenu en main (player.js) -- les deux
+// sont de VRAIS objets Three.js (contrairement à l'icône CSS de l'inventaire, cf.
+// ui/block-icon-3d.js, qui doit reconstruire l'équivalent en pur CSS 3D). Même
+// décomposition en 2 boîtes sans chevauchement que render/mesher.js (cf. son
+// commentaire pour le détail), mais ici en unités CENTRÉES sur l'origine
+// (-0.5..0.5, pas 0..1) pour matcher la convention de `geometry` ci-dessus
+// (BoxGeometry(1,1,1) est centrée par défaut) -- l'orientation ('sud' figée)
+// n'a aucune importance ici, cette géométrie n'est jamais posée telle quelle
+// dans le monde (seuls les 4 blocs stairs_*_* de data/blocks.js le sont).
+// Un seul matériau (pas un tableau par face) : les 2 textures possibles
+// (planches/pierre) sont `{ all: ... }`, donc UNE texture uniforme suffit sur
+// toutes les faces des 2 boîtes -- plus simple qu'un groupe par face comme le
+// cube plein ci-dessus.
+const STAIRS_ICON_BOXES = [
+  [0, 1, 0, 1, 0, 0.5], // dossier (arrière), pleine hauteur
+  [0, 1, 0, 0.5, 0.5, 1], // marche basse (avant), mi-hauteur
+];
+const STAIRS_FACES = [
+  { n: [1, 0, 0], v: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
+  { n: [-1, 0, 0], v: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]] },
+  { n: [0, 1, 0], v: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]] },
+  { n: [0, -1, 0], v: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
+  { n: [0, 0, 1], v: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]] },
+  { n: [0, 0, -1], v: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] },
+];
+const STAIRS_QUAD_UVS = [[0, 1], [0, 0], [1, 0], [1, 1]];
+function buildStairsGeometry() {
+  const positions = [],
+    normals = [],
+    uvs = [];
+  for (const [x0, x1, y0, y1, z0, z1] of STAIRS_ICON_BOXES) {
+    for (const face of STAIRS_FACES) {
+      const [nx, ny, nz] = face.n;
+      const quad = face.v.map(([cx, cy, cz]) => [
+        (cx ? x1 : x0) - 0.5,
+        (cy ? y1 : y0) - 0.5,
+        (cz ? z1 : z0) - 0.5,
+      ]);
+      for (const i of [0, 1, 2, 0, 2, 3]) {
+        positions.push(...quad[i]);
+        normals.push(nx, ny, nz);
+        uvs.push(...STAIRS_QUAD_UVS[i]);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  return geo;
+}
+
 export function createBlockAssets() {
   const geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
   const mat = (t) => new THREE.MeshLambertMaterial({ map: t });
@@ -67,7 +120,12 @@ export function createBlockAssets() {
     tBedFoot = tex.texBedFoot(),
     tBedPillow = tex.texBedPillow(),
     tBedSide = tex.texBedSide(),
-    tBedHeadSide = tex.texBedHeadSide();
+    tBedHeadSide = tex.texBedHeadSide(),
+    // icônes plates dédiées (cf. commentaire de texStairsIcon) : teintes reprises
+    // de texPlanks (#daa44c/#e2b261) et texStone (#8e8e8e/#7c7c7c) pour rester
+    // cohérent avec la texture du bloc réel, arêtes plus sombres pour le relief.
+    tStairsWoodIcon = tex.texStairsIcon('#daa44c', '#e2b261', '#59300e'),
+    tStairsStoneIcon = tex.texStairsIcon('#8e8e8e', '#9d9d9d', '#4a4a4a');
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -163,6 +221,17 @@ export function createBlockAssets() {
     materials[`stairs_stone_${dir}`] = materials.stairs_stone;
   }
 
+  // vraie géométrie en L (cf. buildStairsGeometry plus haut) + 1 matériau simple
+  // (texture uniforme) par variante -- utilisés par item-entity.js (item lâché au
+  // sol) et player.js (objet tenu en main) pour un rendu 3D fidèle au bloc réel,
+  // plutôt que le cube plein générique (`geometry`/`materials`) utilisé pour tous
+  // les autres blocs.
+  const stairsGeometry = buildStairsGeometry();
+  const stairsMaterials = {
+    stairs_wood: new THREE.MeshLambertMaterial({ map: tPlanks }),
+    stairs_stone: new THREE.MeshLambertMaterial({ map: tStone }),
+  };
+
   const toolTextures = {
     wood_sword: tWoodSword,
     wood_pickaxe: tWoodPickaxe,
@@ -245,9 +314,9 @@ export function createBlockAssets() {
       case 'bed':
         return tBedFoot.image;
       case 'stairs_wood':
-        return tPlanks.image;
+        return tStairsWoodIcon.image;
       case 'stairs_stone':
-        return tStone.image;
+        return tStairsStoneIcon.image;
       case 'wood_sword':
         return tWoodSword.image;
       case 'wood_pickaxe':
@@ -325,14 +394,26 @@ export function createBlockAssets() {
         return { top: tIce.image, left: tIce.image, right: tIce.image };
       case 'bed':
         return { top: tBedFoot.image, left: tBedSide.image, right: tBedSide.image };
+      // `shape: 'stairs'` : lu par ui/block-icon-3d.js pour composer 2 boîtes en
+      // vrai profil L en CSS 3D (au lieu d'un cube plein) -- un cube texturé
+      // planches/pierre serait ici indiscernable de l'item "Planches"/"Pierre".
       case 'stairs_wood':
-        return { top: tPlanks.image, left: tPlanks.image, right: tPlanks.image };
+        return { top: tPlanks.image, left: tPlanks.image, right: tPlanks.image, shape: 'stairs' };
       case 'stairs_stone':
-        return { top: tStone.image, left: tStone.image, right: tStone.image };
+        return { top: tStone.image, left: tStone.image, right: tStone.image, shape: 'stairs' };
       default:
         return null;
     }
   }
 
-  return { geometry, materials, toolTextures, iconCanvas, iconFaces3D, blockTypes: BLOCK_TYPES };
+  return {
+    geometry,
+    materials,
+    toolTextures,
+    iconCanvas,
+    iconFaces3D,
+    blockTypes: BLOCK_TYPES,
+    stairsGeometry,
+    stairsMaterials,
+  };
 }

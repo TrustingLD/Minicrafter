@@ -205,6 +205,41 @@ export function texPlanks() {
   speckle(ctx, ['#cf933b', '#c18632'], 20);
   return canvasToTexture(c);
 }
+// Icône plate (hotbar/inventaire/craft) pour l'item escalier : contrairement aux
+// blocs pleins ci-dessus, un simple carré de texture (planches/pierre) serait
+// visuellement identique à l'item "Planches"/"Pierre" -- illisible en jeu. On
+// dessine donc un vrai profil en L (2 marches, silhouette + arête foncée pour la
+// lecture du relief), recoloré selon le matériau (mêmes teintes que la texture du
+// bloc réel, pour rester cohérent visuellement). Fond transparent, comme les icônes
+// d'outils ci-dessus (texWoodSword etc.) -- pas un carré plein comme les blocs.
+export function texStairsIcon(fillColor, shadeColor, edgeColor) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const s = TEX_SIZE / 16;
+  // marche basse (avant, en bas) : large et basse
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(1 * s, 10 * s, 14 * s, 5 * s);
+  // marche haute (arrière, en haut à droite) : plus étroite, posée dessus
+  ctx.fillRect(7 * s, 5 * s, 8 * s, 5 * s);
+  // ombre portée sur le dessus de la marche basse (partie non couverte par la
+  // marche haute) -- lisible même sans les arêtes, façon éclairage du dessus.
+  ctx.fillStyle = shadeColor;
+  ctx.fillRect(1 * s, 10 * s, 6 * s, 1 * s);
+  ctx.fillRect(7 * s, 5 * s, 8 * s, 1 * s);
+  // arêtes sombres : contour du profil en L, pour bien détacher la silhouette
+  ctx.strokeStyle = edgeColor;
+  ctx.lineWidth = Math.max(1, s * 0.8);
+  ctx.beginPath();
+  ctx.moveTo(1 * s, 15 * s);
+  ctx.lineTo(1 * s, 10 * s);
+  ctx.lineTo(7 * s, 10 * s);
+  ctx.lineTo(7 * s, 5 * s);
+  ctx.lineTo(15 * s, 5 * s);
+  ctx.lineTo(15 * s, 15 * s);
+  ctx.closePath();
+  ctx.stroke();
+  return canvasToTexture(c);
+}
 export function texCraftTop() {
   const c = newCanvas();
   const ctx = c.getContext('2d');

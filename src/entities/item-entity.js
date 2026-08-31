@@ -58,6 +58,7 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
   const iconGeometry = new THREE.BoxGeometry(1, 1, ICON_THICKNESS);
 
   function materialFor(item) {
+    if (blockAssets.stairsMaterials[item]) return blockAssets.stairsMaterials[item]; // matériau simple (pas un tableau) : cf. geometryFor
     if (blockAssets.materials[item]) return blockAssets.materials[item]; // array de 6 (comme un Mesh multi-matériaux)
     // sinon on retombe sur la même icône que la hotbar/l'inventaire (blockAssets.iconCanvas) :
     // une seule source de vérité pour "à quoi ressemble cet objet"
@@ -79,6 +80,9 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
   }
 
   function geometryFor(item) {
+    // escaliers : vraie géométrie en L (cf. render/block-assets.js buildStairsGeometry)
+    // plutôt que le cube générique -- pour matcher visuellement le vrai bloc posé.
+    if (blockAssets.stairsGeometry && blockAssets.stairsMaterials[item]) return blockAssets.stairsGeometry;
     return blockAssets.materials[item] ? blockAssets.geometry : iconGeometry;
   }
 

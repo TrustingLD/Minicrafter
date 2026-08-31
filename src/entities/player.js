@@ -10,6 +10,8 @@ export function createPlayer({
   materials,
   blockTypes,
   toolTextures,
+  stairsGeometry,
+  stairsMaterials,
   collidesAtBox,
   getBlock,
   spawnPos,
@@ -75,7 +77,23 @@ export function createPlayer({
   handPivot.add(handMesh);
 
   function buildHeldItemMesh(type) {
-    if (blockTypes[type]) {
+    // escaliers : vraie géométrie en L (cf. render/block-assets.js
+    // buildStairsGeometry), échelle réduite comme le cube ci-dessous (0.26) --
+    // AVANT tout autre check, sinon `materials[type]` (qui existe aussi pour ces
+    // items, pour les particules de cassage/le fallback du drop) ferait passer
+    // par le cube plein générique à la place.
+    if (stairsMaterials[type]) {
+      const mesh = new THREE.Mesh(stairsGeometry, stairsMaterials[type]);
+      mesh.scale.setScalar(0.26);
+      return { mesh };
+    }
+    // `materials[type]` (pas `blockTypes[type]`) est la vraie condition "cet item
+    // a un aperçu cube plein" -- couvre les blocs normaux ET les items "virtuels"
+    // qui posent un bloc différent d'eux-mêmes (bed, stairs_wood/stairs_stone,
+    // cf. data/items.js NON_PLACEABLE) : `blockTypes[type]` (= BLOCK_TYPES[type])
+    // est undefined pour ceux-là puisqu'ils ne sont volontairement PAS des clés
+    // de BLOCK_TYPES, donc l'ancienne condition les laissait sans rien en main.
+    if (materials[type]) {
       return { mesh: new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), materials[type]) };
     }
     const iconTex = toolTextures[type];
