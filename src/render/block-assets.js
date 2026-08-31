@@ -26,14 +26,67 @@ const STAIRS_ICON_BOXES = [
   [0, 1, 0, 0.5, 0.5, 1], // marche basse (avant), mi-hauteur
 ];
 const STAIRS_FACES = [
-  { n: [1, 0, 0], v: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
-  { n: [-1, 0, 0], v: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]] },
-  { n: [0, 1, 0], v: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]] },
-  { n: [0, -1, 0], v: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
-  { n: [0, 0, 1], v: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]] },
-  { n: [0, 0, -1], v: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] },
+  {
+    n: [1, 0, 0],
+    v: [
+      [1, 0, 0],
+      [1, 1, 0],
+      [1, 1, 1],
+      [1, 0, 1],
+    ],
+  },
+  {
+    n: [-1, 0, 0],
+    v: [
+      [0, 0, 1],
+      [0, 1, 1],
+      [0, 1, 0],
+      [0, 0, 0],
+    ],
+  },
+  {
+    n: [0, 1, 0],
+    v: [
+      [0, 1, 1],
+      [1, 1, 1],
+      [1, 1, 0],
+      [0, 1, 0],
+    ],
+  },
+  {
+    n: [0, -1, 0],
+    v: [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 0, 1],
+      [0, 0, 1],
+    ],
+  },
+  {
+    n: [0, 0, 1],
+    v: [
+      [1, 0, 1],
+      [1, 1, 1],
+      [0, 1, 1],
+      [0, 0, 1],
+    ],
+  },
+  {
+    n: [0, 0, -1],
+    v: [
+      [0, 0, 0],
+      [0, 1, 0],
+      [1, 1, 0],
+      [1, 0, 0],
+    ],
+  },
 ];
-const STAIRS_QUAD_UVS = [[0, 1], [0, 0], [1, 0], [1, 1]];
+const STAIRS_QUAD_UVS = [
+  [0, 1],
+  [0, 0],
+  [1, 0],
+  [1, 1],
+];
 function buildStairsGeometry() {
   const positions = [],
     normals = [],
@@ -121,6 +174,8 @@ export function createBlockAssets() {
     tBedPillow = tex.texBedPillow(),
     tBedSide = tex.texBedSide(),
     tBedHeadSide = tex.texBedHeadSide(),
+    tDoorTop = tex.texDoorTop(),
+    tDoorBottom = tex.texDoorBottom(),
     // icônes plates dédiées (cf. commentaire de texStairsIcon) : teintes reprises
     // de texPlanks (#daa44c/#e2b261) et texStone (#8e8e8e/#7c7c7c) pour rester
     // cohérent avec la texture du bloc réel, arêtes plus sombres pour le relief.
@@ -197,7 +252,14 @@ export function createBlockAssets() {
     // mêmes matériaux pour les 2 moitiés réellement posées en jeu (bed_foot/bed_head)
     // -- sert uniquement aux particules de cassage (particles.js), qui piochent par
     // TYPE DE BLOC cassé, pas par item ; sans ça elles retomberaient sur le gris pierre.
-    bed_foot: [mat(tBedSide), mat(tBedSide), mat(tBedFoot), mat(tPlanks), mat(tBedSide), mat(tBedSide)],
+    bed_foot: [
+      mat(tBedSide),
+      mat(tBedSide),
+      mat(tBedFoot),
+      mat(tPlanks),
+      mat(tBedSide),
+      mat(tBedSide),
+    ],
     bed_head: [
       mat(tBedHeadSide),
       mat(tBedHeadSide),
@@ -213,12 +275,57 @@ export function createBlockAssets() {
     // `stairs_stone` couvrent l'item en poche ; les 8 entrées `stairs_*_*`
     // couvrent les particules quand on casse le bloc réellement posé (son nom
     // exact dépend de l'orientation, cf. data/blocks.js).
-    stairs_wood: [mat(tPlanks), mat(tPlanks), mat(tPlanks), mat(tPlanks), mat(tPlanks), mat(tPlanks)],
+    stairs_wood: [
+      mat(tPlanks),
+      mat(tPlanks),
+      mat(tPlanks),
+      mat(tPlanks),
+      mat(tPlanks),
+      mat(tPlanks),
+    ],
     stairs_stone: [mat(tStone), mat(tStone), mat(tStone), mat(tStone), mat(tStone), mat(tStone)],
+    // Porte ("door") : comme le lit, tient dans un seul slot d'inventaire même si
+    // elle pose 2 blocs (cf. data/blocks.js door_bottom_*/door_top_*) -- aperçu
+    // cube simple (poignée dessus, panneau nu sur les côtés) pour hotbar/craft/item
+    // au sol, même simplification que le lit/la torche ci-dessus.
+    door: [
+      mat(tDoorBottom),
+      mat(tDoorBottom),
+      mat(tDoorBottom),
+      mat(tDoorBottom),
+      mat(tDoorBottom),
+      mat(tDoorBottom),
+    ],
   };
   for (const dir of ['north', 'south', 'east', 'west']) {
     materials[`stairs_wood_${dir}`] = materials.stairs_wood;
     materials[`stairs_stone_${dir}`] = materials.stairs_stone;
+  }
+  // mêmes matériaux pour les 8 blocs réellement posés en jeu (2 axes x 2 états x 2
+  // moitiés, cf. data/blocks.js) -- sert uniquement aux particules de cassage
+  // (particles.js), qui piochent par TYPE DE BLOC cassé, pas par item ; sans ça
+  // elles retomberaient sur le gris pierre (fallback de particles.js).
+  const doorBottomMat = [
+    mat(tDoorBottom),
+    mat(tDoorBottom),
+    mat(tDoorBottom),
+    mat(tDoorBottom),
+    mat(tDoorBottom),
+    mat(tDoorBottom),
+  ];
+  const doorTopMat = [
+    mat(tDoorTop),
+    mat(tDoorTop),
+    mat(tDoorTop),
+    mat(tDoorTop),
+    mat(tDoorTop),
+    mat(tDoorTop),
+  ];
+  for (const axis of ['x', 'z']) {
+    for (const state of ['closed', 'open']) {
+      materials[`door_bottom_${axis}_${state}`] = doorBottomMat;
+      materials[`door_top_${axis}_${state}`] = doorTopMat;
+    }
   }
 
   // vraie géométrie en L (cf. buildStairsGeometry plus haut) + 1 matériau simple
@@ -313,6 +420,8 @@ export function createBlockAssets() {
         return tWeeds.image;
       case 'bed':
         return tBedFoot.image;
+      case 'door':
+        return tDoorBottom.image;
       case 'stairs_wood':
         return tStairsWoodIcon.image;
       case 'stairs_stone':
@@ -394,6 +503,8 @@ export function createBlockAssets() {
         return { top: tIce.image, left: tIce.image, right: tIce.image };
       case 'bed':
         return { top: tBedFoot.image, left: tBedSide.image, right: tBedSide.image };
+      case 'door':
+        return { top: tDoorBottom.image, left: tDoorBottom.image, right: tDoorBottom.image };
       // `shape: 'stairs'` : lu par ui/block-icon-3d.js pour composer 2 boîtes en
       // vrai profil L en CSS 3D (au lieu d'un cube plein) -- un cube texturé
       // planches/pierre serait ici indiscernable de l'item "Planches"/"Pierre".

@@ -93,6 +93,9 @@ export function createSfx() {
       case 'drown':
         playTone(150, 0.3, 'sawtooth', 0.2, 60);
         break;
+      case 'door':
+        playNoiseBurst(0.15, 350, 0.16, 'lowpass');
+        break;
     }
   }
 

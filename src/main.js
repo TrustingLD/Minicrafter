@@ -965,6 +965,10 @@ function breakBlockAt(x, y, z, type) {
     breakBed(x, y, z, type);
     return;
   }
+  if (type.startsWith('door_')) {
+    breakDoor(x, y, z, type);
+    return;
+  }
   const multiplier = hasRightToolFor(type) ? 2 : 1;
   const drops = BLOCK_TYPES[type]?.drops || [];
   drops.forEach(({ item, min, max }) => {
@@ -1013,6 +1017,28 @@ function breakBed(x, y, z, type) {
     particleSystem.burst(px + 0.5, py + 0.5, pz + 0.5, otherType, 10);
   }
   itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, 'bed', 1);
+  bus.emit('block:broken', { x, y, z, type });
+  player.hunger = Math.max(0, player.hunger - 0.005);
+  bus.emit('player:hunger');
+  sfx.playSound('break');
+}
+
+// Casser une moitié de porte casse l'autre avec elle et ne rend qu'UN SEUL item
+// "porte" (peu importe l'état ouvert/fermé au moment de la casse, ni l'axe) --
+// contrairement au lit (paire horizontale, recherche N/S/E/O), la moitié jumelle
+// d'une porte est toujours juste au-dessus (si on casse le bas) ou en-dessous (si
+// on casse le haut), jamais besoin de chercher.
+function breakDoor(x, y, z, type) {
+  const isBottom = type.includes('_bottom_');
+  const otherY = isBottom ? y + 1 : y - 1;
+  const otherType = worldApi.getBlock(x, otherY, z);
+  worldApi.setBlock(x, y, z, null);
+  particleSystem.burst(x + 0.5, y + 0.5, z + 0.5, type, 10);
+  if (otherType && otherType.startsWith('door_')) {
+    worldApi.setBlock(x, otherY, z, null);
+    particleSystem.burst(x + 0.5, otherY + 0.5, z + 0.5, otherType, 10);
+  }
+  itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, 'door', 1);
   bus.emit('block:broken', { x, y, z, type });
   player.hunger = Math.max(0, player.hunger - 0.005);
   bus.emit('player:hunger');
@@ -1236,7 +1262,13 @@ function tryPlaceStairs(item) {
   // basse doit être au nord.
   const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
   const facing =
-    Math.abs(dir.x) > Math.abs(dir.z) ? (dir.x > 0 ? 'west' : 'east') : dir.z > 0 ? 'north' : 'south';
+    Math.abs(dir.x) > Math.abs(dir.z)
+      ? dir.x > 0
+        ? 'west'
+        : 'east'
+      : dir.z > 0
+        ? 'north'
+        : 'south';
 
   worldApi.setBlock(x, y, z, STAIRS_VARIANTS[item][facing]);
   triggerPlaceFeedback(x, y, z);
@@ -1244,6 +1276,74 @@ function tryPlaceStairs(item) {
   removeItem(slots, item, 1);
   bus.emit('inventory:changed');
   sfx.playSound('place');
+}
+
+// Poser une porte (Phase 21) : 2 blocs empilés à LA VERTICALE (bas + haut), pas à
+// l'horizontale comme le lit -- un seul point de pose (`blockHit.place`) suffit
+// donc, la seconde case est juste celle du dessus. L'axe ('x'/'z', cf. commentaire
+// de data/blocks.js) est choisi pour que le panneau barre bien le passage devant
+// le joueur : perpendiculaire à son regard, comme un vrai battant de porte.
+function tryPlaceDoor() {
+  if (countOf(slots, 'door') <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place; // case du bas
+
+  const px = Math.floor(player.pos.x),
+    py0 = Math.floor(player.pos.y),
+    py1 = Math.floor(player.pos.y + player.height),
+    pz = Math.floor(player.pos.z);
+  const insidePlayer = (cx, cy, cz) => cx === px && cz === pz && (cy === py0 || cy === py1);
+  if (insidePlayer(x, y, z) || insidePlayer(x, y + 1, z)) return;
+
+  // les 2 cases (bas + haut) doivent être libres, ET avoir un sol sous le bas
+  // (même exigence que le lit -- pas de porte flottante dans le vide).
+  if (worldApi.getBlock(x, y, z) || worldApi.getBlock(x, y + 1, z)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  if (!worldApi.getBlock(x, y - 1, z)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+
+  // même calcul de direction regardée que le lit/l'escalier, arrondi à l'axe
+  // dominant : si le joueur regarde surtout selon X (est/ouest), le panneau doit
+  // couvrir Z pour lui barrer la route -> axe 'z' ; et inversement.
+  const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
+  const axis = Math.abs(dir.x) > Math.abs(dir.z) ? 'z' : 'x';
+
+  worldApi.setBlock(x, y, z, `door_bottom_${axis}_closed`);
+  worldApi.setBlock(x, y + 1, z, `door_top_${axis}_closed`);
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, 'door', 1);
+  bus.emit('inventory:changed');
+  sfx.playSound('place');
+}
+
+// Ouvrir/fermer une porte (clic droit dessus, Phase 21) : bascule 'closed'<->'open'
+// sur LES DEUX moitiés d'un coup, en gardant l'axe d'origine intact dans le nom
+// (cf. commentaire de data/blocks.js) -- ce n'est qu'un remplacement de nom, pas
+// un état séparé à mémoriser ailleurs, exactement comme les 4 blocs d'escalier
+// encodent déjà leur orientation dans leur id.
+function toggleDoorName(name) {
+  return name.includes('_closed')
+    ? name.replace('_closed', '_open')
+    : name.replace('_open', '_closed');
+}
+function toggleDoor(x, y, z, type) {
+  const isBottom = type.includes('_bottom_');
+  const otherY = isBottom ? y + 1 : y - 1;
+  const otherType = worldApi.getBlock(x, otherY, z);
+  worldApi.setBlock(x, y, z, toggleDoorName(type));
+  if (otherType && otherType.startsWith('door_')) {
+    worldApi.setBlock(x, otherY, z, toggleDoorName(otherType));
+  }
+  sfx.playSound('door');
 }
 
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
@@ -1256,6 +1356,10 @@ function performSecondaryAction() {
   const targetedType = worldApi.getBlock(tx, ty, tz);
   if (targetedType === 'bed_foot' || targetedType === 'bed_head') {
     trySleep(tx, ty, tz, targetedType);
+    return;
+  }
+  if (targetedType && targetedType.startsWith('door_')) {
+    toggleDoor(tx, ty, tz, targetedType);
     return;
   }
   if (targetedType === 'crafting_table') {
@@ -1272,6 +1376,10 @@ function performSecondaryAction() {
   }
   if (selectedBlock === 'stairs_wood' || selectedBlock === 'stairs_stone') {
     tryPlaceStairs(selectedBlock);
+    return;
+  }
+  if (selectedBlock === 'door') {
+    tryPlaceDoor();
     return;
   }
   if (NON_PLACEABLE.has(selectedBlock)) {

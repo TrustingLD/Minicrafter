@@ -39,16 +39,17 @@ export const ITEM_NAMES = {
   bed: 'Lit',
   stairs_wood: 'Escalier en bois',
   stairs_stone: 'Escalier en pierre',
+  door: 'Porte',
   gold_ingot: "Lingot d'or",
   diamond: 'Diamant',
   iron_helmet: 'Casque en fer',
   iron_chestplate: 'Plastron en fer',
   iron_leggings: 'Jambières en fer',
   iron_boots: 'Bottes en fer',
-  gold_helmet: "Casque en or",
-  gold_chestplate: "Plastron en or",
-  gold_leggings: "Jambières en or",
-  gold_boots: "Bottes en or",
+  gold_helmet: 'Casque en or',
+  gold_chestplate: 'Plastron en or',
+  gold_leggings: 'Jambières en or',
+  gold_boots: 'Bottes en or',
   diamond_helmet: 'Casque en diamant',
   diamond_chestplate: 'Plastron en diamant',
   diamond_leggings: 'Jambières en diamant',
@@ -273,6 +274,18 @@ export const RECIPES = [
     pattern: ['S..', 'SS.', 'SSS'],
     key: { S: 'stone' },
     give: { stairs_stone: 4 },
+    needsTable: true,
+  },
+  // Porte (Phase 21) : comme le lit, 'door' est un simple item en poche
+  // (NON_PLACEABLE, cf. plus bas) -- la pose spéciale fait apparaître 2 blocs
+  // empilés (door_bottom_*/door_top_*, cf. tryPlaceDoor dans main.js). 2 colonnes
+  // pleines sur 3 lignes = 2/3 de la grille 3x3 (6 cases sur 9), comme demandé.
+  {
+    id: 'door',
+    name: 'Porte',
+    pattern: ['PP', 'PP', 'PP'],
+    key: { P: 'planks' },
+    give: { door: 3 },
     needsTable: true,
   },
   // Armures (Phase 19) : 4 pièces par matériau (fer/or/diamant), mêmes formes

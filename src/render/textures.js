@@ -550,6 +550,54 @@ export function texBedSide() {
   ctx.fillRect(0, TEX_SIZE - 4, TEX_SIZE, 4);
   return canvasToTexture(c);
 }
+// Porte (Phase 21) : comme la torche, ces tuiles habillent un bloc à `shape`
+// réduite (cf. data/blocks.js), donc elles remplissent toute leur face au lieu de
+// dessiner une petite porte perdue au milieu d'un fond noir -- ce qu'on voit,
+// c'est directement le panneau de bois. Cadre + 2 planches verticales pour lire
+// "porte" plutôt que "planches" (texPlanks) au premier coup d'oeil ; la moitié du
+// bas ajoute la poignée, la seule différence entre les deux tuiles.
+function doorPanel(ctx) {
+  ctx.fillStyle = '#7a4a22';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  // cadre extérieur, un peu plus sombre
+  ctx.fillStyle = '#5c3717';
+  ctx.fillRect(0, 0, TEX_SIZE, 2);
+  ctx.fillRect(0, TEX_SIZE - 2, TEX_SIZE, 2);
+  ctx.fillRect(0, 0, 2, TEX_SIZE);
+  ctx.fillRect(TEX_SIZE - 2, 0, 2, TEX_SIZE);
+  // 2 planches verticales en relief (panneau plus clair, liseré sombre) --
+  // proportions arbitraires mais symétriques, façon vraie porte à panneaux.
+  ctx.fillStyle = '#8f5a2c';
+  ctx.fillRect(4, 4, TEX_SIZE / 2 - 6, TEX_SIZE - 8);
+  ctx.fillRect(TEX_SIZE / 2 + 2, 4, TEX_SIZE / 2 - 6, TEX_SIZE - 8);
+  ctx.strokeStyle = '#5c3717';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(4.5, 4.5, TEX_SIZE / 2 - 7, TEX_SIZE - 9);
+  ctx.strokeRect(TEX_SIZE / 2 + 2.5, 4.5, TEX_SIZE / 2 - 7, TEX_SIZE - 9);
+  speckle(ctx, ['#6b4220', '#96622f'], 14);
+}
+export function texDoorTop() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  doorPanel(ctx);
+  return canvasToTexture(c);
+}
+export function texDoorBottom() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  doorPanel(ctx);
+  // poignée (laiton) côté droit, à mi-hauteur -- seul repère qui distingue la
+  // moitié du bas de celle du haut, comme une vraie porte.
+  ctx.fillStyle = '#dfa93a';
+  ctx.beginPath();
+  ctx.arc(TEX_SIZE - 7, TEX_SIZE * 0.52, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#8a6416';
+  ctx.beginPath();
+  ctx.arc(TEX_SIZE - 7, TEX_SIZE * 0.52, 2, 0, Math.PI * 2);
+  ctx.stroke();
+  return canvasToTexture(c);
+}
 // Sable. Avant : un aplat + du bruit uniforme, donc aucune structure — de loin ça
 // rendait comme une couleur plate. Le sable se lit à ses RIDES : des ondulations
 // douces laissées par le vent, plus quelques grains sombres épars.

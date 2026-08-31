@@ -41,6 +41,8 @@ const TEXTURE_FN = {
   bedPillow: tex.texBedPillow,
   bedSide: tex.texBedSide,
   bedHeadSide: tex.texBedHeadSide,
+  doorTop: tex.texDoorTop,
+  doorBottom: tex.texDoorBottom,
 };
 
 // construit l'atlas + la table d'UV. Appelé une seule fois au boot.

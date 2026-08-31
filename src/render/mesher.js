@@ -364,12 +364,31 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
           const factor = lightFactor(shape ? getLight(x, y, z) : getLight(x + nx, y + ny, z + nz));
           for (const corner of face.v) {
             // `corner` reste le coin du cube unité (0..1) pour les UV plus bas ; seule
-            // la POSITION est ramenée aux dimensions de la boîte, centrée en x/z et
-            // posée sur le sol de la cellule.
+            // la POSITION est ramenée aux dimensions de la boîte, posée sur le sol de
+            // la cellule. Par défaut CENTRÉE en x/z (torche, lit -- une tige ou un
+            // demi-bloc n'ont pas de "côté" logique, autant les garder au milieu).
             if (shape) {
-              positions[pOff++] = x + 0.5 + (corner[0] - 0.5) * shape.width;
-              positions[pOff++] = y + corner[1] * shape.height;
-              positions[pOff++] = z + 0.5 + (corner[2] - 0.5) * shape.width;
+              // `depth` (profondeur sur Z) optionnelle -- absente (torche, lit) ->
+              // retombe sur `width` (carré centré, comportement d'avant la porte,
+              // Phase 21). La porte est le premier bloc à donner les deux séparément
+              // (panneau plein sur 1 axe, fin de quelques pixels sur l'autre).
+              const depth = shape.depth ?? shape.width;
+              // `flush` (porte) : NE PAS centrer -- le panneau doit rester plaqué au
+              // coin (0,0) de la cellule (charnière fixe), pas flotter au milieu.
+              // Fermée, ce coin correspond au bord contre lequel le panneau bloque le
+              // passage ; ouverte (panneau tourné à 90°, largeur/profondeur permutées
+              // dans data/blocks.js), même coin (0,0) -- c'est ce qui donne l'effet
+              // "la porte pivote sur sa charnière" plutôt que "elle saute d'un côté à
+              // l'autre du bloc".
+              if (shape.flush) {
+                positions[pOff++] = x + corner[0] * shape.width;
+                positions[pOff++] = y + corner[1] * shape.height;
+                positions[pOff++] = z + corner[2] * depth;
+              } else {
+                positions[pOff++] = x + 0.5 + (corner[0] - 0.5) * shape.width;
+                positions[pOff++] = y + corner[1] * shape.height;
+                positions[pOff++] = z + 0.5 + (corner[2] - 0.5) * depth;
+              }
             } else {
               positions[pOff++] = x + corner[0];
               positions[pOff++] = y + corner[1];

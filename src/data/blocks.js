@@ -14,6 +14,11 @@
 //            (Phase 10). Une seule entrée à quantité fixe = min===max. Un bloc sans
 //            `drops` (ou tableau vide) ne laisse rien tomber (ex: feuilles).
 
+// Épaisseur du panneau de porte : 3 texels sur les 32 d'une texture (cf.
+// render/textures.js TEX_SIZE) -- « 3 pixels de largeur » demandé, exprimé en
+// fraction 0..1 de la cellule comme le reste du champ `shape`.
+const DOOR_THICKNESS = 3 / 32;
+
 export const BLOCK_TYPES = {
   grass: {
     id: 1,
@@ -400,6 +405,103 @@ export const BLOCK_TYPES = {
     shape: { stairs: true, facing: 'west' },
     textures: { all: 'stone' },
     drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+
+  // Porte (Phase 21) : comme le lit, ce n'est pas l'item en poche ('door') qui est
+  // posé -- tryPlaceDoor() (main.js) pose 2 blocs empilés (door_bottom_*/door_top_*)
+  // d'un coup, verticalement (contrairement au lit qui s'étend à l'horizontale).
+  // Chaque moitié occupe toute la hauteur de sa cellule (`height: 1`, PAS un
+  // demi-bloc comme le lit) -- ce sont les 2 cellules empilées qui donnent les
+  // « 2 blocs de hauteur » demandés, pas un rétrécissement vertical par cellule.
+  // Seule l'EMPRISE AU SOL est réduite : `width`/`depth` (mesher.js, cf. son
+  // commentaire pour la distinction des deux) donnent un panneau plein sur 1 bloc
+  // de long et fin de DOOR_THICKNESS (3px/32 de large), façon vraie porte.
+  //
+  // `x`/`z` dans le nom = l'axe que couvre le panneau QUAND IL EST FERMÉ (choisi à
+  // la pose selon le regard du joueur, cf. tryPlaceDoor) -- ce suffixe ne change
+  // JAMAIS après la pose, ouvrir/fermer (clic droit, cf. toggleDoor) ne fait que
+  // basculer 'closed'<->'open' en gardant cet axe, jamais un axe pour l'autre :
+  // c'est ce qui permet de refermer une porte ouverte sans perdre son orientation
+  // d'origine. Concrètement, ouvrir fait pivoter le panneau de 90° (mêmes
+  // dimensions que la variante `closed` de l'AUTRE axe) et le rend traversable
+  // (`solid: false`) -- une porte fermée bloque le passage comme un bloc plein
+  // (simplification déjà vue pour l'escalier : la collision reste binaire par
+  // cellule, cf. son commentaire), une porte ouverte se traverse librement.
+  door_bottom_x_closed: {
+    id: 35,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_x_closed: {
+    id: 36,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
+  },
+  door_bottom_x_open: {
+    id: 37,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_x_open: {
+    id: 38,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
+  },
+  door_bottom_z_closed: {
+    id: 39,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_z_closed: {
+    id: 40,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
+  },
+  door_bottom_z_open: {
+    id: 41,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_z_open: {
+    id: 42,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
   },
 };
 
