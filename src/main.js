@@ -310,14 +310,17 @@ function openCraft() {
 }
 function closeCraft() {
   craftOpen = false;
+  blocker.style.display = 'none';
+  blocker.classList.remove('paused');
+  resumePointerLock();
   craftUI.hide();
   charPreview.hide();
-  // On vient de fermer le panneau nous-mêmes (touche E) : on redemande le
-  // pointer lock tout de suite, sans écran intermédiaire.
-  // Non pertinent sur tactile : il n'y a jamais eu de pointer lock à reprendre.
-  resumePointerLock();
 }
-document.getElementById('closeCraft').addEventListener('click', closeCraft);
+document.getElementById('closeCraft').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  closeCraft();
+});
 
 /* ---------- Fourneau (Phase 14) ---------- */
 // État + horloge (world/block-entities.js) séparés du rendu (ui/furnace.js) — le
@@ -331,12 +334,22 @@ const furnaceUI = createFurnaceUI({
     outputSlot: document.getElementById('fOutput'),
     progressFill: document.getElementById('furnaceProgressFill'),
     flameFill: document.getElementById('furnaceFlameFill'),
+    invGrid: document.getElementById('furnaceInvGrid'),
+    hotbarGrid: document.getElementById('furnaceHotbarGrid'),
+    cursorEl: document.getElementById('craftCursor'),
     closeBtn: document.getElementById('closeFurnace'),
   },
   iconCanvas: blockAssets.iconCanvas,
   iconFaces3D: blockAssets.iconFaces3D,
+  SMELTING,
+  FUELS,
   onClose: () => {
     resumePointerLock();
+  },
+  onInventoryChanged: () => {
+    selectedBlock = slots[selectedIndex]?.item ?? null;
+    refreshHeldItem(selectedBlock);
+    bus.emit('inventory:changed');
   },
 });
 let furnaceOpen = false;
@@ -348,48 +361,22 @@ function renderFurnace() {
   const state = furnaceStateAt();
   if (!state) return;
   const burnBudget = state.fuel ? FUELS[state.fuel.item] || 1 : FUELS[state.input?.item] || 8;
-  furnaceUI.render(state, Math.max(1, burnBudget));
+  furnaceUI.render(state, Math.max(1, burnBudget), slots, selectedIndex);
 }
-// clic sur une case entrée/combustible = "charge l'objet actuellement en main"
-// (jusqu'à un plein slot) ; clic sur la sortie = "récupère tout ce qu'il y a".
-// Pas de glisser-déposer (cf. PLAN.md Phase 14) : click-to-move suffit.
-function loadFromHotbar(field, predicate) {
-  const state = furnaceStateAt();
-  if (!state || !selectedBlock || !predicate(selectedBlock)) return;
-  const have = countOf(slots, selectedBlock);
-  if (have <= 0) return;
-  const existing = state[field];
-  if (existing && existing.item !== selectedBlock) return; // case déjà occupée par autre chose
-  const room = 64 - (existing?.count || 0);
-  const move = Math.min(room, have);
-  if (move <= 0) return;
-  removeItem(slots, selectedBlock, move);
-  state[field] = { item: selectedBlock, count: (existing?.count || 0) + move };
-  bus.emit('inventory:changed');
-  renderFurnace();
-}
-furnaceUI.setHandlers({
-  onInputClick: () => loadFromHotbar('input', (item) => !!SMELTING[item]),
-  onFuelClick: () => loadFromHotbar('fuel', (item) => !!FUELS[item]),
-  onOutputClick: () => {
-    const state = furnaceStateAt();
-    if (!state || !state.output) return;
-    const leftover = addItem(slots, state.output.item, state.output.count);
-    state.output.count = leftover;
-    if (leftover <= 0) state.output = null;
-    bus.emit('inventory:changed');
-    renderFurnace();
-  },
-});
 function openFurnace(x, y, z) {
   furnaceOpen = true;
-  furnaceUI.open(x, y, z);
-  document.exitPointerLock();
+  furnaceUI.show(x, y, z);
+  if (!touchMode && document.pointerLockElement === renderer.domElement) {
+    document.exitPointerLock();
+  }
   renderFurnace();
 }
 function closeFurnace() {
   furnaceOpen = false;
-  furnaceUI.close();
+  blocker.style.display = 'none';
+  blocker.classList.remove('paused');
+  resumePointerLock();
+  furnaceUI.hide();
 }
 // E ferme le panneau ouvert (fourneau prioritaire sur craft), ou ouvre craft sinon —
 // jamais les deux en même temps. Partagé par la touche E et le bouton tactile inventaire.
@@ -813,69 +800,67 @@ let gameStarted = false;
 // utilisateur : "on doit juste cliquer sur E ... et reprendre la partie
 // direct", pas de "cliquez pour reprendre".
 function resumePointerLock() {
-  if (!touchMode) renderer.domElement.requestPointerLock();
+  if (!touchMode) {
+    try {
+      const p = renderer.domElement.requestPointerLock();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          showResumeBlocker();
+        });
+      }
+    } catch {
+      showResumeBlocker();
+    }
+  }
 }
-// Filet de sécurité pour les pertes de pointer lock qu'on ne contrôle PAS
-// nous-mêmes (Echap, alt-tab, perte de focus) : là on n'est dans aucun
-// handler de geste utilisateur, impossible de relock directement -- il faut
-// un vrai clic, donc on affiche un écran minimal "cliquez pour reprendre"
-// (jamais le menu principal complet une fois la partie commencée).
 function showResumeBlocker() {
-  if (gameStarted) blocker.classList.add('paused');
-  blocker.style.display = 'flex';
+  if (gameStarted && !craftOpen && !furnaceOpen && !chatUI.isOpen && !sleeping && !gameOverOpen) {
+    blocker.classList.add('paused');
+    blocker.style.display = 'flex';
+  }
 }
 renderer.domElement.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
-  if (!sleeping && !craftOpen && !furnaceOpen && !gameOverOpen)
-    renderer.domElement.requestPointerLock();
+  if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) {
+    if (document.pointerLockElement !== renderer.domElement) {
+      resumePointerLock();
+    }
+  }
 });
-// Seul "Solo" lance/reprend la partie -- Multijoueur et Options n'ont
-// délibérément aucun gestionnaire pour l'instant (boutons de menu inertes).
 soloBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
   gameStarted = true;
   if (touchMode)
-    blocker.style.display = 'none'; // pas de pointer lock sur tactile
-  else renderer.domElement.requestPointerLock();
+    blocker.style.display = 'none';
+  else resumePointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === renderer.domElement) {
     blocker.style.display = 'none';
-  } else if (sleeping || craftOpen || furnaceOpen || gameOverOpen) {
+    blocker.classList.remove('paused');
+  } else if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) {
     blocker.style.display = 'none';
   } else {
     showResumeBlocker();
   }
 });
-// L'écran "cliquez pour reprendre" recouvre tout l'écran (donc bloque bien
-// les clics vers le canvas en dessous, cf. #blocker en position fixed) --
-// mais SANS ce gestionnaire, cliquer dessus ne faisait littéralement rien,
-// puisque seul `soloBtn` (à l'intérieur) avait un listener : impossible de
-// reprendre la partie après un Echap. On ne réagit qu'en mode "reprise"
-// (`.paused`) : sur l'écran-titre initial, seul le bouton Solo doit lancer
-// la partie.
 blocker.addEventListener('click', () => {
-  if (blocker.classList.contains('paused')) resumePointerLock();
+  if (gameStarted && !craftOpen && !furnaceOpen && !chatUI.isOpen && !sleeping && !gameOverOpen) {
+    resumePointerLock();
+  }
 });
-// Juste après un Echap (le geste de déverrouillage "par défaut" du
-// navigateur), Chrome/Firefox refusent tout requestPointerLock() pendant un
-// court délai de sécurité -- MÊME avec un vrai clic (cf. MDN, section
-// "Security" de requestPointerLock() : "If calling requestPointerLock()
-// immediately after releasing the pointer lock via the default unlock
-// gesture [...] the call will fail, even if a transient activation is
-// available"). Ce n'est pas contournable en JS, d'où les clics qui semblent
-// ne "rien faire" juste après un Echap. On programme donc UNE tentative
-// automatique un peu plus tard (l'activation du clic reste valide quelques
-// secondes côté navigateur), pour éviter d'avoir à recliquer plusieurs fois.
 let pointerLockRetryTimer = null;
 document.addEventListener('pointerlockerror', () => {
-  if (blocker.classList.contains('paused') && !pointerLockRetryTimer) {
-    pointerLockRetryTimer = setTimeout(() => {
-      pointerLockRetryTimer = null;
-      resumePointerLock();
-    }, 1300);
+  if (gameStarted && !craftOpen && !furnaceOpen && !chatUI.isOpen && !sleeping && !gameOverOpen) {
+    showResumeBlocker();
+    if (!pointerLockRetryTimer) {
+      pointerLockRetryTimer = setTimeout(() => {
+        pointerLockRetryTimer = null;
+        resumePointerLock();
+      }, 500);
+    }
   }
 });
 document.addEventListener('mousemove', (e) => {

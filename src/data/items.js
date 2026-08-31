@@ -34,6 +34,7 @@ export const ITEM_NAMES = {
   iron_ingot: 'Lingot de fer',
   wool: 'Laine',
   sand: 'Sable',
+  glass: 'Verre',
   sandstone: 'Grès',
   cactus: 'Cactus',
   bed: 'Lit',

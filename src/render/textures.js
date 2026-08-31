@@ -767,6 +767,39 @@ export function texIce() {
   }
   return canvasToTexture(c);
 }
+export function texGlass() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+
+  // Cadre extérieur blanc/cyan clair semi-transparent
+  ctx.fillStyle = 'rgba(215, 240, 255, 0.85)';
+  ctx.fillRect(0, 0, TEX_SIZE, 1);
+  ctx.fillRect(0, 0, 1, TEX_SIZE);
+  ctx.fillRect(TEX_SIZE - 1, 0, 1, TEX_SIZE);
+  ctx.fillRect(0, TEX_SIZE - 1, TEX_SIZE, 1);
+
+  // Coins intérieurs
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.fillRect(1, 1, 2, 1);
+  ctx.fillRect(1, 1, 1, 2);
+  ctx.fillRect(TEX_SIZE - 3, 1, 2, 1);
+  ctx.fillRect(TEX_SIZE - 2, 1, 1, 2);
+  ctx.fillRect(1, TEX_SIZE - 2, 2, 1);
+  ctx.fillRect(1, TEX_SIZE - 3, 1, 2);
+
+  // Lignes de reflets diagonales (glare)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.fillRect(4, 4, 3, 1);
+  ctx.fillRect(6, 5, 3, 1);
+  ctx.fillRect(8, 6, 2, 1);
+
+  ctx.fillRect(20, 22, 3, 1);
+  ctx.fillRect(22, 23, 3, 1);
+  ctx.fillRect(24, 24, 2, 1);
+
+  return canvasToTexture(c);
+}
 // Four : avant, un aplat gris avec un petit trou noir/orange perdu au milieu --
 // trop discret pour se lire comme un four à l'échelle du bloc. La pierre est
 // maintenant découpée en gros blocs façon maçonnerie (au lieu d'un bruit fin),

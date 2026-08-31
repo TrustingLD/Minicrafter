@@ -28,7 +28,7 @@ import {
   SEA_LEVEL,
   WORLD_BORDER,
 } from './generator.js';
-import { BLOCK_ID, BLOCK_BY_ID, BLOCK_TYPES, LIQUID_IDS, SHAPE_BY_ID } from '../data/blocks.js';
+import { BLOCK_ID, BLOCK_BY_ID, BLOCK_TYPES, LIQUID_IDS, SHAPE_BY_ID, TRANSPARENT_IDS } from '../data/blocks.js';
 import { buildBlockAtlas } from '../render/atlas.js';
 import { meshChunk, meshLiquid } from '../render/mesher.js';
 import { texWater, texLava } from '../render/textures.js';
@@ -47,7 +47,7 @@ import { stepFluidQueue } from './fluid.js';
 // bâtonnet fin, il serait absurde qu'il projette une colonne d'ombre sous lui ou
 // qu'il coupe le couloir qu'il est censé éclairer.
 function isOpaqueBlock(id) {
-  return id !== 0 && !LIQUID_IDS.has(id) && !SHAPE_BY_ID[id];
+  return id !== 0 && !LIQUID_IDS.has(id) && !SHAPE_BY_ID[id] && !TRANSPARENT_IDS.has(id);
 }
 
 export { WORLD_BORDER };
@@ -155,6 +155,7 @@ export function createWorld({
       lightData,
       LIQUID_IDS,
       SHAPE_BY_ID,
+      TRANSPARENT_IDS,
     );
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));

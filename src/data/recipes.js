@@ -9,6 +9,7 @@ export const SMELTING = {
   gold_ore: 'gold_ingot',
   diamond_ore: 'diamond',
   meat: 'cooked_meat',
+  sand: 'glass',
 };
 
 export const FUELS = {

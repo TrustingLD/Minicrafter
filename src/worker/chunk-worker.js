@@ -14,13 +14,13 @@
 
 import { generateChunk } from '../world/generator.js';
 import { meshChunk, meshLiquid } from '../render/mesher.js';
-import { LIQUID_IDS, BLOCK_ID } from '../data/blocks.js';
+import { LIQUID_IDS, TRANSPARENT_IDS, SHAPE_BY_ID, BLOCK_ID } from '../data/blocks.js';
 
 // coeur du worker, exporté séparément de `self.onmessage` pour rester testable
 // depuis node (aucun `self`/`postMessage` là-dedans).
 export function buildChunkResult(cx, cz, uvByBlockId) {
   const { data } = generateChunk(cx, cz);
-  const opaque = meshChunk(data, uvByBlockId, undefined, LIQUID_IDS);
+  const opaque = meshChunk(data, uvByBlockId, undefined, LIQUID_IDS, SHAPE_BY_ID, TRANSPARENT_IDS);
   // topOnly=true pour l'eau (cf. mesher.js meshLiquid) : pas de faces latérales,
   // donc pas de bordure visible entre deux chunks d'eau voisins.
   const water = meshLiquid(data, BLOCK_ID.water, LIQUID_IDS, undefined, true);

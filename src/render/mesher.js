@@ -9,9 +9,11 @@
 // coutures, mais aucun risque de trou/incohérence entre deux chunks voisins.
 
 import { CHUNK_X, CHUNK_Y, CHUNK_Z, idx } from '../world/chunk.js';
+import { TRANSPARENT_IDS } from '../data/blocks.js';
 
 const EMPTY_SET = new Set();
 const EMPTY_OBJECT = {};
+
 
 // [normale, verts relatifs au coin (x,y,z) du bloc, dans l'ordre qui donne un
 // enroulement CCW vu de l'extérieur (donc la normale calculée par produit vectoriel
@@ -140,19 +142,19 @@ function lightFactor(level) {
 // surfaces exposées), ça fait beaucoup d'allocations/copies pour rien. On fait donc deux
 // passes : la 1ère ne fait QUE compter les faces visibles (aucune allocation), la 2e
 // remplit directement des tableaux typés déjà dimensionnés à la bonne taille.
-export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
+export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById, transparentIds) {
   const liquids = liquidIds || EMPTY_SET;
   const shapes = shapeById || EMPTY_OBJECT;
+  const transparents = transparentIds || TRANSPARENT_IDS;
   function get(x, y, z) {
     if (x < 0 || x >= CHUNK_X || y < 0 || y >= CHUNK_Y || z < 0 || z >= CHUNK_Z) return 0;
     return data[idx(x, y, z)];
   }
   // opaque = un bloc plein qui n'est PAS un liquide (l'air ne l'est pas non plus, id 0)
-  // ni une forme réduite : une torche est un bâtonnet fin, elle ne remplit pas sa
-  // cellule, donc elle ne peut pas masquer la face du bloc d'à côté.
+  // ni une forme réduite ni un bloc transparent (ex: verre).
   function isOpaque(x, y, z) {
     const id = get(x, y, z);
-    return id !== 0 && !liquids.has(id) && !shapes[id];
+    return id !== 0 && !liquids.has(id) && !shapes[id] && !transparents.has(id);
   }
   // lumière du voisin exposé (celui qui a fait accepter la face) : hors-chunk ou pas
   // de lightData fourni -> plein jour (15), même simplification que `get()` pour les
@@ -202,6 +204,8 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
         }
         for (const face of FACES) {
           const [nx, ny, nz] = face.n;
+          const neighborId = get(x + nx, y + ny, z + nz);
+          if (transparents.has(id) && neighborId === id) continue;
           if (!isOpaque(x + nx, y + ny, z + nz)) faceCount++;
         }
       }
@@ -353,6 +357,8 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById) {
         }
         for (const face of FACES) {
           const [nx, ny, nz] = face.n;
+          const neighborId = get(x + nx, y + ny, z + nz);
+          if (transparents.has(id) && neighborId === id) continue;
           if (!shape && isOpaque(x + nx, y + ny, z + nz)) continue; // face cachée
           const rect = uv[faceSlot(nx, ny)];
           const base = vertCount;

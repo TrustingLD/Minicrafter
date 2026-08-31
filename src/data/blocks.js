@@ -503,6 +503,15 @@ export const BLOCK_TYPES = {
     textures: { all: 'doorTop' },
     drops: [],
   },
+  glass: {
+    id: 43,
+    name: 'Verre',
+    hardness: 0.3,
+    tool: null,
+    textures: { all: 'glass' },
+    transparent: true,
+    drops: [{ item: 'glass', min: 1, max: 1 }],
+  },
 };
 
 // les 4 variantes (une par orientation) pour chaque matériau d'escalier --
@@ -528,6 +537,14 @@ export const STAIRS_VARIANTS = {
 export const LIQUID_IDS = new Set(
   Object.values(BLOCK_TYPES)
     .filter((b) => b.liquid)
+    .map((b) => b.id),
+);
+
+// blocs transparents (ex: verre) : la lumière passe à travers et leurs faces
+// adjacentes sont gérées spécialement par le mesher.
+export const TRANSPARENT_IDS = new Set(
+  Object.values(BLOCK_TYPES)
+    .filter((b) => b.transparent)
     .map((b) => b.id),
 );
 
@@ -558,3 +575,4 @@ export const BLOCK_BY_ID = Object.fromEntries(
 export const ORE_TYPES = Object.entries(BLOCK_TYPES)
   .filter(([, b]) => b.vein)
   .map(([name, b]) => ({ name, id: b.id, ...b.vein }));
+

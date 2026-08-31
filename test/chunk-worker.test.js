@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildChunkResult, collectTransferables } from '../src/worker/chunk-worker.js';
 import { generateChunk } from '../src/world/generator.js';
 import { meshChunk, meshLiquid } from '../src/render/mesher.js';
-import { BLOCK_TYPES, LIQUID_IDS, BLOCK_ID } from '../src/data/blocks.js';
+import { BLOCK_TYPES, LIQUID_IDS, SHAPE_BY_ID, TRANSPARENT_IDS, BLOCK_ID } from '../src/data/blocks.js';
 
 // pas de vrai atlas ici (buildBlockAtlas() a besoin de `document`, absent sous
 // node --test) : un rect [0,0,1,1] identique pour chaque bloc suffit à vérifier
@@ -23,7 +23,7 @@ test('buildChunkResult: produces the exact same block data as calling generateCh
 
 test('buildChunkResult: the opaque/water/lava geometries match calling the mesher directly on the same data', () => {
   const { data, opaque, water, lava } = buildChunkResult(1, 1, FAKE_UV);
-  const expectedOpaque = meshChunk(data, FAKE_UV, undefined, LIQUID_IDS);
+  const expectedOpaque = meshChunk(data, FAKE_UV, undefined, LIQUID_IDS, SHAPE_BY_ID, TRANSPARENT_IDS);
   // topOnly=true pour l'eau : le worker (chunk-worker.js) applique le même réglage,
   // cf. mesher.js meshLiquid.
   const expectedWater = meshLiquid(data, BLOCK_ID.water, LIQUID_IDS, undefined, true);

@@ -176,6 +176,7 @@ export function createBlockAssets() {
     tBedHeadSide = tex.texBedHeadSide(),
     tDoorTop = tex.texDoorTop(),
     tDoorBottom = tex.texDoorBottom(),
+    tGlass = tex.texGlass(),
     // icônes plates dédiées (cf. commentaire de texStairsIcon) : teintes reprises
     // de texPlanks (#daa44c/#e2b261) et texStone (#8e8e8e/#7c7c7c) pour rester
     // cohérent avec la texture du bloc réel, arêtes plus sombres pour le relief.
@@ -223,6 +224,7 @@ export function createBlockAssets() {
       mat(tFurnace),
     ],
     wool: [mat(tWool), mat(tWool), mat(tWool), mat(tWool), mat(tWool), mat(tWool)],
+    glass: [mat(tGlass), mat(tGlass), mat(tGlass), mat(tGlass), mat(tGlass), mat(tGlass)],
     sand: [mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand)],
     sandstone: [
       mat(tSandstone),
@@ -408,6 +410,8 @@ export function createBlockAssets() {
         return tWool.image;
       case 'sand':
         return tSand.image;
+      case 'glass':
+        return tGlass.image;
       case 'sandstone':
         return tSandstone.image;
       case 'cactus':
@@ -495,6 +499,8 @@ export function createBlockAssets() {
         return { top: tWool.image, left: tWool.image, right: tWool.image };
       case 'sand':
         return { top: tSand.image, left: tSand.image, right: tSand.image };
+      case 'glass':
+        return { top: tGlass.image, left: tGlass.image, right: tGlass.image };
       case 'sandstone':
         return { top: tSandstone.image, left: tSandstone.image, right: tSandstone.image };
       case 'cactus':
