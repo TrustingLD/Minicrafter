@@ -343,7 +343,7 @@ const furnaceUI = createFurnaceUI({
   iconFaces3D: blockAssets.iconFaces3D,
   SMELTING,
   FUELS,
-    onClose: () => {
+  onClose: () => {
     furnaceOpen = false;
     blocker.style.display = 'none';
     blocker.classList.remove('paused');
@@ -770,6 +770,11 @@ document.addEventListener('keyup', (e) => {
 // pour éviter que le joueur continue d'avancer tout seul
 window.addEventListener('blur', () => {
   for (const k in keys) keys[k] = false;
+  pointerLockLostByBlur = true;
+  clearTimeout(blurResetTimer);
+  blurResetTimer = setTimeout(() => {
+    pointerLockLostByBlur = false;
+  }, 300);
 });
 document.addEventListener(
   'wheel',
@@ -794,6 +799,15 @@ const soloBtn = document.getElementById('soloBtn');
 // #blocker (vrai menu principal) d'un éventuel réaffichage plus tard (perte
 // de pointer lock imprévue, cf. showResumeBlocker() ci-dessous).
 let gameStarted = false;
+// La touche Échap fait perdre le pointer lock (comportement du navigateur,
+// pas interceptable en amont de façon fiable selon les navigateurs) : pour
+// savoir si la perte du pointer lock vient d'un Échap volontaire (-> retour
+// au menu principal) plutôt que d'une perte de focus fenêtre involontaire
+// (alt-tab, clic hors fenêtre -> écran "cliquez pour reprendre"), on
+// s'appuie sur l'événement 'blur' de la fenêtre : un vrai Échap ne fait PAS
+// perdre le focus de la fenêtre, contrairement à un alt-tab.
+let pointerLockLostByBlur = false;
+let blurResetTimer = null;
 // Redemande directement le pointer lock (ZQSD/souris repris tout de suite,
 // sans écran intermédiaire) -- appelé depuis les endroits où on VIENT de
 // fermer un panneau nous-mêmes (E pour l'inventaire, bouton fermer du
@@ -845,6 +859,11 @@ document.addEventListener('pointerlockchange', () => {
     blocker.classList.remove('paused');
   } else if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) {
     blocker.style.display = 'none';
+  } else if (!pointerLockLostByBlur && gameStarted) {
+    // Perte du pointer lock sans perte de focus fenêtre = Échap volontaire :
+    // retour direct au menu principal (pas juste l'écran "cliquez pour reprendre").
+    blocker.classList.remove('paused');
+    blocker.style.display = 'flex';
   } else {
     showResumeBlocker();
   }
