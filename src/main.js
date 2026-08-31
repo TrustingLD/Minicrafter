@@ -343,7 +343,10 @@ const furnaceUI = createFurnaceUI({
   iconFaces3D: blockAssets.iconFaces3D,
   SMELTING,
   FUELS,
-  onClose: () => {
+    onClose: () => {
+    furnaceOpen = false;
+    blocker.style.display = 'none';
+    blocker.classList.remove('paused');
     resumePointerLock();
   },
   onInventoryChanged: () => {
