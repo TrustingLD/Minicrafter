@@ -148,6 +148,54 @@
       <p id="resumeHint">Cliquez pour reprendre</p>
     </div>
 
+    <!-- Panneau Options, accessible depuis le menu principal (bouton "Options").
+         Trois sous-écrans (sensibilité / touches / langue) affichés un par un
+         dans la même boîte -- cf. #optionsPanel dans style.css et la logique
+         de bascule dans main.js. -->
+    <div id="optionsPanel">
+      <div id="optionsBox">
+        <h2 id="optionsTitle">Options</h2>
+
+        <!-- Écran racine : les 3 boutons demandés -->
+        <div id="optionsRoot" class="optionsScreen">
+          <button id="optSensitivityBtn" class="menuBtn">Sensibilité de la souris</button>
+          <button id="optKeybindsBtn" class="menuBtn">Touches</button>
+          <button id="optLanguageBtn" class="menuBtn">Langue</button>
+          <button id="optionsBackBtn" class="menuBtn">Retour</button>
+        </div>
+
+        <!-- Sous-écran : sensibilité -->
+        <div id="optionsSensitivity" class="optionsScreen" style="display: none">
+          <label for="sensitivitySlider"
+            >Sensibilité : <span id="sensitivityValue">10</span></label
+          >
+          <input
+            type="range"
+            id="sensitivitySlider"
+            min="1"
+            max="30"
+            step="1"
+          />
+          <button id="sensitivityBackBtn" class="menuBtn">Retour</button>
+        </div>
+
+        <!-- Sous-écran : touches -->
+        <div id="optionsKeybinds" class="optionsScreen" style="display: none">
+          <div id="keybindList"></div>
+          <button id="keybindsBackBtn" class="menuBtn">Retour</button>
+        </div>
+
+        <!-- Sous-écran : langue -->
+        <div id="optionsLanguage" class="optionsScreen" style="display: none">
+          <label for="languageSelect">Langue</label>
+          <select id="languageSelect">
+            <option value="fr" selected>Français</option>
+          </select>
+          <button id="languageBackBtn" class="menuBtn">Retour</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       // Décor du menu façon Minecraft Beta 1.1 (fond terre + titre en blocs avec
       // ombre portée) -- en JS classique hors module, avant src/main.js, pour

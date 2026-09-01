@@ -681,8 +681,103 @@ bus.on('chat:message', (text) => {
   chatUI.addMessage(result);
 });
 
+/* ---------- Réglages (sensibilité, touches, langue) ---------- */
+// Touches rebindables depuis le menu Options -- KeyW/A/S/D etc. par défaut
+// (e.code = position physique, donc ZQSD en AZERTY sans rien changer ici).
+// Les touches "système" (flèches, Maj pour l'accroupi) restent fixes en
+// plus des touches ci-dessous, elles ne sont pas rebindables pour l'instant.
+const DEFAULT_KEYBINDS = {
+  forward: 'KeyW',
+  backward: 'KeyS',
+  left: 'KeyA',
+  right: 'KeyD',
+  jump: 'Space',
+  inventory: 'KeyE',
+  drop: 'KeyQ',
+  zoom: 'KeyC',
+  chat: 'KeyT',
+  mute: 'KeyM',
+  nextTrack: 'KeyL',
+};
+// Ordre + libellés affichés dans le sous-menu "Touches".
+const KEYBIND_ACTIONS = [
+  ['forward', 'Avancer'],
+  ['backward', 'Reculer'],
+  ['left', 'Aller à gauche'],
+  ['right', 'Aller à droite'],
+  ['jump', 'Sauter'],
+  ['inventory', 'Inventaire / craft'],
+  ['drop', "Jeter l'objet"],
+  ['zoom', 'Viser (zoom)'],
+  ['chat', 'Ouvrir le chat'],
+  ['mute', 'Couper la musique'],
+  ['nextTrack', 'Piste suivante'],
+];
+
+const SETTINGS_KEY = 'minicrafter_settings_v1';
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      sensitivity: typeof parsed.sensitivity === 'number' ? parsed.sensitivity : 10,
+      keybinds: { ...DEFAULT_KEYBINDS, ...(parsed.keybinds || {}) },
+      language: 'fr', // seule langue dispo pour l'instant
+    };
+  } catch {
+    return { sensitivity: 10, keybinds: { ...DEFAULT_KEYBINDS }, language: 'fr' };
+  }
+}
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // stockage indisponible (navigation privée, quota...) -- tant pis, les
+    // réglages resteront valables juste pour cette session
+  }
+}
+const settings = loadSettings();
+const keybinds = settings.keybinds;
+// Multiplicateur souris (yaw/pitch par pixel) : 0.0025 = valeur d'origine du
+// jeu, obtenue avec le curseur de sensibilité au milieu (10 sur l'échelle 1-30).
+let mouseSensitivity = settings.sensitivity * 0.00025;
+
+// Noms de touches lisibles pour l'UI du sous-menu "Touches".
+const KEY_CODE_LABELS = {
+  Space: 'Espace',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  ShiftLeft: 'Maj (G)',
+  ShiftRight: 'Maj (D)',
+  ControlLeft: 'Ctrl (G)',
+  ControlRight: 'Ctrl (D)',
+  AltLeft: 'Alt (G)',
+  AltRight: 'Alt (D)',
+  Escape: 'Échap',
+  Enter: 'Entrée',
+  Tab: 'Tab',
+};
+function formatKeyCode(code) {
+  if (!code) return '?';
+  if (KEY_CODE_LABELS[code]) return KEY_CODE_LABELS[code];
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  return code;
+}
+
+// Non-null pendant qu'on attend l'appui de la prochaine touche pour rebind
+// une action (cf. sous-menu Touches) : contient le nom de l'action en cours.
+let awaitingRebindAction = null;
+// true tant que le panneau Options est affiché -- coupe les touches de jeu
+// (mouvement, inventaire...) pour que taper au clavier dans ce menu n'agisse
+// pas sur la partie en fond.
+let optionsOpen = false;
+
 /* ---------- Entrées clavier / souris ---------- */
 document.addEventListener('keydown', (e) => {
+  if (awaitingRebindAction || optionsOpen) return;
   if (e.code === 'F5') {
     e.preventDefault();
     if (sleeping) return; // le lit impose déjà sa propre vue -- pas de bascule pendant qu'on dort
@@ -696,17 +791,19 @@ document.addEventListener('keydown', (e) => {
 });
 
 const keys = {};
-const MOVE_CODES = new Set([
-  'KeyW',
-  'KeyA',
-  'KeyS',
-  'KeyD',
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  'Space',
-]);
+function isMovementCode(code) {
+  return (
+    code === 'ArrowUp' ||
+    code === 'ArrowDown' ||
+    code === 'ArrowLeft' ||
+    code === 'ArrowRight' ||
+    code === keybinds.forward ||
+    code === keybinds.backward ||
+    code === keybinds.left ||
+    code === keybinds.right ||
+    code === keybinds.jump
+  );
+}
 // zoom (C, façon longue-vue) : bascule + interpolé dans la boucle animate()
 let zoomed = false;
 // sprint (double-tap W/Z) : deux appuis rapprochés déclenchent la course
@@ -715,20 +812,36 @@ let lastForwardTapTime = -Infinity;
 const SPRINT_TAP_WINDOW = 300; // ms
 
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyE') {
+  if (awaitingRebindAction) {
+    // Sous-menu Touches en attente d'une touche pour rebind (cf. plus bas) :
+    // Échap annule sans rien changer, toute autre touche devient la nouvelle
+    // touche de l'action -- ce handler ne fait rien d'autre tant que c'est actif.
+    e.preventDefault();
+    const action = awaitingRebindAction;
+    awaitingRebindAction = null;
+    if (e.code !== 'Escape') {
+      keybinds[action] = e.code;
+      settings.keybinds = keybinds;
+      saveSettings();
+    }
+    renderKeybindList();
+    return;
+  }
+  if (optionsOpen) return;
+  if (e.code === keybinds.inventory) {
     if (!sleeping && !gameOverOpen) toggleCraftOrClose();
     e.preventDefault();
     return;
   }
-  if (e.code === 'KeyM') {
+  if (e.code === keybinds.mute) {
     music.toggleBgmMute();
     return;
   }
-  if (e.code === 'KeyL') {
+  if (e.code === keybinds.nextTrack) {
     music.nextTrack();
     return;
   }
-  if (e.code === 'KeyT') {
+  if (e.code === keybinds.chat) {
     if (!craftOpen && !furnaceOpen && !chatUI.isOpen) {
       chatUI.open();
       document.exitPointerLock();
@@ -737,22 +850,20 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) return;
-  if (e.code === 'KeyC') {
+  if (e.code === keybinds.zoom) {
     zoomed = !zoomed;
     return;
   }
-  if (e.code === 'KeyQ' && !e.repeat) {
-    // Touche "A" en AZERTY = même position physique que "Q" en QWERTY (comme le
-    // ZQSD des déplacements, cf. plus haut) -> jeter un objet, raccourci Minecraft.
+  if (e.code === keybinds.drop && !e.repeat) {
     dropSelectedItem();
     return;
   }
-  if (e.code === 'KeyW' && !e.repeat) {
+  if (e.code === keybinds.forward && !e.repeat) {
     const now = performance.now();
     if (now - lastForwardTapTime < SPRINT_TAP_WINDOW) sprinting = true;
     lastForwardTapTime = now;
   }
-  if (MOVE_CODES.has(e.code)) e.preventDefault(); // évite le scroll de page avec Espace/flèches
+  if (isMovementCode(e.code)) e.preventDefault(); // évite le scroll de page avec Espace/flèches
   keys[e.code] = true;
   // e.code = position physique de la touche : fonctionne en QWERTY comme en AZERTY
   // (pas besoin de Shift pour les chiffres sur clavier français)
@@ -764,7 +875,8 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => {
   keys[e.code] = false;
-  if (e.code === 'KeyW' || e.code === 'KeyS') sprinting = false; // lâcher/reculer arrête la course
+  // lâcher/reculer arrête la course
+  if (e.code === keybinds.forward || e.code === keybinds.backward) sprinting = false;
 });
 // si la fenêtre perd le focus (alt-tab, clic ailleurs), on relâche toutes les touches
 // pour éviter que le joueur continue d'avancer tout seul
@@ -831,7 +943,15 @@ function resumePointerLock() {
   }
 }
 function showResumeBlocker() {
-  if (gameStarted && !craftOpen && !furnaceOpen && !chatUI.isOpen && !sleeping && !gameOverOpen) {
+  if (
+    gameStarted &&
+    !optionsOpen &&
+    !craftOpen &&
+    !furnaceOpen &&
+    !chatUI.isOpen &&
+    !sleeping &&
+    !gameOverOpen
+  ) {
     blocker.classList.add('paused');
     blocker.style.display = 'flex';
   }
@@ -853,13 +973,107 @@ soloBtn.addEventListener('click', () => {
     blocker.style.display = 'none';
   else resumePointerLock();
 });
+
+/* ---------- Menu Options (accessible depuis le menu principal) ---------- */
+const optionsBtn = document.getElementById('optionsBtn');
+const optionsPanel = document.getElementById('optionsPanel');
+const optionsRoot = document.getElementById('optionsRoot');
+const optionsSensitivity = document.getElementById('optionsSensitivity');
+const optionsKeybinds = document.getElementById('optionsKeybinds');
+const optionsLanguage = document.getElementById('optionsLanguage');
+const sensitivitySlider = document.getElementById('sensitivitySlider');
+const sensitivityValue = document.getElementById('sensitivityValue');
+const keybindList = document.getElementById('keybindList');
+const languageSelect = document.getElementById('languageSelect');
+
+function showOptionsScreen(screen) {
+  for (const el of [optionsRoot, optionsSensitivity, optionsKeybinds, optionsLanguage]) {
+    el.style.display = el === screen ? 'flex' : 'none';
+  }
+}
+function openOptions() {
+  optionsOpen = true;
+  awaitingRebindAction = null;
+  for (const k in keys) keys[k] = false; // au cas où on ouvre Options depuis le menu-pause (Échap)
+  sensitivitySlider.value = String(settings.sensitivity);
+  sensitivityValue.textContent = String(settings.sensitivity);
+  renderKeybindList();
+  showOptionsScreen(optionsRoot);
+  optionsPanel.style.display = 'flex';
+}
+function closeOptions() {
+  optionsOpen = false;
+  awaitingRebindAction = null;
+  optionsPanel.style.display = 'none';
+}
+function renderKeybindList() {
+  keybindList.innerHTML = '';
+  for (const [action, label] of KEYBIND_ACTIONS) {
+    const row = document.createElement('div');
+    row.className = 'keybindRow';
+    const labelEl = document.createElement('span');
+    labelEl.className = 'keybindLabel';
+    labelEl.textContent = label;
+    const keyBtn = document.createElement('button');
+    keyBtn.className = 'keybindKeyBtn';
+    const listening = awaitingRebindAction === action;
+    keyBtn.textContent = listening ? '...' : formatKeyCode(keybinds[action]);
+    if (listening) keyBtn.classList.add('listening');
+    keyBtn.addEventListener('click', () => {
+      awaitingRebindAction = action;
+      renderKeybindList();
+    });
+    row.appendChild(labelEl);
+    row.appendChild(keyBtn);
+    keybindList.appendChild(row);
+  }
+}
+optionsBtn.addEventListener('click', () => {
+  sfx.resumeAudio();
+  openOptions();
+});
+document.getElementById('optSensitivityBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsSensitivity);
+});
+document.getElementById('optKeybindsBtn').addEventListener('click', () => {
+  awaitingRebindAction = null;
+  renderKeybindList();
+  showOptionsScreen(optionsKeybinds);
+});
+document.getElementById('optLanguageBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsLanguage);
+});
+document.getElementById('optionsBackBtn').addEventListener('click', closeOptions);
+document.getElementById('sensitivityBackBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsRoot);
+});
+document.getElementById('keybindsBackBtn').addEventListener('click', () => {
+  awaitingRebindAction = null;
+  showOptionsScreen(optionsRoot);
+});
+document.getElementById('languageBackBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsRoot);
+});
+sensitivitySlider.addEventListener('input', () => {
+  const v = parseInt(sensitivitySlider.value, 10);
+  settings.sensitivity = v;
+  mouseSensitivity = v * 0.00025;
+  sensitivityValue.textContent = String(v);
+  saveSettings();
+});
+languageSelect.addEventListener('change', () => {
+  // Une seule langue dispo pour l'instant (français) -- on stocke quand même
+  // le choix pour ne pas avoir à retoucher cette partie plus tard.
+  settings.language = languageSelect.value;
+  saveSettings();
+});
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === renderer.domElement) {
     blocker.style.display = 'none';
     blocker.classList.remove('paused');
   } else if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) {
     blocker.style.display = 'none';
-  } else if (!pointerLockLostByBlur && gameStarted) {
+  } else if (!pointerLockLostByBlur && gameStarted && !optionsOpen) {
     // Perte du pointer lock sans perte de focus fenêtre = Échap volontaire :
     // retour direct au menu principal (pas juste l'écran "cliquez pour reprendre").
     blocker.classList.remove('paused');
@@ -869,13 +1083,29 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 blocker.addEventListener('click', () => {
-  if (gameStarted && !craftOpen && !furnaceOpen && !chatUI.isOpen && !sleeping && !gameOverOpen) {
+  if (
+    gameStarted &&
+    !optionsOpen &&
+    !craftOpen &&
+    !furnaceOpen &&
+    !chatUI.isOpen &&
+    !sleeping &&
+    !gameOverOpen
+  ) {
     resumePointerLock();
   }
 });
 let pointerLockRetryTimer = null;
 document.addEventListener('pointerlockerror', () => {
-  if (gameStarted && !craftOpen && !furnaceOpen && !chatUI.isOpen && !sleeping && !gameOverOpen) {
+  if (
+    gameStarted &&
+    !optionsOpen &&
+    !craftOpen &&
+    !furnaceOpen &&
+    !chatUI.isOpen &&
+    !sleeping &&
+    !gameOverOpen
+  ) {
     showResumeBlocker();
     if (!pointerLockRetryTimer) {
       pointerLockRetryTimer = setTimeout(() => {
@@ -887,8 +1117,8 @@ document.addEventListener('pointerlockerror', () => {
 });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== renderer.domElement) return;
-  yaw -= e.movementX * 0.0025;
-  pitch -= e.movementY * 0.0025;
+  yaw -= e.movementX * mouseSensitivity;
+  pitch -= e.movementY * mouseSensitivity;
   pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
 });
 
@@ -1459,7 +1689,7 @@ if (touchMode) {
         performSecondaryAction();
     },
     onJump: (down) => {
-      keys['Space'] = down;
+      keys[keybinds.jump] = down;
     },
     onInventory: toggleCraftOrClose,
   });
@@ -1649,10 +1879,10 @@ function animate() {
   if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) {
     let dx = touchMoveVec.x,
       dz = touchMoveVec.z;
-    if (keys['KeyW'] || keys['ArrowUp']) dz -= 1;
-    if (keys['KeyS'] || keys['ArrowDown']) dz += 1;
-    if (keys['KeyA'] || keys['ArrowLeft']) dx -= 1;
-    if (keys['KeyD'] || keys['ArrowRight']) dx += 1;
+    if (keys[keybinds.forward] || keys['ArrowUp']) dz -= 1;
+    if (keys[keybinds.backward] || keys['ArrowDown']) dz += 1;
+    if (keys[keybinds.left] || keys['ArrowLeft']) dx -= 1;
+    if (keys[keybinds.right] || keys['ArrowRight']) dx += 1;
 
     // accroupi (Maj) : abaisse les yeux/hitbox, ralentit, et interdit de marcher
     // dans le vide (contrairement à la marche normale qui laisse tomber du bord)
@@ -1772,14 +2002,14 @@ function animate() {
     resolveKnockback(player, dt, worldApi.collidesAtBox);
 
     if (player.flying) {
-      const vertical = (keys['Space'] ? 1 : 0) - (crouching ? 1 : 0);
+      const vertical = (keys[keybinds.jump] ? 1 : 0) - (crouching ? 1 : 0);
       resolveFlyingVertical(player, dt, vertical, worldApi.collidesAtBox);
     } else if (underwater) {
       // Nage (Phase 16) : flottabilité (chute très ralentie, pas de "coulé comme une
       // pierre") + Espace nage vers la surface au lieu d'un saut plein — la même
       // résolution de collision que la gravité normale, juste une échelle différente.
       resolveVerticalPhysics(player, dt, worldApi.collidesAtBox, 0.25);
-      if (keys['Space']) player.velY = Math.max(player.velY, 2.2);
+      if (keys[keybinds.jump]) player.velY = Math.max(player.velY, 2.2);
     } else {
       const { landed, fallDistance } = resolveVerticalPhysics(player, dt, worldApi.collidesAtBox);
       if (landed) {
@@ -1798,7 +2028,7 @@ function animate() {
           }
         }
       }
-      if (keys['Space'] && tryJump(player)) {
+      if (keys[keybinds.jump] && tryJump(player)) {
         player.hunger = Math.max(0, player.hunger - 0.1); // coût ponctuel (Phase 11)
         bus.emit('player:hunger');
         sfx.playSound('jump');
