@@ -981,10 +981,14 @@ const optionsRoot = document.getElementById('optionsRoot');
 const optionsSensitivity = document.getElementById('optionsSensitivity');
 const optionsKeybinds = document.getElementById('optionsKeybinds');
 const optionsLanguage = document.getElementById('optionsLanguage');
-const sensitivitySlider = document.getElementById('sensitivitySlider');
+const sensitivitySlider = /** @type {HTMLInputElement} */ (
+  document.getElementById('sensitivitySlider')
+);
 const sensitivityValue = document.getElementById('sensitivityValue');
 const keybindList = document.getElementById('keybindList');
-const languageSelect = document.getElementById('languageSelect');
+const languageSelect = /** @type {HTMLSelectElement} */ (
+  document.getElementById('languageSelect')
+);
 
 function showOptionsScreen(screen) {
   for (const el of [optionsRoot, optionsSensitivity, optionsKeybinds, optionsLanguage]) {
