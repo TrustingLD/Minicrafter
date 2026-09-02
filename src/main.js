@@ -774,6 +774,10 @@ let awaitingRebindAction = null;
 // (mouvement, inventaire...) pour que taper au clavier dans ce menu n'agisse
 // pas sur la partie en fond.
 let optionsOpen = false;
+// Même principe pour le sous-menu "Solo" (choix du mode -- juste "Survie" pour
+// l'instant) : tant qu'il est ouvert, pas de reprise de pointer lock ni de touches
+// de jeu, comme pour optionsOpen ci-dessus.
+let soloMenuOpen = false;
 
 /* ---------- Entrées clavier / souris ---------- */
 document.addEventListener('keydown', (e) => {
@@ -827,7 +831,7 @@ document.addEventListener('keydown', (e) => {
     renderKeybindList();
     return;
   }
-  if (optionsOpen) return;
+  if (optionsOpen || soloMenuOpen) return;
   if (e.code === keybinds.inventory) {
     if (!sleeping && !gameOverOpen) toggleCraftOrClose();
     e.preventDefault();
@@ -882,11 +886,6 @@ document.addEventListener('keyup', (e) => {
 // pour éviter que le joueur continue d'avancer tout seul
 window.addEventListener('blur', () => {
   for (const k in keys) keys[k] = false;
-  pointerLockLostByBlur = true;
-  clearTimeout(blurResetTimer);
-  blurResetTimer = setTimeout(() => {
-    pointerLockLostByBlur = false;
-  }, 300);
 });
 document.addEventListener(
   'wheel',
@@ -911,15 +910,6 @@ const soloBtn = document.getElementById('soloBtn');
 // #blocker (vrai menu principal) d'un éventuel réaffichage plus tard (perte
 // de pointer lock imprévue, cf. showResumeBlocker() ci-dessous).
 let gameStarted = false;
-// La touche Échap fait perdre le pointer lock (comportement du navigateur,
-// pas interceptable en amont de façon fiable selon les navigateurs) : pour
-// savoir si la perte du pointer lock vient d'un Échap volontaire (-> retour
-// au menu principal) plutôt que d'une perte de focus fenêtre involontaire
-// (alt-tab, clic hors fenêtre -> écran "cliquez pour reprendre"), on
-// s'appuie sur l'événement 'blur' de la fenêtre : un vrai Échap ne fait PAS
-// perdre le focus de la fenêtre, contrairement à un alt-tab.
-let pointerLockLostByBlur = false;
-let blurResetTimer = null;
 // Redemande directement le pointer lock (ZQSD/souris repris tout de suite,
 // sans écran intermédiaire) -- appelé depuis les endroits où on VIENT de
 // fermer un panneau nous-mêmes (E pour l'inventaire, bouton fermer du
@@ -946,6 +936,7 @@ function showResumeBlocker() {
   if (
     gameStarted &&
     !optionsOpen &&
+    !soloMenuOpen &&
     !craftOpen &&
     !furnaceOpen &&
     !chatUI.isOpen &&
@@ -965,10 +956,30 @@ renderer.domElement.addEventListener('click', () => {
     }
   }
 });
+/* ---------- Menu Solo (accessible depuis le menu principal) : pour l'instant
+   un seul mode, "Survie", qui est ce qui lance vraiment la partie -- avant ça
+   (page tout juste chargée, ou juste le menu principal affiché), animate() ne
+   simule/rend rien tant que gameStarted est faux (cf. la fonction plus bas). */
+const soloPanel = document.getElementById('soloPanel');
+const survieBtn = document.getElementById('survieBtn');
+function openSoloMenu() {
+  soloMenuOpen = true;
+  soloPanel.style.display = 'flex';
+}
+function closeSoloMenu() {
+  soloMenuOpen = false;
+  soloPanel.style.display = 'none';
+}
 soloBtn.addEventListener('click', () => {
+  sfx.resumeAudio();
+  openSoloMenu();
+});
+document.getElementById('soloBackBtn').addEventListener('click', closeSoloMenu);
+survieBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
   gameStarted = true;
+  closeSoloMenu();
   if (touchMode)
     blocker.style.display = 'none';
   else resumePointerLock();
@@ -1036,6 +1047,12 @@ optionsBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   openOptions();
 });
+// Même bouton, dupliqué sous "Cliquez pour reprendre" (écran de pause) --
+// permet de régler sensibilité/touches/langue sans revenir au menu principal.
+document.getElementById('pausedOptionsBtn').addEventListener('click', () => {
+  sfx.resumeAudio();
+  openOptions();
+});
 document.getElementById('optSensitivityBtn').addEventListener('click', () => {
   showOptionsScreen(optionsSensitivity);
 });
@@ -1077,11 +1094,6 @@ document.addEventListener('pointerlockchange', () => {
     blocker.classList.remove('paused');
   } else if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) {
     blocker.style.display = 'none';
-  } else if (!pointerLockLostByBlur && gameStarted && !optionsOpen) {
-    // Perte du pointer lock sans perte de focus fenêtre = Échap volontaire :
-    // retour direct au menu principal (pas juste l'écran "cliquez pour reprendre").
-    blocker.classList.remove('paused');
-    blocker.style.display = 'flex';
   } else {
     showResumeBlocker();
   }
@@ -1090,6 +1102,7 @@ blocker.addEventListener('click', () => {
   if (
     gameStarted &&
     !optionsOpen &&
+    !soloMenuOpen &&
     !craftOpen &&
     !furnaceOpen &&
     !chatUI.isOpen &&
@@ -1104,6 +1117,7 @@ document.addEventListener('pointerlockerror', () => {
   if (
     gameStarted &&
     !optionsOpen &&
+    !soloMenuOpen &&
     !craftOpen &&
     !furnaceOpen &&
     !chatUI.isOpen &&
@@ -1812,6 +1826,12 @@ function animate() {
   requestAnimationFrame(animate);
   const rawDt = clock.getDelta();
   const dt = Math.min(rawDt, 0.05); // plafonné pour la physique/mouvement (évite les gros sauts en cas de lag)
+
+  // Le jeu (monde, mobs, cycle jour/nuit, faim...) ne doit pas tourner "en fond"
+  // tant qu'on n'a pas vraiment lancé une partie (Solo -> Survie) : cf. gameStarted.
+  // clock.getDelta() ci-dessus reste appelé à chaque frame pour ne pas accumuler
+  // un gros dt d'un coup le jour où la partie démarre enfin.
+  if (!gameStarted) return;
 
   // FPS (moyenne glissante — la valeur instantanée saute trop pour être lisible).
   // IMPORTANT : on utilise rawDt (non plafonné) et pas dt ici. dt est plafonné à 0.05

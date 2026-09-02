@@ -146,6 +146,25 @@
            lock en pleine partie (fermeture inventaire/fourneau/chat, sortie de
            lit) -- pas question de revoir le titre et les boutons Solo/Multi. -->
       <p id="resumeHint">Cliquez pour reprendre</p>
+      <!-- Même bouton Options que dans le menu principal (id différent, mais câblé
+           sur les mêmes fonctions dans main.js) : permet de régler sensibilité/
+           touches/langue sans quitter la partie en pause. Masqué en dehors de
+           #blocker.paused, cf. style.css. -->
+      <button id="pausedOptionsBtn" class="menuBtn">Options</button>
+    </div>
+
+    <!-- Panneau Solo, accessible depuis le menu principal (bouton "Solo") : pour
+         l'instant un seul mode ("Survie"), c'est ce clic qui lance vraiment la
+         partie -- cf. animate() dans main.js qui ne tourne plus tant que
+         gameStarted est faux. -->
+    <div id="soloPanel">
+      <div id="soloBox">
+        <h2>Solo</h2>
+        <div class="optionsScreen">
+          <button id="survieBtn" class="menuBtn">Survie</button>
+          <button id="soloBackBtn" class="menuBtn">Retour</button>
+        </div>
+      </div>
     </div>
 
     <!-- Panneau Options, accessible depuis le menu principal (bouton "Options").

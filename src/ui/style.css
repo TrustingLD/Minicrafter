@@ -665,6 +665,13 @@ canvas {
 #blocker.paused #resumeHint {
   display: block;
 }
+#pausedOptionsBtn {
+  display: none;
+  margin-top: 16px;
+}
+#blocker.paused #pausedOptionsBtn {
+  display: inline-block;
+}
 
 #hint {
   position: fixed;
@@ -690,7 +697,8 @@ canvas {
   align-items: center;
   justify-content: center;
 }
-/* ---------- Panneau Options (menu principal) ---------- */
+/* ---------- Panneaux Solo et Options (menu principal) ---------- */
+#soloPanel,
 #optionsPanel {
   position: fixed;
   inset: 0;
@@ -700,6 +708,7 @@ canvas {
   align-items: center;
   justify-content: center;
 }
+#soloBox,
 #optionsBox {
   background: #545454;
   border: 4px solid #2b2b2b;
@@ -712,6 +721,7 @@ canvas {
   font-size: 14px;
   text-align: center;
 }
+#soloBox h2,
 #optionsBox h2 {
   margin-top: 0;
 }
