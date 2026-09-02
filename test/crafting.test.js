@@ -66,7 +66,7 @@ test('matchRecipe: recette asymétrique (hache) matche aussi en miroir', () => {
   assert.equal(matchRecipe(mirrored, RECIPES, true)?.id, 'axe');
 });
 
-test('matchRecipe: recette needsTable ignorée hors de proximité d\'une table', () => {
+test("matchRecipe: recette needsTable ignorée hors de proximité d'une table", () => {
   const g = grid9([
     [0, 'planks'],
     [1, 'planks'],
@@ -77,7 +77,7 @@ test('matchRecipe: recette needsTable ignorée hors de proximité d\'une table',
   assert.equal(matchRecipe(g, RECIPES, false), null);
 });
 
-test('matchRecipe: shapeless (planches) matche 1 bûche dans n\'importe quelle case', () => {
+test("matchRecipe: shapeless (planches) matche 1 bûche dans n'importe quelle case", () => {
   assert.equal(matchRecipe(grid9([[0, 'wood']]), RECIPES, false)?.id, 'planks');
   assert.equal(matchRecipe(grid9([[8, 'wood']]), RECIPES, false)?.id, 'planks');
 });
@@ -106,6 +106,20 @@ test('matchRecipe: fourneau (anneau de 8 pierres, centre vide)', () => {
     [8, 'stone'],
   ]);
   assert.equal(matchRecipe(g, RECIPES, false)?.id, 'furnace');
+});
+
+test('matchRecipe: coffre (anneau de 8 planches, centre vide)', () => {
+  const g = grid9([
+    [0, 'planks'],
+    [1, 'planks'],
+    [2, 'planks'],
+    [3, 'planks'],
+    [5, 'planks'],
+    [6, 'planks'],
+    [7, 'planks'],
+    [8, 'planks'],
+  ]);
+  assert.equal(matchRecipe(g, RECIPES, true)?.id, 'chest');
 });
 
 test('consumeForRecipe: recette à motif retire exactement 1 par case utilisée', () => {
@@ -198,7 +212,7 @@ test('matchRecipe: armures ignorées sans table à proximité', () => {
   assert.equal(matchRecipe(g, RECIPES, false), null);
 });
 
-test('SMELTING: minerai d\'or et de diamant se fondent bien', () => {
+test("SMELTING: minerai d'or et de diamant se fondent bien", () => {
   assert.equal(SMELTING.gold_ore, 'gold_ingot');
   assert.equal(SMELTING.diamond_ore, 'diamond');
 });

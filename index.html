@@ -150,7 +150,11 @@
             title="Entrée : clic/glisser pour poser ou retirer de la matière à fondre (ou Maj+clic)"
           ></div>
           <div id="furnaceProgress"><div id="furnaceProgressFill"></div></div>
-          <div class="fSlot empty" id="fOutput" title="Sortie : clic/glisser pour récupérer (ou Maj+clic)"></div>
+          <div
+            class="fSlot empty"
+            id="fOutput"
+            title="Sortie : clic/glisser pour récupérer (ou Maj+clic)"
+          ></div>
         </div>
         <div id="furnaceFuelRow">
           <div id="furnaceFlame"><div id="furnaceFlameFill"></div></div>
@@ -163,6 +167,16 @@
         <div class="invGrid" id="furnaceInvGrid"></div>
         <div class="invGrid hotbarGrid" id="furnaceHotbarGrid"></div>
         <button id="closeFurnace">Fermer (E)</button>
+      </div>
+    </div>
+
+    <div id="chestPanel">
+      <div id="chestBox">
+        <h2>Coffre</h2>
+        <div class="invGrid" id="chestGrid"></div>
+        <div class="invGrid" id="chestInvGrid"></div>
+        <div class="invGrid hotbarGrid" id="chestHotbarGrid"></div>
+        <button id="closeChest">Fermer (E)</button>
       </div>
     </div>
 
@@ -240,16 +254,8 @@
 
         <!-- Sous-écran : sensibilité -->
         <div id="optionsSensitivity" class="optionsScreen" style="display: none">
-          <label for="sensitivitySlider"
-            >Sensibilité : <span id="sensitivityValue">10</span></label
-          >
-          <input
-            type="range"
-            id="sensitivitySlider"
-            min="1"
-            max="30"
-            step="1"
-          />
+          <label for="sensitivitySlider">Sensibilité : <span id="sensitivityValue">10</span></label>
+          <input type="range" id="sensitivitySlider" min="1" max="30" step="1" />
           <button id="sensitivityBackBtn" class="menuBtn">Retour</button>
         </div>
 

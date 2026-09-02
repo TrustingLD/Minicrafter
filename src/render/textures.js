@@ -1300,3 +1300,93 @@ export function texZombieShirt() {
   }
   return canvasToTexture(c);
 }
+
+// Coffre (Phase Chest) : planche de chêne avec bordure renforcée et loquet métallique
+export function texChestTop() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  // fond bois
+  ctx.fillStyle = '#9e6727';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#8a571e', '#b07630'], 12, 1.5, 3.5);
+  speckle(ctx, ['#724413', '#c2873d'], 30);
+
+  // bordure sombre renforcée (cadre du coffre)
+  ctx.fillStyle = '#42280e';
+  ctx.fillRect(0, 0, TEX_SIZE, 2.5);
+  ctx.fillRect(0, TEX_SIZE - 2.5, TEX_SIZE, 2.5);
+  ctx.fillRect(0, 0, 2.5, TEX_SIZE);
+  ctx.fillRect(TEX_SIZE - 2.5, 0, 2.5, TEX_SIZE);
+
+  // planches intérieures
+  ctx.strokeStyle = 'rgba(66, 40, 14, 0.4)';
+  ctx.lineWidth = 1;
+  for (let y = 8; y < TEX_SIZE - 4; y += 8) {
+    ctx.beginPath();
+    ctx.moveTo(3, y);
+    ctx.lineTo(TEX_SIZE - 3, y);
+    ctx.stroke();
+  }
+
+  // renforts aux coins
+  ctx.fillStyle = '#2d1a08';
+  ctx.fillRect(0, 0, 4, 4);
+  ctx.fillRect(TEX_SIZE - 4, 0, 4, 4);
+  ctx.fillRect(0, TEX_SIZE - 4, 4, 4);
+  ctx.fillRect(TEX_SIZE - 4, TEX_SIZE - 4, 4, 4);
+
+  return canvasToTexture(c);
+}
+
+export function texChestSide() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  // fond bois
+  ctx.fillStyle = '#9e6727';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#8a571e', '#b07630'], 12, 1.5, 3.5);
+  speckle(ctx, ['#724413', '#c2873d'], 30);
+
+  // bordure extérieure sombre
+  ctx.fillStyle = '#42280e';
+  ctx.fillRect(0, 0, TEX_SIZE, 2.5);
+  ctx.fillRect(0, TEX_SIZE - 2.5, TEX_SIZE, 2.5);
+  ctx.fillRect(0, 0, 2.5, TEX_SIZE);
+  ctx.fillRect(TEX_SIZE - 2.5, 0, 2.5, TEX_SIZE);
+
+  // renforts aux 4 coins
+  ctx.fillStyle = '#2d1a08';
+  ctx.fillRect(0, 0, 4, 4);
+  ctx.fillRect(TEX_SIZE - 4, 0, 4, 4);
+  ctx.fillRect(0, TEX_SIZE - 4, 4, 4);
+  ctx.fillRect(TEX_SIZE - 4, TEX_SIZE - 4, 4, 4);
+
+  // fente du couvercle (séparation horizontale)
+  const seamY = Math.floor(TEX_SIZE * 0.38);
+  ctx.fillStyle = '#1c1005';
+  ctx.fillRect(2, seamY, TEX_SIZE - 4, 2);
+
+  // loquet métallique au centre (fermeture argentée / noire)
+  const latchW = 6;
+  const latchH = 8;
+  const latchX = Math.floor((TEX_SIZE - latchW) / 2);
+  const latchY = seamY - 3;
+
+  // contour sombre du loquet
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(latchX - 0.5, latchY - 0.5, latchW + 1, latchH + 1);
+
+  // corps du loquet (métal argenté)
+  ctx.fillStyle = '#dcdcdc';
+  ctx.fillRect(latchX, latchY, latchW, latchH);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(latchX + 1, latchY + 1, 2, latchH - 2);
+  ctx.fillStyle = '#8f8f8f';
+  ctx.fillRect(latchX + latchW - 2, latchY + 1, 1, latchH - 2);
+
+  // trou de serrure / rivet central
+  ctx.fillStyle = '#222222';
+  ctx.fillRect(latchX + 2, latchY + 3, 2, 2);
+
+  return canvasToTexture(c);
+}

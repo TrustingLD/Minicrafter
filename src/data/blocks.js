@@ -512,6 +512,15 @@ export const BLOCK_TYPES = {
     transparent: true,
     drops: [{ item: 'glass', min: 1, max: 1 }],
   },
+  chest: {
+    id: 44,
+    name: 'Coffre',
+    hardness: 2.5,
+    tool: 'axe',
+    textures: { top: 'chestTop', bottom: 'chestTop', side: 'chestSide' },
+    isChest: true,
+    drops: [{ item: 'chest', min: 1, max: 1 }],
+  },
 };
 
 // les 4 variantes (une par orientation) pour chaque matériau d'escalier --
@@ -575,4 +584,3 @@ export const BLOCK_BY_ID = Object.fromEntries(
 export const ORE_TYPES = Object.entries(BLOCK_TYPES)
   .filter(([, b]) => b.vein)
   .map(([name, b]) => ({ name, id: b.id, ...b.vein }));
-

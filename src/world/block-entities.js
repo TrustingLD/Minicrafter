@@ -43,12 +43,19 @@ export function tickFurnace(state, dt, SMELTING, FUELS) {
   return state;
 }
 
+export const CHEST_SLOTS = 27;
+
+export function createChestState() {
+  return { slots: new Array(CHEST_SLOTS).fill(null) };
+}
+
 const STORAGE_KEY = 'minicrafter_furnaces_v1';
+const CHEST_STORAGE_KEY = 'minicrafter_chests_v1';
 const TICK_RATE = 0.25; // 4 Hz
 
-function loadSaved() {
+function loadSaved(storageKey = STORAGE_KEY) {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    return JSON.parse(localStorage.getItem(storageKey) || '{}');
   } catch {
     return {};
   }
@@ -56,8 +63,12 @@ function loadSaved() {
 
 export function createBlockEntitySystem() {
   const furnaces = new Map(); // "x,y,z" -> state
-  const saved = loadSaved();
-  for (const key in saved) furnaces.set(key, saved[key]);
+  const chests = new Map(); // "x,y,z" -> { slots: (null | { item, count })[] }
+  const savedFurnaces = loadSaved(STORAGE_KEY);
+  for (const key in savedFurnaces) furnaces.set(key, savedFurnaces[key]);
+  const savedChests = loadSaved(CHEST_STORAGE_KEY);
+  for (const key in savedChests) chests.set(key, savedChests[key]);
+
   let dirty = false;
   let tickAccum = 0;
 
@@ -84,6 +95,31 @@ export function createBlockEntitySystem() {
     dirty = true;
     return state || null;
   }
+
+  function ensureChest(x, y, z) {
+    const k = key(x, y, z);
+    let state = chests.get(k);
+    if (!state) {
+      state = createChestState();
+      chests.set(k, state);
+    }
+    return state;
+  }
+  function getChest(x, y, z) {
+    return chests.get(key(x, y, z)) || null;
+  }
+  function removeChest(x, y, z) {
+    const k = key(x, y, z);
+    const state = chests.get(k);
+    chests.delete(k);
+    dirty = true;
+    return state || null;
+  }
+
+  function markDirty() {
+    dirty = true;
+  }
+
   function flush() {
     if (!dirty) return;
     dirty = false;
@@ -91,6 +127,11 @@ export function createBlockEntitySystem() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(furnaces)));
     } catch {
       /* quota pleine ou stockage indisponible : tant pis, on continue sans persister */
+    }
+    try {
+      localStorage.setItem(CHEST_STORAGE_KEY, JSON.stringify(Object.fromEntries(chests)));
+    } catch {
+      /* quota pleine ou stockage indisponible */
     }
   }
   function update(dt, SMELTING, FUELS) {
@@ -104,5 +145,5 @@ export function createBlockEntitySystem() {
   setInterval(flush, 2000);
   window.addEventListener('beforeunload', flush);
 
-  return { ensure, get, remove, update, flush };
+  return { ensure, get, remove, ensureChest, getChest, removeChest, markDirty, update, flush };
 }

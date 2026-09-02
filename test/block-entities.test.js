@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createFurnaceState, tickFurnace } from '../src/world/block-entities.js';
+import { createFurnaceState, tickFurnace, createChestState } from '../src/world/block-entities.js';
 
 const SMELTING = { iron_ore: 'iron_ingot' };
 const FUELS = { coal_ore: 8 };
@@ -76,4 +76,10 @@ test('tickFurnace: removing the input mid-burn resets progress but keeps the lef
   state.input = null;
   tickFurnace(state, 1, SMELTING, FUELS);
   assert.equal(state.smeltProgress, 0);
+});
+
+test('createChestState: initializes 27 empty slots', () => {
+  const state = createChestState();
+  assert.equal(state.slots.length, 27);
+  assert.ok(state.slots.every((s) => s === null));
 });

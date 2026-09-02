@@ -55,6 +55,7 @@ export const ITEM_NAMES = {
   diamond_chestplate: 'Plastron en diamant',
   diamond_leggings: 'Jambières en diamant',
   diamond_boots: 'Bottes en diamant',
+  chest: 'Coffre',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
@@ -243,6 +244,15 @@ export const RECIPES = [
     key: { S: 'stone' },
     give: { furnace: 1 },
     needsTable: false,
+  },
+  {
+    id: 'chest',
+    name: 'Coffre',
+    // anneau de 8 planches, case centrale vide
+    pattern: ['PPP', 'P.P', 'PPP'],
+    key: { P: 'planks' },
+    give: { chest: 1 },
+    needsTable: true,
   },
   // Lit (occupe 2 cases au sol, cf. tryPlaceBed dans main.js) : pas un bloc simple
   // dans BLOCK_TYPES -- 'bed' est l'item qu'on garde en poche, sa pose spéciale

@@ -177,6 +177,8 @@ export function createBlockAssets() {
     tDoorTop = tex.texDoorTop(),
     tDoorBottom = tex.texDoorBottom(),
     tGlass = tex.texGlass(),
+    tChestTop = tex.texChestTop(),
+    tChestSide = tex.texChestSide(),
     // icônes plates dédiées (cf. commentaire de texStairsIcon) : teintes reprises
     // de texPlanks (#daa44c/#e2b261) et texStone (#8e8e8e/#7c7c7c) pour rester
     // cohérent avec la texture du bloc réel, arêtes plus sombres pour le relief.
@@ -225,6 +227,14 @@ export function createBlockAssets() {
     ],
     wool: [mat(tWool), mat(tWool), mat(tWool), mat(tWool), mat(tWool), mat(tWool)],
     glass: [mat(tGlass), mat(tGlass), mat(tGlass), mat(tGlass), mat(tGlass), mat(tGlass)],
+    chest: [
+      mat(tChestSide),
+      mat(tChestSide),
+      mat(tChestTop),
+      mat(tChestTop),
+      mat(tChestSide),
+      mat(tChestSide),
+    ],
     sand: [mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand)],
     sandstone: [
       mat(tSandstone),
@@ -426,6 +436,8 @@ export function createBlockAssets() {
         return tBedFoot.image;
       case 'door':
         return tDoorBottom.image;
+      case 'chest':
+        return tChestSide.image;
       case 'stairs_wood':
         return tStairsWoodIcon.image;
       case 'stairs_stone':
@@ -511,6 +523,8 @@ export function createBlockAssets() {
         return { top: tBedFoot.image, left: tBedSide.image, right: tBedSide.image };
       case 'door':
         return { top: tDoorBottom.image, left: tDoorBottom.image, right: tDoorBottom.image };
+      case 'chest':
+        return { top: tChestTop.image, left: tChestSide.image, right: tChestSide.image };
       // `shape: 'stairs'` : lu par ui/block-icon-3d.js pour composer 2 boîtes en
       // vrai profil L en CSS 3D (au lieu d'un cube plein) -- un cube texturé
       // planches/pierre serait ici indiscernable de l'item "Planches"/"Pierre".

@@ -57,6 +57,7 @@ import { createHungerUI, createBreathUI } from './ui/hunger.js';
 import { createCraftUI } from './ui/craft.js';
 import { createCharPreview } from './ui/char-preview.js';
 import { createFurnaceUI } from './ui/furnace.js';
+import { createChestUI } from './ui/chest.js';
 import { createChatUI } from './ui/chat.js';
 import { isTouchDevice, createTouchUI } from './ui/touch.js';
 
@@ -381,10 +382,64 @@ function closeFurnace() {
   resumePointerLock();
   furnaceUI.hide();
 }
-// E ferme le panneau ouvert (fourneau prioritaire sur craft), ou ouvre craft sinon —
+
+/* ---------- Coffre ---------- */
+const chestUI = createChestUI({
+  elements: {
+    panel: document.getElementById('chestPanel'),
+    chestGrid: document.getElementById('chestGrid'),
+    invGrid: document.getElementById('chestInvGrid'),
+    hotbarGrid: document.getElementById('chestHotbarGrid'),
+    cursorEl: document.getElementById('craftCursor'),
+    closeBtn: document.getElementById('closeChest'),
+  },
+  iconCanvas: blockAssets.iconCanvas,
+  iconFaces3D: blockAssets.iconFaces3D,
+  onClose: () => {
+    chestOpen = false;
+    blocker.style.display = 'none';
+    blocker.classList.remove('paused');
+    resumePointerLock();
+  },
+  onInventoryChanged: () => {
+    blockEntities.markDirty();
+    selectedBlock = slots[selectedIndex]?.item ?? null;
+    refreshHeldItem(selectedBlock);
+    bus.emit('inventory:changed');
+  },
+});
+let chestOpen = false;
+function chestStateAt() {
+  const p = chestUI.currentPos;
+  return p ? blockEntities.ensureChest(p.x, p.y, p.z) : null;
+}
+function renderChest() {
+  const state = chestStateAt();
+  if (!state) return;
+  chestUI.render(state, slots, selectedIndex);
+}
+function openChest(x, y, z) {
+  chestOpen = true;
+  chestUI.show(x, y, z);
+  if (!touchMode && document.pointerLockElement === renderer.domElement) {
+    document.exitPointerLock();
+  }
+  renderChest();
+  sfx.playSound('door');
+}
+function closeChest() {
+  chestOpen = false;
+  blocker.style.display = 'none';
+  blocker.classList.remove('paused');
+  resumePointerLock();
+  chestUI.hide();
+}
+
+// E ferme le panneau ouvert (coffre / fourneau prioritaire sur craft), ou ouvre craft sinon —
 // jamais les deux en même temps. Partagé par la touche E et le bouton tactile inventaire.
 function toggleCraftOrClose() {
-  if (furnaceOpen) closeFurnace();
+  if (chestOpen) closeChest();
+  else if (furnaceOpen) closeFurnace();
   else if (craftOpen) closeCraft();
   else openCraft();
 }
@@ -846,14 +901,14 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === keybinds.chat) {
-    if (!craftOpen && !furnaceOpen && !chatUI.isOpen) {
+    if (!craftOpen && !furnaceOpen && !chestOpen && !chatUI.isOpen) {
       chatUI.open();
       document.exitPointerLock();
     }
     e.preventDefault();
     return;
   }
-  if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) return;
+  if (sleeping || craftOpen || furnaceOpen || chestOpen || chatUI.isOpen || gameOverOpen) return;
   if (e.code === keybinds.zoom) {
     zoomed = !zoomed;
     return;
@@ -890,7 +945,7 @@ window.addEventListener('blur', () => {
 document.addEventListener(
   'wheel',
   (e) => {
-    if (craftOpen || furnaceOpen) return;
+    if (craftOpen || furnaceOpen || chestOpen) return;
     e.preventDefault();
     selectedIndex = (selectedIndex + (e.deltaY > 0 ? 1 : -1) + HOTBAR_SLOTS) % HOTBAR_SLOTS;
     selectedBlock = slots[selectedIndex]?.item ?? null;
@@ -939,6 +994,7 @@ function showResumeBlocker() {
     !soloMenuOpen &&
     !craftOpen &&
     !furnaceOpen &&
+    !chestOpen &&
     !chatUI.isOpen &&
     !sleeping &&
     !gameOverOpen
@@ -950,7 +1006,7 @@ function showResumeBlocker() {
 renderer.domElement.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
-  if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) {
+  if (!sleeping && !craftOpen && !furnaceOpen && !chestOpen && !chatUI.isOpen && !gameOverOpen) {
     if (document.pointerLockElement !== renderer.domElement) {
       resumePointerLock();
     }
@@ -980,8 +1036,7 @@ survieBtn.addEventListener('click', () => {
   music.startBgm();
   gameStarted = true;
   closeSoloMenu();
-  if (touchMode)
-    blocker.style.display = 'none';
+  if (touchMode) blocker.style.display = 'none';
   else resumePointerLock();
 });
 
@@ -997,9 +1052,7 @@ const sensitivitySlider = /** @type {HTMLInputElement} */ (
 );
 const sensitivityValue = document.getElementById('sensitivityValue');
 const keybindList = document.getElementById('keybindList');
-const languageSelect = /** @type {HTMLSelectElement} */ (
-  document.getElementById('languageSelect')
-);
+const languageSelect = /** @type {HTMLSelectElement} */ (document.getElementById('languageSelect'));
 
 function showOptionsScreen(screen) {
   for (const el of [optionsRoot, optionsSensitivity, optionsKeybinds, optionsLanguage]) {
@@ -1092,7 +1145,7 @@ document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === renderer.domElement) {
     blocker.style.display = 'none';
     blocker.classList.remove('paused');
-  } else if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) {
+  } else if (sleeping || craftOpen || furnaceOpen || chestOpen || chatUI.isOpen || gameOverOpen) {
     blocker.style.display = 'none';
   } else {
     showResumeBlocker();
@@ -1105,6 +1158,7 @@ blocker.addEventListener('click', () => {
     !soloMenuOpen &&
     !craftOpen &&
     !furnaceOpen &&
+    !chestOpen &&
     !chatUI.isOpen &&
     !sleeping &&
     !gameOverOpen
@@ -1120,6 +1174,7 @@ document.addEventListener('pointerlockerror', () => {
     !soloMenuOpen &&
     !craftOpen &&
     !furnaceOpen &&
+    !chestOpen &&
     !chatUI.isOpen &&
     !sleeping &&
     !gameOverOpen
@@ -1246,6 +1301,20 @@ function breakBlockAt(x, y, z, type) {
       if (cell) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, cell.item, cell.count);
     });
   }
+  if (type === 'chest') {
+    const state = blockEntities.removeChest(x, y, z);
+    if (
+      chestOpen &&
+      chestUI.currentPos?.x === x &&
+      chestUI.currentPos?.y === y &&
+      chestUI.currentPos?.z === z
+    )
+      closeChest();
+    // rend au joueur tous les objets stockés dans le coffre
+    state?.slots?.forEach((cell) => {
+      if (cell) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, cell.item, cell.count);
+    });
+  }
   bus.emit('block:broken', { x, y, z, type });
   player.hunger = Math.max(0, player.hunger - 0.005); // coût ponctuel (Phase 11)
   bus.emit('player:hunger');
@@ -1310,7 +1379,7 @@ function breakDoor(x, y, z, type) {
 let sleeping = false;
 const sleepOverlay = document.getElementById('sleepOverlay');
 function trySleep(x, y, z, type) {
-  if (sleeping || craftOpen || furnaceOpen || chatUI.isOpen || gameOverOpen) return;
+  if (sleeping || craftOpen || furnaceOpen || chestOpen || chatUI.isOpen || gameOverOpen) return;
   // même recherche de la moitié jumelle que breakBed() : le lit est toujours
   // posé en paire adjacente (N/S/E/O), jamais stocké comme une seule entité.
   const otherType = type === 'bed_foot' ? 'bed_head' : 'bed_foot';
@@ -1625,6 +1694,10 @@ function performSecondaryAction() {
     openFurnace(tx, ty, tz);
     return;
   }
+  if (targetedType === 'chest') {
+    openChest(tx, ty, tz);
+    return;
+  }
   if (selectedBlock === 'bed') {
     tryPlaceBed();
     return;
@@ -1661,7 +1734,13 @@ function performSecondaryAction() {
 }
 
 renderer.domElement.addEventListener('mousedown', (e) => {
-  if (document.pointerLockElement !== renderer.domElement || sleeping || craftOpen || furnaceOpen)
+  if (
+    document.pointerLockElement !== renderer.domElement ||
+    sleeping ||
+    craftOpen ||
+    furnaceOpen ||
+    chestOpen
+  )
     return;
   if (e.button === 0) performPrimaryAction();
   else if (e.button === 2) performSecondaryAction();
@@ -1698,12 +1777,12 @@ if (touchMode) {
       pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
     },
     onBreakStart: () => {
-      if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen)
+      if (!sleeping && !craftOpen && !furnaceOpen && !chestOpen && !chatUI.isOpen && !gameOverOpen)
         performPrimaryAction();
     },
     onBreakEnd: stopBreaking,
     onPlace: () => {
-      if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen)
+      if (!sleeping && !craftOpen && !furnaceOpen && !chestOpen && !chatUI.isOpen && !gameOverOpen)
         performSecondaryAction();
     },
     onJump: (down) => {
@@ -1895,12 +1974,15 @@ function animate() {
 
   // joystick/visée tactiles coupés pendant craft/chat, comme le reste des contrôles
   if (touchUI)
-    touchUI.setActive(!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen);
+    touchUI.setActive(
+      !sleeping && !craftOpen && !furnaceOpen && !chestOpen && !chatUI.isOpen && !gameOverOpen,
+    );
 
   blockEntities.update(dt, SMELTING, FUELS);
   if (furnaceOpen) renderFurnace();
+  if (chestOpen) renderChest();
 
-  if (!sleeping && !craftOpen && !furnaceOpen && !chatUI.isOpen && !gameOverOpen) {
+  if (!sleeping && !craftOpen && !furnaceOpen && !chestOpen && !chatUI.isOpen && !gameOverOpen) {
     let dx = touchMoveVec.x,
       dz = touchMoveVec.z;
     if (keys[keybinds.forward] || keys['ArrowUp']) dz -= 1;
@@ -2094,6 +2176,7 @@ function animate() {
     sleeping ||
     craftOpen ||
     furnaceOpen ||
+    chestOpen ||
     chatUI.isOpen ||
     gameOverOpen ||
     (!touchMode && document.pointerLockElement !== renderer.domElement);

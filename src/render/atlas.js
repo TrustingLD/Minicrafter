@@ -44,6 +44,8 @@ const TEXTURE_FN = {
   doorTop: tex.texDoorTop,
   doorBottom: tex.texDoorBottom,
   glass: tex.texGlass,
+  chestTop: tex.texChestTop,
+  chestSide: tex.texChestSide,
 };
 
 // construit l'atlas + la table d'UV. Appelé une seule fois au boot.
