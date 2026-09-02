@@ -36,7 +36,27 @@ export function blotches(ctx, colors, count, minR, maxR) {
   }
 }
 
+// Sature légèrement TOUTES les textures procédurales (couleurs plus vives, sans
+// tomber dans le flashy/dessin-animé) -- un seul réglage ici plutôt que de
+// retoucher les centaines de couleurs codées en dur plus bas dans ce fichier,
+// puisque canvasToTexture() est le point de passage unique de toutes (cf. les
+// 4 textures de minerai, qui passent par texOre() -> canvasToTexture() aussi).
+// 100% = couleurs inchangées ; monter au-delà sature, descendre désature.
+const SATURATION_BOOST = 130;
+function boostSaturation(c) {
+  const ctx = c.getContext('2d');
+  const tmp = document.createElement('canvas');
+  tmp.width = c.width;
+  tmp.height = c.height;
+  tmp.getContext('2d').drawImage(c, 0, 0);
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.filter = `saturate(${SATURATION_BOOST}%)`;
+  ctx.drawImage(tmp, 0, 0);
+  ctx.filter = 'none';
+}
+
 export function canvasToTexture(c) {
+  boostSaturation(c);
   const t = new THREE.CanvasTexture(c);
   t.magFilter = THREE.NearestFilter;
   t.minFilter = THREE.NearestFilter;
