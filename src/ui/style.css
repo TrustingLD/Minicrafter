@@ -1176,3 +1176,52 @@ canvas {
   font-weight: bold;
   width: 100%;
 }
+
+/* ---------------------------------------------------------------------
+   Écran de chargement (faux), affiché avant le menu principal (#blocker).
+   z-index au-dessus de tout (blocker=20, panels=30, fps/hud=40) pour être
+   certain de masquer entièrement le jeu/menu pendant le "chargement".
+   ------------------------------------------------------------------- */
+#loadingScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: #e3e0f6;
+  transition: opacity 0.5s ease;
+}
+#loadingScreen.loadingHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+#loadingLogo {
+  width: min(60vw, 420px);
+  height: auto;
+  image-rendering: auto;
+}
+#loadingBarTrack {
+  width: min(70vw, 480px);
+  height: 18px;
+  background: rgba(76, 43, 168, 0.15);
+  border: 2px solid #4c2ba8;
+  border-radius: 10px;
+  overflow: hidden;
+}
+#loadingBarFill {
+  height: 100%;
+  width: 0%;
+  background: #4c2ba8;
+  border-radius: 8px 0 0 8px;
+  transition: width 0.15s ease-out;
+}
+#loadingPercent {
+  margin: -14px 0 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95em;
+  letter-spacing: 1px;
+  color: #4c2ba8;
+}

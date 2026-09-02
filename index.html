@@ -10,6 +10,61 @@
     <link rel="stylesheet" href="./src/ui/style.css" />
   </head>
   <body>
+    <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
+         (#blocker) : logo + barre de progression qui avance de façon
+         aléatoire (cf. script inline en bas de page). Il est simplement
+         posé par-dessus tout le reste (z-index le plus haut) puis retiré
+         du DOM une fois le "chargement" terminé. -->
+    <div id="loadingScreen">
+      <img id="loadingLogo" src="./assets/loading-logo.png" alt="Logo" />
+      <div id="loadingBarTrack">
+        <div id="loadingBarFill"></div>
+      </div>
+      <p id="loadingPercent">0%</p>
+    </div>
+
+    <script>
+      // Faux chargement de ~3s avant le menu principal : le #blocker (menu)
+      // est déjà présent dans le DOM en dessous, cet écran se contente de le
+      // masquer visuellement le temps d'une barre de progression qui avance
+      // par à-coups aléatoires (jamais parfaitement linéaire), puis se garantit
+      // d'atteindre 100% pile à la fin des 3s avant de disparaître en fondu.
+      (function () {
+        var DURATION = 3000;
+        var screen = document.getElementById('loadingScreen');
+        var fill = document.getElementById('loadingBarFill');
+        var percentEl = document.getElementById('loadingPercent');
+        var progress = 0;
+        var start = performance.now();
+
+        function setProgress(p) {
+          progress = p;
+          fill.style.width = progress + '%';
+          percentEl.textContent = Math.floor(progress) + '%';
+        }
+
+        function tick() {
+          var elapsed = performance.now() - start;
+          if (elapsed >= DURATION) {
+            setProgress(100);
+            setTimeout(function () {
+              screen.classList.add('loadingHidden');
+              setTimeout(function () {
+                screen.remove();
+              }, 550);
+            }, 150);
+            return;
+          }
+          // avance aléatoire (entre 1 et 10 points), plafonnée à 97 pour
+          // réserver le dernier bond à 100% une fois les 3s écoulées
+          setProgress(Math.min(progress + (1 + Math.random() * 9), 97));
+          setTimeout(tick, 80 + Math.random() * 220);
+        }
+
+        tick();
+      })();
+    </script>
+
     <div id="crosshair"></div>
     <div id="hurtVignette"></div>
 
