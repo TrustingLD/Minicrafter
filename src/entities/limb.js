@@ -10,6 +10,7 @@ export function makeLimb(w, h, d, mat, jointX, jointY, jointZ) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   mesh.position.y = -h / 2;
   mesh.castShadow = true;
+  mesh.receiveShadow = true;
   pivot.add(mesh);
   return { pivot, mesh };
 }

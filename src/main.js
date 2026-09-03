@@ -93,6 +93,10 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touchMode ? 1 : 2));
 renderer.shadowMap.enabled = !touchMode;
+// Ombres douces (PCF avec échantillonnage bilinéaire) plutôt que le PCF de base
+// (bords crénelés) -- même coût GPU côté shadow map, juste un meilleur filtrage
+// à la lecture.
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.65);
@@ -104,7 +108,22 @@ sun.shadow.camera.left = -60;
 sun.shadow.camera.right = 60;
 sun.shadow.camera.top = 60;
 sun.shadow.camera.bottom = -60;
-sun.shadow.mapSize.set(512, 512); // réduit : moins coûteux à calculer
+// near/far du frustum ortho de la shadow camera : le soleil est placé à
+// LIGHT_DIST=100 du joueur (cf. sky.js) et pointe vers lui, donc 0.5 unité
+// suffit comme near, et il faut au moins 2*LIGHT_DIST de far pour ne pas
+// tronquer le rayon quand le soleil est bas sur l'horizon.
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 260;
+// mapSize plus grand (1024 au lieu de 512) : coûte plus cher à calculer mais
+// donne des ombres nettement moins pixelisées/"en escalier" sur les grandes
+// surfaces (terrain vu de loin). Toujours désactivé sur tactile (cf. plus haut).
+sun.shadow.mapSize.set(1024, 1024);
+// bias en dur pour éviter à la fois le "shadow acne" (hachures sur les faces
+// éclairées, bias trop faible) et le "peter-panning" (l'ombre décollée du bloc
+// qui la projette, bias trop fort) -- ces deux valeurs sont le compromis usuel
+// pour de la géométrie de blocs (faces bien alignées sur les axes).
+sun.shadow.bias = -0.0015;
+sun.shadow.normalBias = 0.4;
 scene.add(sun);
 scene.add(sun.target);
 
@@ -143,6 +162,7 @@ const worldApi = createWorld({
   scene,
   renderDistance,
   preloadAt: { x: SPAWN_COLUMN.x, z: SPAWN_COLUMN.z },
+  touchMode,
   onTorchesChanged: (x, y, z, present) => {
     const key = `${x},${y},${z}`;
     if (present) torchPositions.set(key, { x, y, z });
@@ -150,7 +170,7 @@ const worldApi = createWorld({
   },
 });
 const cloudsApi = createClouds({ scene });
-const skyApi = createSky({ scene, ambientLight: ambient, sunLight: sun });
+const skyApi = createSky({ scene, ambientLight: ambient, sunLight: sun, touchMode });
 const snowWeatherApi = createSnowWeather({ scene });
 
 // Bordure du monde : mur purement invisible, seule la collision existe (cf.

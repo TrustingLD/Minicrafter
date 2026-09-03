@@ -28,7 +28,14 @@ import {
   SEA_LEVEL,
   WORLD_BORDER,
 } from './generator.js';
-import { BLOCK_ID, BLOCK_BY_ID, BLOCK_TYPES, LIQUID_IDS, SHAPE_BY_ID, TRANSPARENT_IDS } from '../data/blocks.js';
+import {
+  BLOCK_ID,
+  BLOCK_BY_ID,
+  BLOCK_TYPES,
+  LIQUID_IDS,
+  SHAPE_BY_ID,
+  TRANSPARENT_IDS,
+} from '../data/blocks.js';
 import { buildBlockAtlas } from '../render/atlas.js';
 import { meshChunk, meshLiquid } from '../render/mesher.js';
 import { texWater, texLava } from '../render/textures.js';
@@ -87,6 +94,9 @@ export function createWorld({
   // chargement d'un chunk, retirée au déchargement — pour que l'appelant n'ait pas à
   // les suivre séparément (c'est ce qu'il faisait, et il en ratait deux sur trois).
   onTorchesChanged = (_x, _y, _z, _present) => {},
+  // même perf tradeoff que sun.castShadow (main.js) et moonLight.castShadow (sky.js) :
+  // pas d'ombre projetée par le terrain lui-même sur tactile.
+  touchMode = false,
 }) {
   const RENDER_DISTANCE = renderDistance;
   const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
@@ -226,6 +236,10 @@ export function createWorld({
       waterMaterial,
     );
     record.waterMesh.position.set(record.cx * CHUNK_X, 0, record.cz * CHUNK_Z);
+    // receiveShadow (pas castShadow : l'eau est transparente, une ombre nette
+    // projetée PAR elle aurait l'air d'un bloc plein) -- un arbre ou une
+    // falaise qui surplombe une mare doit s'y voir ombré.
+    record.waterMesh.receiveShadow = true;
     scene.add(record.waterMesh);
     record.lavaMesh = new THREE.Mesh(
       buildLiquidGeometry(record.data, BLOCK_ID.lava, record.lightData),
@@ -248,6 +262,13 @@ export function createWorld({
     record = { cx, cz, key, data, lightData, torches, mesh: null, waterMesh: null, lavaMesh: null };
     record.mesh = new THREE.Mesh(buildGeometry(data, lightData), atlasMaterial);
     record.mesh.position.set(cx * CHUNK_X, 0, cz * CHUNK_Z);
+    // castShadow (en plus de receiveShadow) : sans ça le terrain ne projetait
+    // JAMAIS d'ombre sur lui-même -- un surplomb, une falaise ou un arbre ne
+    // faisait aucune ombre sur le sol en dessous, seules les entités (joueur,
+    // mobs) en projetaient. Coûte un peu de perf (chaque chunk visible entre
+    // dans le rendu de la shadow map en plus du rendu normal), désactivé sur
+    // tactile comme le reste des ombres (cf. sun.castShadow, main.js).
+    record.mesh.castShadow = !touchMode;
     record.mesh.receiveShadow = true;
     scene.add(record.mesh);
 

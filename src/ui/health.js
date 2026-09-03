@@ -11,8 +11,7 @@ export function createHealthUI(healthEl) {
     for (let i = 0; i < totalHearts; i++) {
       const h = document.createElement('div');
       const isBonus = i >= 10;
-      h.className =
-        'heart' + (isBonus ? ' bonus' : '') + (i < filledHearts ? '' : ' empty');
+      h.className = 'heart' + (isBonus ? ' bonus' : '') + (i < filledHearts ? '' : ' empty');
       healthEl.appendChild(h);
     }
   }

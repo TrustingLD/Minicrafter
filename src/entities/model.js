@@ -31,6 +31,7 @@ export function buildBoxModel(model, textures) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(...p.size), materialFor(p, textures));
     mesh.position.set(p.at[0], p.at[1], p.at[2]);
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     group.add(mesh);
     parts.push(mesh);
   });

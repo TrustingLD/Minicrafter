@@ -43,9 +43,21 @@ function texGlowDisc(coreColor, glowColor) {
   return new THREE.CanvasTexture(c);
 }
 
-export function createSky({ scene, ambientLight, sunLight }) {
-  // lune : lumière douce et froide qui prend le relais du soleil la nuit
+export function createSky({ scene, ambientLight, sunLight, touchMode = false }) {
+  // lune : lumière douce et froide qui prend le relais du soleil la nuit --
+  // projette aussi des ombres (plus douces/moins nettes que le soleil, cf.
+  // mapSize plus petit ci-dessous), pour que la nuit ne soit pas plate.
   const moonLight = new THREE.DirectionalLight(0xaac0ff, 0);
+  moonLight.castShadow = !touchMode;
+  moonLight.shadow.camera.left = -60;
+  moonLight.shadow.camera.right = 60;
+  moonLight.shadow.camera.top = 60;
+  moonLight.shadow.camera.bottom = -60;
+  moonLight.shadow.camera.near = 1;
+  moonLight.shadow.camera.far = 260;
+  moonLight.shadow.mapSize.set(512, 512); // plus petit que le soleil : ombre secondaire, pas besoin d'autant de netteté
+  moonLight.shadow.bias = -0.0015;
+  moonLight.shadow.normalBias = 0.4;
   scene.add(moonLight);
   scene.add(moonLight.target);
 

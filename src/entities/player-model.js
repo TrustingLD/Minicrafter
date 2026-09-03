@@ -63,11 +63,13 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.28), mats.shirtMat);
   body.position.y = 1.15;
   body.castShadow = true;
+  body.receiveShadow = true;
   group.add(body);
 
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), mats.headMaterials);
   head.position.y = 1.775;
   head.castShadow = true;
+  head.receiveShadow = true;
   group.add(head);
 
   // longueur et niveau des bras alignés sur le buste : le pivot (épaule) est
@@ -99,6 +101,7 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
     const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.18, THIGH_H, 0.18), mats.pantsMat);
     thigh.position.y = -THIGH_H / 2;
     thigh.castShadow = true;
+    thigh.receiveShadow = true;
     hip.add(thigh);
 
     const knee = new THREE.Group();
@@ -107,6 +110,7 @@ export function buildPlayerAvatar(mats, armorMats = createArmorMaterials()) {
     const shin = new THREE.Mesh(new THREE.BoxGeometry(0.18, SHIN_H, 0.18), mats.pantsMat);
     shin.position.y = -SHIN_H / 2;
     shin.castShadow = true;
+    shin.receiveShadow = true;
     knee.add(shin);
 
     group.add(hip);
