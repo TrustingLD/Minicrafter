@@ -140,6 +140,8 @@ export function createBlockAssets() {
     tMeat = tex.texMeat(),
     tCookedMeat = tex.texCookedMeat(),
     tMilk = tex.texMilk(),
+    tApple = tex.texApple(),
+    tGoldenApple = tex.texGoldenApple(),
     tCoalOre = tex.texCoalOre(),
     tIronOre = tex.texIronOre(),
     tGoldOre = tex.texGoldOre(),
@@ -361,6 +363,12 @@ export function createBlockAssets() {
     iron_sword: tIronSword,
     iron_pickaxe: tIronPickaxe,
     iron_axe: tIronAxe,
+    // pomme / pomme dorée : réutilise le mécanisme "icône plate tenue en main"
+    // (cf. entities/player.js buildHeldItemMesh) déjà utilisé pour les outils --
+    // ni un cube (materials[type]) ni un escalier, donc sinon rien ne s'affichait
+    // dans la main quand on les tient.
+    apple: tApple,
+    golden_apple: tGoldenApple,
   };
 
   function iconCanvas(type) {
@@ -474,6 +482,10 @@ export function createBlockAssets() {
         return tCookedMeat.image;
       case 'milk':
         return tMilk.image;
+      case 'apple':
+        return tApple.image;
+      case 'golden_apple':
+        return tGoldenApple.image;
       case 'stick':
         return null; // drawn separately
       default:

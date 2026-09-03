@@ -393,6 +393,50 @@ export function texCookedMeat() {
   ctx.fillRect(TEX_SIZE * 0.2, TEX_SIZE * 0.55, TEX_SIZE * 0.6, TEX_SIZE * 0.08);
   return canvasToTexture(c);
 }
+// Pomme : disque rouge (queue + petite feuille) -- même gabarit que texMeat
+// (blotch principal + speckle) pour rester cohérent visuellement avec le
+// reste des icônes de nourriture.
+export function texApple() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#c62828';
+  ctx.beginPath();
+  ctx.arc(TEX_SIZE * 0.5, TEX_SIZE * 0.58, TEX_SIZE * 0.32, 0, Math.PI * 2);
+  ctx.fill();
+  speckle(ctx, ['#8f1c1c', '#e34d4d'], 22);
+  // reflet
+  ctx.fillStyle = '#ff8a8a';
+  ctx.fillRect(TEX_SIZE * 0.32, TEX_SIZE * 0.44, TEX_SIZE * 0.09, TEX_SIZE * 0.13);
+  // queue
+  ctx.fillStyle = '#5c3a1e';
+  ctx.fillRect(TEX_SIZE * 0.47, TEX_SIZE * 0.16, TEX_SIZE * 0.06, TEX_SIZE * 0.16);
+  // feuille
+  ctx.fillStyle = '#4caf50';
+  ctx.beginPath();
+  ctx.ellipse(TEX_SIZE * 0.63, TEX_SIZE * 0.2, TEX_SIZE * 0.1, TEX_SIZE * 0.06, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  return canvasToTexture(c);
+}
+// Pomme dorée : même silhouette que texApple, teintes or à la place du rouge
+// (facilement reconnaissable dans la hotbar/craft, comme les lingots d'or).
+export function texGoldenApple() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#e6b800';
+  ctx.beginPath();
+  ctx.arc(TEX_SIZE * 0.5, TEX_SIZE * 0.58, TEX_SIZE * 0.32, 0, Math.PI * 2);
+  ctx.fill();
+  speckle(ctx, ['#b8860b', '#ffd700'], 26, 2);
+  ctx.fillStyle = '#fff2b3';
+  ctx.fillRect(TEX_SIZE * 0.32, TEX_SIZE * 0.44, TEX_SIZE * 0.09, TEX_SIZE * 0.13);
+  ctx.fillStyle = '#5c3a1e';
+  ctx.fillRect(TEX_SIZE * 0.47, TEX_SIZE * 0.16, TEX_SIZE * 0.06, TEX_SIZE * 0.16);
+  ctx.fillStyle = '#d4af37';
+  ctx.beginPath();
+  ctx.ellipse(TEX_SIZE * 0.63, TEX_SIZE * 0.2, TEX_SIZE * 0.1, TEX_SIZE * 0.06, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  return canvasToTexture(c);
+}
 export function texMilk() {
   const c = newCanvas();
   const ctx = c.getContext('2d');

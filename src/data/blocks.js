@@ -10,9 +10,12 @@
 //            quel tier de pioche (bois/pierre/fer) débloque le bonus sur la pierre.
 // vein     : { minY, maxY, rarity, veinSize } — uniquement les minerais (Phase 4b).
 // unbreakable : bloc qu'on ne peut jamais casser (bedrock, plancher du monde).
-// drops    : [{ item, min, max }] — ce qui apparaît au sol quand on casse le bloc
-//            (Phase 10). Une seule entrée à quantité fixe = min===max. Un bloc sans
-//            `drops` (ou tableau vide) ne laisse rien tomber (ex: feuilles).
+// drops    : [{ item, min, max, chance? }] — ce qui apparaît au sol quand on casse
+//            le bloc (Phase 10). Une seule entrée à quantité fixe = min===max. Un
+//            bloc sans `drops` (ou tableau vide) ne laisse rien tomber. `chance`
+//            optionnel (0..1) : probabilité que CETTE entrée tombe (ex: 0.2 = 20%
+//            de chance) ; une entrée sans `chance` tombe toujours (comportement
+//            historique, cf. breakBlockAt dans main.js).
 
 // Épaisseur du panneau de porte : 3 texels sur les 32 d'une texture (cf.
 // render/textures.js TEX_SIZE) -- « 3 pixels de largeur » demandé, exprimé en
@@ -58,7 +61,8 @@ export const BLOCK_TYPES = {
     hardness: 0.3,
     tool: null,
     textures: { all: 'leaves' },
-    drops: [],
+    // 20% de chance de laisser tomber une pomme (sinon rien, comme avant).
+    drops: [{ item: 'apple', min: 1, max: 1, chance: 0.2 }],
   },
   planks: {
     id: 6,

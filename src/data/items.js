@@ -28,6 +28,8 @@ export const ITEM_NAMES = {
   meat: 'Viande',
   cooked_meat: 'Viande cuite',
   milk: 'Lait',
+  apple: 'Pomme',
+  golden_apple: 'Pomme dorée',
   snow: 'Neige',
   torch: 'Torche',
   furnace: 'Fourneau',
@@ -65,6 +67,10 @@ export const FOOD = {
   meat: { hunger: 3, saturationTime: 1.6 },
   cooked_meat: { hunger: 6, saturationTime: 1.6 },
   milk: { hunger: 4, saturationTime: 1.2 },
+  apple: { hunger: 4, saturationTime: 1.6 },
+  // Pomme dorée : 20 >= la faim max (20), donc Math.min(20, hunger + 20) = 20
+  // à coup sûr -- remplit ENTIÈREMENT la barre, peu importe le niveau de départ.
+  golden_apple: { hunger: 20, saturationTime: 1.6 },
 };
 
 // item d'outil -> catégorie ('pickaxe' | 'axe' | 'sword'). blocks.js référence la
@@ -399,6 +405,17 @@ export const RECIPES = [
     pattern: ['M.M', 'M.M'],
     key: { M: 'diamond' },
     give: { diamond_boots: 1 },
+    needsTable: true,
+  },
+  // Pomme dorée : anneau de 8 lingots d'or autour d'une pomme centrale, comme
+  // dans Minecraft. `needsTable: true` puisque la grille 3x3 pleine ne rentre
+  // pas dans l'inventaire 2x2 (cf. table de craft plus haut).
+  {
+    id: 'golden_apple',
+    name: 'Pomme dorée',
+    pattern: ['GGG', 'GAG', 'GGG'],
+    key: { G: 'gold_ingot', A: 'apple' },
+    give: { golden_apple: 1 },
     needsTable: true,
   },
 ];

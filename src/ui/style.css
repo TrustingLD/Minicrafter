@@ -367,6 +367,16 @@ canvas {
   background: #333;
   filter: drop-shadow(0 0 1px #111) drop-shadow(0 0 1px #111);
 }
+/* Coeurs bonus de la pomme dorée (10->15 coeurs pendant 30s) : jaune plutôt
+   que rouge, comme les coeurs d'absorption dans Minecraft. */
+.heart.bonus {
+  background: #ffd54f;
+  filter: drop-shadow(0 0 1px #b8860b) drop-shadow(0 0 1px #b8860b);
+}
+.heart.bonus.empty {
+  background: #333;
+  filter: drop-shadow(0 0 1px #111) drop-shadow(0 0 1px #111);
+}
 
 #hungerbar {
   position: fixed;

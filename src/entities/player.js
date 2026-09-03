@@ -25,6 +25,13 @@ export function createPlayer({
     speed: 5.5,
     jumpForce: 7,
     health: 20,
+    maxHealth: 20,
+    // Pomme dorée : coeurs bonus temporaires (jaunes), ajoutés à maxHealth
+    // pendant bonusHealthTimer secondes (cf. tryEat() dans main.js) puis
+    // retirés -- même principe que l'absorption de Minecraft, en plus simple
+    // (pas de pool séparé : on augmente/rabaisse maxHealth directement).
+    bonusHealth: 0,
+    bonusHealthTimer: 0,
     hunger: 20, // Phase 11 : sur 20, comme la vie
     breath: 15, // secondes d'air restantes sous l'eau
     maxBreath: 15,
@@ -293,6 +300,10 @@ export function createPlayer({
   function respawn(spawnAt) {
     player.pos.copy(spawnAt);
     player.velY = 0;
+    // la mort dissipe le bonus de la pomme dorée, comme dans Minecraft
+    player.maxHealth = 20;
+    player.bonusHealth = 0;
+    player.bonusHealthTimer = 0;
     player.health = 20;
     player.hunger = 20;
     player.breath = player.maxBreath;

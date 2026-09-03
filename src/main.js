@@ -666,7 +666,7 @@ const commandHandlers = {
       .join('  |  ');
   },
   heal() {
-    player.health = 20;
+    player.health = player.maxHealth;
     bus.emit('player:health');
     return 'Vie remplie.';
   },
@@ -1281,7 +1281,10 @@ function breakBlockAt(x, y, z, type) {
   }
   const multiplier = hasRightToolFor(type) ? 2 : 1;
   const drops = BLOCK_TYPES[type]?.drops || [];
-  drops.forEach(({ item, min, max }) => {
+  drops.forEach(({ item, min, max, chance }) => {
+    // `chance` optionnel (ex: 0.2 pour la pomme des feuilles) : une entrée sans
+    // `chance` tombe toujours, comme avant (cf. commentaire de data/blocks.js).
+    if (chance !== undefined && Math.random() >= chance) return;
     const count = (min + Math.floor(Math.random() * (max - min + 1))) * multiplier;
     if (count > 0) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, item, count);
   });
@@ -1485,9 +1488,21 @@ function performPrimaryAction() {
 function tryEat() {
   const food = FOOD[selectedBlock];
   if (!food || countOf(slots, selectedBlock) <= 0 || player.hunger >= 20) return false;
+  const eaten = selectedBlock;
   removeItem(slots, selectedBlock, 1);
   player.hunger = Math.min(20, player.hunger + food.hunger);
   bus.emit('player:hunger');
+  // Pomme dorée : en plus de remplir la faim comme n'importe quelle nourriture,
+  // elle ajoute 5 coeurs (10 PV) pendant 30s -- on passe de 10 à 15 coeurs,
+  // affichés en jaune (cf. ui/health.js) -- puis on revient à 10 coeurs
+  // (le compte à rebours est décrémenté dans animate(), cf. plus bas).
+  if (eaten === 'golden_apple') {
+    player.bonusHealth = 10;
+    player.bonusHealthTimer = 30;
+    player.maxHealth = 20 + player.bonusHealth;
+    player.health = Math.min(player.health + 10, player.maxHealth);
+    bus.emit('player:health');
+  }
   bus.emit('inventory:changed');
   sfx.playSound('eat');
   triggerHandSwing();
@@ -2058,12 +2073,25 @@ function animate() {
         // damagePlayer plus haut), comme dans Minecraft.
         player.health = Math.max(0, player.health - 1);
         bus.emit('player:health');
-      } else if (player.hunger >= 20 && player.health < 20) {
-        player.health = Math.min(20, player.health + 1);
+      } else if (player.hunger >= 20 && player.health < player.maxHealth) {
+        player.health = Math.min(player.maxHealth, player.health + 1);
         player.hunger = Math.max(0, player.hunger - 1); // la régénération coûte de la faim
         bus.emit('player:health');
       }
       bus.emit('player:hunger');
+    }
+
+    // Pomme dorée (suite) : décompte des 30s de coeurs bonus, puis retour à
+    // 10 coeurs (20 PV) -- l'éventuel excédent de vie au-delà de 20 est
+    // simplement écrêté, comme l'absorption qui expire dans Minecraft.
+    if (player.bonusHealthTimer > 0) {
+      player.bonusHealthTimer = Math.max(0, player.bonusHealthTimer - dt);
+      if (player.bonusHealthTimer <= 0) {
+        player.bonusHealth = 0;
+        player.maxHealth = 20;
+        player.health = Math.min(player.health, 20);
+        bus.emit('player:health');
+      }
     }
 
     // Noyade (Phase 11) : le souffle se vide sous l'eau, se remplit instantanément
