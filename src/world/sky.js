@@ -58,6 +58,13 @@ export function createSky({ scene, ambientLight, sunLight, touchMode = false }) 
   moonLight.shadow.mapSize.set(512, 512); // plus petit que le soleil : ombre secondaire, pas besoin d'autant de netteté
   moonLight.shadow.bias = -0.0015;
   moonLight.shadow.normalBias = 0.4;
+  // AVATAR_SHADOW_LAYER = 1 (entities/player.js) : même raison que sun.shadow.camera
+  // dans main.js -- l'avatar du joueur doit projeter une ombre même en vue 1ère
+  // personne (où il n'est pas rendu par la caméra principale). Valeur recopiée en
+  // dur plutôt qu'importée pour ne pas faire dépendre world/ de entities/ (aucun
+  // autre fichier de world/ n'importe depuis entities/, cf. mob.js qui fait
+  // l'inverse en prenant tout par ctx plutôt que par import direct).
+  moonLight.shadow.camera.layers.enable(1);
   scene.add(moonLight);
   scene.add(moonLight.target);
 

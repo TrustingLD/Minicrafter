@@ -30,7 +30,7 @@ import { createSnowWeather } from './world/weather.js';
 import { createSfx } from './audio/sfx.js';
 import { createMusic } from './audio/music.js';
 import { createMobTextures, createMobSystem } from './entities/mob.js';
-import { createPlayer } from './entities/player.js';
+import { createPlayer, AVATAR_SHADOW_LAYER } from './entities/player.js';
 import { createParticleSystem } from './entities/particles.js';
 import { computeArmorReduction as armorComputeReduction } from './entities/armor.js';
 import {
@@ -124,6 +124,12 @@ sun.shadow.mapSize.set(1024, 1024);
 // pour de la géométrie de blocs (faces bien alignées sur les axes).
 sun.shadow.bias = -0.0015;
 sun.shadow.normalBias = 0.4;
+// AVATAR_SHADOW_LAYER (cf. entities/player.js) : la shadow map du soleil doit
+// TOUJOURS voir l'avatar du joueur, même quand la caméra principale ne l'affiche
+// pas (vue 1ère personne) -- sinon aucune ombre au sol pour le joueur tant qu'on
+// n'est pas passé en 3e personne (F5). `layers.enable` s'AJOUTE au calque 0 déjà
+// actif par défaut (terrain, mobs...), il ne le remplace pas.
+sun.shadow.camera.layers.enable(AVATAR_SHADOW_LAYER);
 scene.add(sun);
 scene.add(sun.target);
 
@@ -1445,7 +1451,11 @@ function trySleep(x, y, z, type) {
   // vue 1ère personne) plutôt que de créer un modèle dédié -- une rotation de
   // 90° autour de l'axe X local (après le lacet vers la tête de lit) suffit à
   // coucher toute la hiérarchie articulée (torse/tête/bras/jambes) d'un coup.
-  playerAvatar.group.visible = true;
+  // `playerAvatar.group` reste TOUJOURS visible côté scène (cf. AVATAR_SHADOW_LAYER,
+  // entities/player.js) -- c'est le calque caméra qu'on active ici pour se voir
+  // couché même en vue 1ère personne (la caméra du sommeil, plus bas, est de toute
+  // façon repositionnée à l'extérieur du corps, comme la vue selfie).
+  camera.layers.enable(AVATAR_SHADOW_LAYER);
   handPivot.visible = false;
   playerAvatar.group.position.set(foot.x + 0.5, foot.y + 0.56, foot.z + 0.5);
   playerAvatar.group.rotation.order = 'YXZ';
@@ -1484,7 +1494,8 @@ function leaveBed() {
   // `true` (+ handPivot à `false`) pour qu'on se voie couché même en vue 1ère
   // personne ; sans ce reset, en vue 1ère personne on restait ensuite avec
   // l'avatar (buste bleu) planté dans la caméra au lieu de la main tenue.
-  playerAvatar.group.visible = playerCtrl.thirdPerson;
+  if (playerCtrl.thirdPerson) camera.layers.enable(AVATAR_SHADOW_LAYER);
+  else camera.layers.disable(AVATAR_SHADOW_LAYER);
   handPivot.visible = !playerCtrl.thirdPerson;
   // pas de repositionnement à faire par ailleurs : le prochain appel à updateVisuals (débloqué
   // dès que `sleeping` repasse à false) replace avatar/caméra/main selon le mode
@@ -1919,7 +1930,10 @@ function showGameOver() {
     sleeping = false;
     sleepOverlay.style.display = 'none';
     playerAvatar.group.rotation.x = 0; // idem leaveBed() : éviter un avatar figé couché
-    playerAvatar.group.visible = playerCtrl.thirdPerson; // idem leaveBed() : éviter le buste planté en vue 1ère personne
+    // idem leaveBed() : éviter le buste planté en vue 1ère personne (calque
+    // caméra, pas group.visible -- cf. AVATAR_SHADOW_LAYER, entities/player.js)
+    if (playerCtrl.thirdPerson) camera.layers.enable(AVATAR_SHADOW_LAYER);
+    else camera.layers.disable(AVATAR_SHADOW_LAYER);
     handPivot.visible = !playerCtrl.thirdPerson;
   }
   for (const k in keys) keys[k] = false;

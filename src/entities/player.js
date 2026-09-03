@@ -5,6 +5,17 @@ import { voxelRaycast } from '../core/raycast.js';
 import { createPlayerMaterials, createArmorMaterials, buildPlayerAvatar } from './player-model.js';
 import { texFireOverlay } from '../render/textures.js';
 
+// Calque dédié à l'avatar 3e personne (Phase ombre) : lui permet de rester
+// INVISIBLE pour la caméra principale en vue 1ère personne (sinon la tête
+// collerait littéralement à l'objectif) tout en restant VISIBLE pour la shadow
+// map du soleil/de la lune (sun.shadow.camera / moonLight.shadow.camera, cf.
+// main.js / world/sky.js, qui activent ce même calque) -- c'est ce qui permet
+// de voir l'ombre du joueur au sol même quand son corps n'est pas affiché à
+// l'écran. `group.visible` doit donc rester à `true` en permanence : le passer
+// à `false` masquerait aussi l'avatar pour la shadow map, pas seulement pour
+// la caméra (les deux passes de rendu three.js sautent les objets invisibles).
+export const AVATAR_SHADOW_LAYER = 1;
+
 export function createPlayer({
   scene,
   camera,
@@ -63,7 +74,9 @@ export function createPlayer({
 
   // avatar visible uniquement à la 3e personne (F5) - construit comme les mobs, avec des pivots articulés
   const playerAvatar = buildPlayerAvatar(playerMats, armorMats);
-  playerAvatar.group.visible = false;
+  // Toujours visible côté scène (cf. AVATAR_SHADOW_LAYER ci-dessus) : c'est la
+  // caméra, pas l'avatar, qui décide s'il apparaît réellement à l'écran.
+  playerAvatar.group.traverse((obj) => obj.layers.set(AVATAR_SHADOW_LAYER));
   scene.add(playerAvatar.group);
 
   // Overlay "en feu" (même technique que les mobs, cf. entities/mob.js
@@ -94,6 +107,12 @@ export function createPlayer({
     return group;
   })();
   playerAvatar.group.add(fireOverlay);
+  // AVATAR_SHADOW_LAYER (cf. plus haut) : fireOverlay est ajouté APRÈS le
+  // traverse() sur playerAvatar.group, donc pas encore couvert -- sans ce
+  // second passage il resterait sur le calque par défaut (visible pour la
+  // caméra principale même en 1ère personne, ce qui n'est jamais voulu ici :
+  // cet overlay 3D n'a de sens qu'en 3e personne, cf. commentaire plus haut).
+  fireOverlay.traverse((obj) => obj.layers.set(AVATAR_SHADOW_LAYER));
   let onFire = false;
   function setOnFire(on) {
     onFire = on;
@@ -216,8 +235,13 @@ export function createPlayer({
   const camRayOrigin = new THREE.Vector3();
   function toggleThirdPerson() {
     viewMode = (viewMode + 1) % 3;
-    // avatar visible dès qu'on quitte la 1ère personne (3e personne ET selfie)
-    playerAvatar.group.visible = viewMode !== VIEW_FIRST;
+    // avatar visible pour la caméra dès qu'on quitte la 1ère personne (3e personne
+    // ET selfie) -- on bascule le calque de la CAMÉRA, pas `playerAvatar.group.visible`
+    // (cf. AVATAR_SHADOW_LAYER plus haut) : l'avatar doit rester visible pour la
+    // shadow map en permanence, y compris en 1ère personne, pour que l'ombre du
+    // joueur reste visible au sol même quand son corps n'est pas affiché à l'écran.
+    if (viewMode === VIEW_FIRST) camera.layers.disable(AVATAR_SHADOW_LAYER);
+    else camera.layers.enable(AVATAR_SHADOW_LAYER);
     handPivot.visible = viewMode === VIEW_FIRST;
   }
 
