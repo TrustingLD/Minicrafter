@@ -985,6 +985,12 @@ const soloBtn = document.getElementById('soloBtn');
 // #blocker (vrai menu principal) d'un éventuel réaffichage plus tard (perte
 // de pointer lock imprévue, cf. showResumeBlocker() ci-dessous).
 let gameStarted = false;
+// Chute d'arrivée (Solo -> Survie, cf. survieBtn plus bas) : le joueur apparaît
+// 30 blocs au-dessus du sol et tombe jusqu'au terrain SANS dégât, quelle que
+// soit la hauteur -- true tant que cette toute première chute n'a pas encore
+// atterri ; consommé (repassé à false) au premier `landed` dans animate(),
+// après quoi les dégâts de chute normaux reprennent leur cours.
+let pendingSpawnFall = false;
 // Redemande directement le pointer lock (ZQSD/souris repris tout de suite,
 // sans écran intermédiaire) -- appelé depuis les endroits où on VIENT de
 // fermer un panneau nous-mêmes (E pour l'inventaire, bouton fermer du
@@ -1054,6 +1060,15 @@ document.getElementById('soloBackBtn').addEventListener('click', closeSoloMenu);
 survieBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
+  // Chute d'arrivée : on lance la partie 30 blocs au-dessus du point
+  // d'apparition normal -- le joueur tombe jusqu'au sol avant que l'aventure
+  // ne commence vraiment (cf. pendingSpawnFall, qui annule le dégât de chute
+  // correspondant dans animate()). velY/fallDistance à 0 pour un vrai départ
+  // en chute libre (pas de vitesse résiduelle d'un état précédent).
+  player.pos.y += 30;
+  player.velY = 0;
+  player.fallDistance = 0;
+  pendingSpawnFall = true;
   gameStarted = true;
   closeSoloMenu();
   if (touchMode) blocker.style.display = 'none';
@@ -2174,7 +2189,12 @@ function animate() {
         // (1 bloc au-delà de la franchise) retire bien 1 demi-cœur, comme demandé.
         const FALL_DAMAGE_FREE_BLOCKS = 3;
         const HALF_HEART = 1; // 1 point de vie == un demi-cœur affiché
-        if (fallDistance > FALL_DAMAGE_FREE_BLOCKS) {
+        if (pendingSpawnFall) {
+          // chute d'arrivée (Solo -> Survie, cf. survieBtn) : jamais de dégât,
+          // quelle que soit la hauteur -- ne s'applique qu'à ce tout premier
+          // atterrissage, les chutes suivantes retombent sous la règle normale.
+          pendingSpawnFall = false;
+        } else if (fallDistance > FALL_DAMAGE_FREE_BLOCKS) {
           const excessBlocks = Math.floor(fallDistance - FALL_DAMAGE_FREE_BLOCKS);
           if (excessBlocks > 0) {
             damagePlayer(excessBlocks * HALF_HEART);
