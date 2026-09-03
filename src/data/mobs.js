@@ -80,6 +80,10 @@ export const MOBS = {
     hitbox: { radius: 0.32, height: 1.9 },
     ai: 'hostile',
     drops: [],
+    // Mort-vivant : prend feu en plein jour à ciel dégagé (cf. entities/mob.js,
+    // Mob.update()) -- seul mob concerné, donc porté par les données plutôt que
+    // codé en dur sur le type 'zombie' dans la logique.
+    burnsInSunlight: true,
     model: {
       parts: [
         { size: [0.6, 0.9, 0.35], at: [0, 1.05, 0], tex: 'zombieShirt' },

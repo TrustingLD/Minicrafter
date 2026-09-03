@@ -16,6 +16,38 @@ import { getBiome } from '../world/generator.js';
 import { BIOMES } from '../world/biomes.js';
 import { findVillagesNear, villageDoorSpots } from '../world/villages.js';
 
+// Combustion au soleil (Phase burn) : un tic par seconde (comme la faim/la lave côté
+// joueur, cf. main.js), pas à chaque frame -- 1 PV/s tue un zombie (6 PV) en 6s
+// d'exposition continue, cohérent avec le rythme "assez vite pour être un vrai risque,
+// pas instantané" de Minecraft.
+const BURN_TICK_INTERVAL = 1; // s
+const BURN_TICK_DAMAGE = 1;
+
+// Construit l'overlay visuel "en feu" : deux plans texturés en croix (même technique
+// que les brins d'herbe/fleurs de Minecraft), dimensionnés sur la hitbox du mob et
+// centrés dessus. Un seul Group, caché par défaut (cf. Mob.setOnFire) -- créé une
+// seule fois par mob, à la première combustion (pas à la construction : la plupart
+// des mobs ne brûlent jamais, cf. data.burnsInSunlight).
+function buildFireOverlay(radius, height, fireTexture) {
+  const w = radius * 2 * 1.5;
+  const h = height * 1.15;
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshBasicMaterial({
+    map: fireTexture,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const planeA = new THREE.Mesh(geo, mat);
+  const planeB = new THREE.Mesh(geo, mat);
+  planeB.rotation.y = Math.PI / 2;
+  const group = new THREE.Group();
+  group.position.y = h / 2;
+  group.add(planeA, planeB);
+  group.visible = false;
+  return group;
+}
+
 export function createMobTextures() {
   return {
     pigSkin: tex.texMobSkin('#fbbdc4', '#df818e'),
@@ -33,6 +65,11 @@ export function createMobTextures() {
     villagerRobe: tex.texVillagerRobe(),
     villagerSkin: tex.texMobSkin('#e8b98f', '#c99468'),
     villagerFace: tex.texVillagerFace(),
+    // Overlay "en feu" (zombies au soleil, cf. burnsInSunlight/data/mobs.js) :
+    // UNE seule texture partagée par tous les mobs -- offset.y animé une fois par
+    // frame dans createMobSystem().update(), pas par mob (cf. buildFireOverlay
+    // plus bas, qui ne fait QUE créer les plans, jamais de nouvelle texture).
+    fireOverlay: tex.texFireOverlay(),
   };
 }
 
@@ -176,6 +213,12 @@ export class Mob extends Entity {
     // "surgir" au premier `m.villageKey = ...`) pour que TypeScript/checkJs
     // reconnaisse le champ sur la classe (cf. tsconfig.json).
     this.villageKey = null;
+    // Combustion au soleil (cf. data.burnsInSunlight, update()) : `burnCheckTimer`
+    // décalé aléatoirement pour ne pas vérifier tous les mobs hostiles la même
+    // frame (juste un étalement de charge, comme sightTimer plus haut).
+    this.onFire = false;
+    this.fireOverlay = null;
+    this.burnCheckTimer = Math.random() * BURN_TICK_INTERVAL;
   }
   // essaie de déplacer le mob sur un axe ; si un bloc bloque le chemin, autorise
   // à "monter la marche" seulement si l'obstacle ne fait pas plus de 1 bloc de haut
@@ -350,9 +393,79 @@ export class Mob extends Entity {
     this.arms.forEach((pivot, i) => {
       pivot.rotation.x = (i % 2 === 0 ? -swing : swing) * 0.6;
     });
+
+    // Combustion au soleil (zombies, cf. data.burnsInSunlight) : vérifiée au tic
+    // (1x/s, pas à chaque frame -- inutile, le ciel ne change pas d'une frame à
+    // l'autre) plutôt qu'en continu. Exposé = pas nuit, pas dans l'eau, ciel
+    // dégagé au-dessus (hasSkyAbove, même fonction que trySpawnAroundPlayer plus
+    // bas) -- s'éteint dès que l'une de ces conditions cesse d'être vraie, comme
+    // dans Minecraft (pas de minuterie qui "épuise" un feu déjà allumé).
+    if (this.data.burnsInSunlight && this.alive) {
+      this.burnCheckTimer -= dt;
+      if (this.burnCheckTimer <= 0) {
+        this.burnCheckTimer = BURN_TICK_INTERVAL;
+        const fx = Math.floor(this.pos.x);
+        const fy = Math.floor(this.pos.y);
+        const fz = Math.floor(this.pos.z);
+        const inWater = this.ctx.getBlock(fx, fy, fz) === 'water';
+        const exposed =
+          !this.ctx.isNight() && !inWater && hasSkyAbove(this.ctx.getBlock, fx, fy, fz);
+        if (exposed) {
+          this.setOnFire(true);
+          this.burnDamage(BURN_TICK_DAMAGE);
+        } else {
+          this.setOnFire(false);
+        }
+      }
+    }
+  }
+  // Bascule l'overlay visuel "en feu" (cf. buildFireOverlay) -- construit à la
+  // demande, la première fois qu'un mob prend feu (la plupart n'y recourent
+  // jamais, cf. data.burnsInSunlight). `no-op` si l'état ne change pas, pour ne
+  // pas re-toucher `visible` à chaque tic tant que le mob reste au soleil.
+  setOnFire(on) {
+    if (this.onFire === on) return;
+    this.onFire = on;
+    if (on) {
+      if (!this.fireOverlay) {
+        this.fireOverlay = buildFireOverlay(
+          this.radius,
+          this.height,
+          this.ctx.mobAssets.fireOverlay,
+        );
+        this.group.add(this.fireOverlay);
+      }
+      this.fireOverlay.visible = true;
+    } else if (this.fireOverlay) {
+      this.fireOverlay.visible = false;
+    }
+  }
+  // Dégât environnemental (combustion) : même trajectoire de mort que hit() (drops,
+  // son, onDeath) mais SANS le flash rouge ni le knockback -- ce n'est pas un coup
+  // porté par le joueur, ça n'a pas à en avoir l'air.
+  burnDamage(dmg) {
+    if (!this.alive) return;
+    this.health -= dmg;
+    this.ctx.playSound('hurt');
+    if (this.health <= 0 && this.alive) this.die();
+  }
+  // Trajectoire de mort partagée par hit() et burnDamage() : retire le group de la
+  // scène, lâche les drops au sol, joue le son, prévient onDeath (nettoyage côté
+  // createMobSystem).
+  die() {
+    const { scene, itemSystem, playSound, onDeath } = this.ctx;
+    this.alive = false;
+    scene.remove(this.group);
+    this.data.drops.forEach(({ item, min, max }) => {
+      const count = randInt(min, max);
+      if (count > 0)
+        itemSystem.spawn(this.pos.x, this.pos.y + this.height * 0.5, this.pos.z, item, count);
+    });
+    playSound('mobDeath');
+    onDeath(this);
   }
   hit(dmg, attackerPos) {
-    const { scene, itemSystem, playSound, onDeath } = this.ctx;
+    const { playSound } = this.ctx;
     this.health -= dmg;
     playSound('hit');
     // teinte rouge immédiate (1/4 de seconde, cf. update()) pour un retour visuel
@@ -384,20 +497,7 @@ export class Mob extends Entity {
     if (this.data.ai !== 'hostile') {
       this.fleeTimer = FLEE_DURATION;
     }
-    if (this.health <= 0 && this.alive) {
-      this.alive = false;
-      scene.remove(this.group);
-      // Phase 10 : la mort ne remplit plus l'inventaire directement, elle fait
-      // apparaître des items au sol (comme casser un bloc) — le joueur doit
-      // s'approcher pour les ramasser.
-      this.data.drops.forEach(({ item, min, max }) => {
-        const count = randInt(min, max);
-        if (count > 0)
-          itemSystem.spawn(this.pos.x, this.pos.y + this.height * 0.5, this.pos.z, item, count);
-      });
-      playSound('mobDeath');
-      onDeath(this);
-    }
+    if (this.health <= 0 && this.alive) this.die();
   }
 }
 
@@ -480,6 +580,7 @@ export function createMobSystem({
       collidesAtBox,
       getGroundHeight,
       getBlock,
+      isNight,
       itemSystem,
       playSound,
       onPlayerHurt,
@@ -648,6 +749,12 @@ export function createMobSystem({
   }
 
   function update(dt, playerPos) {
+    // Flammes (overlay "en feu", cf. Mob.setOnFire) : une SEULE texture partagée
+    // par tous les mobs -- l'offset défile une fois par frame ici plutôt que dans
+    // chaque Mob.update(), pour animer tous les feux en même temps sans dupliquer
+    // le calcul (même principe que le défilement de lavaTexture, cf. main.js).
+    mobAssets.fireOverlay.offset.y = (mobAssets.fireOverlay.offset.y + dt * 1.3) % 1;
+
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       spawnTimer = SPAWN_INTERVAL;

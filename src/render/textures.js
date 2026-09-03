@@ -413,7 +413,15 @@ export function texApple() {
   // feuille
   ctx.fillStyle = '#4caf50';
   ctx.beginPath();
-  ctx.ellipse(TEX_SIZE * 0.63, TEX_SIZE * 0.2, TEX_SIZE * 0.1, TEX_SIZE * 0.06, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(
+    TEX_SIZE * 0.63,
+    TEX_SIZE * 0.2,
+    TEX_SIZE * 0.1,
+    TEX_SIZE * 0.06,
+    -0.5,
+    0,
+    Math.PI * 2,
+  );
   ctx.fill();
   return canvasToTexture(c);
 }
@@ -433,7 +441,15 @@ export function texGoldenApple() {
   ctx.fillRect(TEX_SIZE * 0.47, TEX_SIZE * 0.16, TEX_SIZE * 0.06, TEX_SIZE * 0.16);
   ctx.fillStyle = '#d4af37';
   ctx.beginPath();
-  ctx.ellipse(TEX_SIZE * 0.63, TEX_SIZE * 0.2, TEX_SIZE * 0.1, TEX_SIZE * 0.06, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(
+    TEX_SIZE * 0.63,
+    TEX_SIZE * 0.2,
+    TEX_SIZE * 0.1,
+    TEX_SIZE * 0.06,
+    -0.5,
+    0,
+    Math.PI * 2,
+  );
   ctx.fill();
   return canvasToTexture(c);
 }
@@ -1262,6 +1278,37 @@ export function texLava() {
   }
   const t = canvasToTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+// Silhouette de flammes sur fond transparent (pas de fillRect de fond, contrairement
+// aux autres textures ci-dessus) : plusieurs langues de feu verticales, base orange
+// foncé -> pointe jaune pâle, façon pixel-art (bandes, pas de dégradé lisse). Utilisée
+// en croix de deux plans (cf. buildFireOverlay, entities/mob.js et entities/player.js)
+// pour l'effet "en feu" -- zombie au soleil, joueur qui sort de la lave. wrapT en
+// RepeatWrapping : on fait défiler l'offset comme la lave (cf. lavaTexture plus haut)
+// pour donner l'impression de flammes qui montent/dansent, sans animer de géométrie.
+export function texFireOverlay() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const tongues = 4;
+  const tongueW = TEX_SIZE / tongues;
+  for (let i = 0; i < tongues; i++) {
+    const cx = tongueW * (i + 0.5) + (Math.random() * 3 - 1.5);
+    const baseW = tongueW - 1 + Math.random() * 2;
+    const h = TEX_SIZE * (0.75 + Math.random() * 0.25);
+    const bands = 9;
+    for (let b = 0; b < bands; b++) {
+      const t = b / (bands - 1); // 0 en bas (base large, orange foncé), 1 en haut (pointe, jaune pâle)
+      const y = TEX_SIZE - (h * (b + 1)) / bands;
+      const w = Math.max(1, baseW * (1 - t * 0.8));
+      const color = t < 0.35 ? '#e6420a' : t < 0.7 ? '#ff9d2e' : '#ffe066';
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.round(cx - w / 2), Math.round(y), Math.ceil(w), TEX_SIZE / bands + 1);
+    }
+  }
+  const t = canvasToTexture(c);
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.RepeatWrapping;
   return t;
 }
 // Villageois (Phase 20) : robe de bure + visage au grand nez, pour rester lisible

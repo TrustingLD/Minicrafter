@@ -126,6 +126,56 @@ canvas {
   transition: opacity 0.1s ease-in;
 }
 
+/* Écran "en feu" (sortie de lave, cf. player.fireTimer dans main.js) : contrairement
+   au flash ponctuel de #hurtVignette ci-dessus, reste affiché en continu tant qu'on
+   brûle -- halo rouge/orange sur les bords + bandes de flammes qui remontent, pour
+   un signal fort et persistant plutôt qu'un simple clignotement. */
+#fireOverlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  opacity: 0;
+  background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 140, 0, 0.55) 0px,
+      rgba(255, 200, 60, 0.35) 12px,
+      rgba(255, 90, 0, 0.5) 24px
+    ),
+    radial-gradient(ellipse at center, rgba(255, 90, 0, 0) 40%, rgba(200, 40, 0, 0.65) 100%);
+  background-size:
+    100% 48px,
+    100% 100%;
+  animation:
+    fireOverlayRise 0.4s linear infinite,
+    fireOverlayFlicker 0.5s steps(2) infinite;
+  transition: opacity 0.5s ease;
+}
+#fireOverlay.burning {
+  opacity: 1;
+}
+@keyframes fireOverlayRise {
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      0 -48px,
+      0 0;
+  }
+}
+@keyframes fireOverlayFlicker {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+}
+
 #fps {
   position: fixed;
   top: 10px;

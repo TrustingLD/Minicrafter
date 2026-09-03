@@ -259,6 +259,7 @@ bus.on('player:health', () => healthUI.render(player));
 // Vignette de dégâts (Phase 19) : ne flashe que sur une VRAIE perte de vie, pas sur
 // chaque event player:health (la régénération de faim > 18 en émet un aussi).
 const hurtVignetteEl = document.getElementById('hurtVignette');
+const fireOverlayEl = document.getElementById('fireOverlay');
 let lastHealth = 20; // vie de départ (cf. entities/player.js) -- `player` n'existe pas encore ici
 
 // Secousse de caméra sur dégât : la caméra part à 20° d'inclinaison puis revient
@@ -500,6 +501,7 @@ const {
   respawn,
   setArmor,
   buildAvatar,
+  setOnFire,
 } = playerCtrl;
 healthUI.render(player);
 hungerUI.render(player);
@@ -1867,6 +1869,14 @@ let lavaDamageTimer = 0; // cooldown entre deux tics de dégâts tant qu'on rest
 let cactusDamageTimer = 0; // même mécanique, tant qu'on reste collé à un cactus
 let hungerTickTimer = 4; // Phase 11 : dégâts de faim / régénération, au tic (4s), pas à la frame
 let drownDamageTimer = 0; // même mécanique que lavaDamageTimer, une fois le souffle à 0
+// Combustion (sortie de lave) : player.fireTimer (entities/player.js) se réarme en
+// continu tant qu'on reste dans la lave et décompte une fois sorti -- fireDamageTimer
+// est le cooldown entre deux tics de dégâts, même mécanique que lavaDamageTimer/
+// drownDamageTimer ci-dessus mais pour ce dégât-là.
+const FIRE_DURATION_AFTER_LAVA = 8; // s de combustion après être sorti de la lave
+const FIRE_TICK_INTERVAL = 1; // s -- 1 dégât/s, plus léger que le contact direct avec la lave
+const FIRE_TICK_DAMAGE = 1;
+let fireDamageTimer = 0;
 const hud = createHud({
   posEl: document.getElementById('pos'),
   targetEl: document.getElementById('target'),
@@ -1943,6 +1953,9 @@ function respawnPlayer() {
   }
 
   respawn(spawnPoint());
+  lavaDamageTimer = 0;
+  fireDamageTimer = 0;
+  fireOverlayEl.classList.remove('burning');
   selectedBlock = slots[selectedIndex]?.item ?? null;
   refreshHeldItem(selectedBlock);
   bus.emit('inventory:changed');
@@ -2065,6 +2078,33 @@ function animate() {
       }
     } else {
       lavaDamageTimer = 0;
+    }
+
+    // Combustion : en contact avec la lave -> le joueur prend feu et le reste tant
+    // qu'il y est (le timer se réarme chaque frame) ; en sortir laisse une traînée
+    // de FIRE_DURATION_AFTER_LAVA secondes de combustion, avec son propre dégât au
+    // tic (plus léger que le contact direct ci-dessus). Overlay plein écran (1ère
+    // personne, cf. #fireOverlay) + overlay 3D sur l'avatar (3e personne, cf.
+    // setOnFire dans entities/player.js) tant que fireTimer > 0.
+    if (inLava) player.fireTimer = FIRE_DURATION_AFTER_LAVA;
+    if (player.fireTimer > 0) {
+      if (!inLava) player.fireTimer = Math.max(0, player.fireTimer - dt);
+      setOnFire(true);
+      fireOverlayEl.classList.add('burning');
+      fireDamageTimer -= dt;
+      if (fireDamageTimer <= 0) {
+        fireDamageTimer = FIRE_TICK_INTERVAL;
+        // Le contact direct avec la lave inflige déjà son propre dégât (ci-dessus,
+        // bien plus lourd) : pas la peine d'en rajouter un second le même tic.
+        if (!inLava) {
+          damagePlayer(FIRE_TICK_DAMAGE);
+          sfx.playSound('hurt');
+        }
+      }
+    } else {
+      fireDamageTimer = 0;
+      setOnFire(false);
+      fireOverlayEl.classList.remove('burning');
     }
 
     // dégâts en tic tant qu'on reste collé à un cactus -- même mécanique que la

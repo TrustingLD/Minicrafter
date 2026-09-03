@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { voxelRaycast } from '../core/raycast.js';
 import { createPlayerMaterials, createArmorMaterials, buildPlayerAvatar } from './player-model.js';
+import { texFireOverlay } from '../render/textures.js';
 
 export function createPlayer({
   scene,
@@ -43,6 +44,12 @@ export function createPlayer({
     knockbackTimer: 0,
     knockbackVX: 0,
     knockbackVZ: 0,
+    // Sortie de lave (Phase burn, cf. main.js) : secondes de combustion restantes.
+    // Se réarme en continu tant qu'on reste dans la lave, décompte une fois sorti
+    // -- cf. la boucle principale (main.js) qui pilote ce timer et applique les
+    // dégâts au tic ; ici on ne fait que déclarer le champ et gérer le VISUEL
+    // (cf. setOnFire plus bas).
+    fireTimer: 0,
   };
   camera.position.copy(player.pos);
 
@@ -58,6 +65,40 @@ export function createPlayer({
   const playerAvatar = buildPlayerAvatar(playerMats, armorMats);
   playerAvatar.group.visible = false;
   scene.add(playerAvatar.group);
+
+  // Overlay "en feu" (même technique que les mobs, cf. entities/mob.js
+  // buildFireOverlay) : deux plans texturés en croix, ajoutés à l'avatar 3e
+  // personne pour rester visible dans cette vue -- caché par défaut, affiché
+  // par setOnFire() tant que player.fireTimer > 0 (piloté depuis main.js).
+  // Texture propre au joueur (pas partagée avec mobAssets.fireOverlay) : son
+  // offset défile indépendamment dans updateVisuals(), plus simple que de
+  // faire transiter la texture des mobs jusqu'ici.
+  const fireTexture = texFireOverlay();
+  const fireOverlay = (() => {
+    const w = player.radius * 2 * 1.5;
+    const h = player.height * 1.15;
+    const geo = new THREE.PlaneGeometry(w, h);
+    const mat = new THREE.MeshBasicMaterial({
+      map: fireTexture,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const planeA = new THREE.Mesh(geo, mat);
+    const planeB = new THREE.Mesh(geo, mat);
+    planeB.rotation.y = Math.PI / 2;
+    const group = new THREE.Group();
+    group.position.y = h / 2;
+    group.add(planeA, planeB);
+    group.visible = false;
+    return group;
+  })();
+  playerAvatar.group.add(fireOverlay);
+  let onFire = false;
+  function setOnFire(on) {
+    onFire = on;
+    fireOverlay.visible = on;
+  }
 
   // fabrique un second avatar INDÉPENDANT (mesh/group propres, donc utilisable
   // dans une autre scène simultanément) mais partageant les mêmes matériaux --
@@ -199,6 +240,10 @@ export function createPlayer({
   }
 
   function updateVisuals(dt, isMoving, yaw, pitch, crouching) {
+    // Flammes (cf. setOnFire) : offset animé seulement quand visible -- inutile de
+    // faire défiler une texture qui ne s'affiche pas.
+    if (onFire) fireTexture.offset.y = (fireTexture.offset.y + dt * 1.3) % 1;
+
     // -- swing (casser/attaquer) --
     if (handSwing > 0) handSwing = Math.max(0, handSwing - dt * 4.5);
     const swingOffset = Math.sin(handSwing * Math.PI) * 0.9;
@@ -308,6 +353,8 @@ export function createPlayer({
     player.hunger = 20;
     player.breath = player.maxBreath;
     player.fallDistance = 0;
+    player.fireTimer = 0;
+    setOnFire(false);
   }
 
   return {
@@ -322,6 +369,7 @@ export function createPlayer({
     respawn,
     setArmor,
     buildAvatar,
+    setOnFire,
     get thirdPerson() {
       return viewMode !== VIEW_FIRST;
     },
