@@ -123,6 +123,21 @@ const KNOCKBACK_DURATION = 0.15; // s
 // tranquillement juste à côté de celui qui vient de le frapper.
 const FLEE_DURATION = 3; // s
 const FLEE_SPEED_MULT = 3; // "vitesse x3 de la normale" pendant la fuite (retour utilisateur)
+
+// Animation de mort : au lieu de disparaître instantanément (die() retirait le
+// group de la scène dans la même frame que le coup fatal), le mob bascule sur le
+// côté et s'enfonce légèrement en s'estompant, comme un "évanouissement" bref --
+// lisible sans être un gros morceau d'anim (pas de squelette/rig, juste le group
+// entier qu'on incline). Le son et les drops partent tout de suite (feedback
+// immédiat au coup porté), seule la disparition visuelle + le nettoyage
+// (mobs[], hitboxes, onDeath) sont différés le temps de l'anim.
+const DEATH_ANIM_DURATION = 0.5; // s
+const DEATH_SINK_DISTANCE = 0.3; // blocs, enfoncement dans le sol pendant la chute
+const DEATH_FADE_START = 0.3; // fraction de l'anim avant que le fondu ne démarre (laisse voir la bascule d'abord)
+
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
 function canSeeTarget(getBlock, from, to) {
   const dx = to.x - from.x,
     dy = to.y - from.y,
@@ -150,7 +165,7 @@ function hasClearMeleePath(getBlock, mobPos, playerPos) {
 
 export class Mob extends Entity {
   // ctx: { scene, mobAssets, collidesAtBox, getGroundHeight, itemSystem,
-  //        playSound, onPlayerHurt(dmg, attackerPos), onDeath }
+  //        playSound, onPlayerHurt(dmg, attackerPos), refreshMobHitboxes, onDeath }
   constructor(type, x, z, ctx) {
     const data = MOBS[type];
     super(x, ctx.getGroundHeight(x, z), z, {
@@ -219,6 +234,16 @@ export class Mob extends Entity {
     this.onFire = false;
     this.fireOverlay = null;
     this.burnCheckTimer = Math.random() * BURN_TICK_INTERVAL;
+    // Animation de mort (cf. startDeath()/updateDeath()) : `dying` couvre la
+    // fenêtre entre le coup fatal et la disparition réelle -- `alive` repasse à
+    // false dès le coup fatal (plus d'IA/collision/dégâts), `dying` reste true
+    // jusqu'à la fin de l'anim (le mob continue donc d'être update() pendant ce
+    // court laps, cf. update()).
+    this.dying = false;
+    this.deathTimer = 0;
+    this.deathRotAxis = 'z';
+    this.deathRotSign = 1;
+    this.deathBaseY = 0;
   }
   // essaie de déplacer le mob sur un axe ; si un bloc bloque le chemin, autorise
   // à "monter la marche" seulement si l'obstacle ne fait pas plus de 1 bloc de haut
@@ -274,6 +299,10 @@ export class Mob extends Entity {
     });
   }
   update(dt, playerPos) {
+    if (this.dying) {
+      this.updateDeath(dt);
+      return;
+    }
     if (!this.alive) return;
     const { playSound, onPlayerHurt } = this.ctx;
     // fin du flash rouge (cf. hit()) : revient à la teinte normale une fois écoulé
@@ -449,22 +478,72 @@ export class Mob extends Entity {
     this.ctx.playSound('hurt');
     if (this.health <= 0 && this.alive) this.die();
   }
-  // Trajectoire de mort partagée par hit() et burnDamage() : retire le group de la
-  // scène, lâche les drops au sol, joue le son, prévient onDeath (nettoyage côté
-  // createMobSystem).
+  // Trajectoire de mort partagée par hit() et burnDamage() : lâche les drops et
+  // joue le son tout de suite (feedback immédiat au coup fatal), puis lance
+  // l'anim de bascule/fondu (updateDeath()) -- le retrait effectif de la scène et
+  // le nettoyage (mobs[], hitboxes, onDeath) arrivent à la fin de celle-ci
+  // (finishDeath()).
   die() {
-    const { scene, itemSystem, playSound, onDeath } = this.ctx;
+    const { itemSystem, playSound, refreshMobHitboxes } = this.ctx;
     this.alive = false;
-    scene.remove(this.group);
+    this.dying = true;
+    this.deathTimer = 0;
+    // exclut tout de suite le cadavre des hitboxes cliquables (cf.
+    // refreshMobHitboxes()) : sans ça il resterait "visable"/visé jusqu'à la fin
+    // de l'anim, même si hit() ignore déjà tout coup porté à un mob dying.
+    refreshMobHitboxes();
+    // axe/sens de bascule tirés au sort à chaque mort : évite que tous les mobs
+    // s'écroulent exactement de la même façon.
+    this.deathRotAxis = Math.random() < 0.5 ? 'x' : 'z';
+    this.deathRotSign = Math.random() < 0.5 ? 1 : -1;
+    this.deathBaseY = this.pos.y;
+    // fige les membres dans leur pose actuelle : sans ça le balancier de marche
+    // continuerait de tourner sous le mob pendant qu'il s'écroule, ce qui casse
+    // la lisibilité de l'anim.
+    this.legs.forEach((pivot) => (pivot.rotation.x = 0));
+    this.arms.forEach((pivot) => (pivot.rotation.x = 0));
+    // rend tous les matériaux du mob transparents une fois pour pouvoir animer
+    // leur opacité (ils sont opaques par défaut, cf. model.js) -- flashMaterials
+    // couvre déjà toutes les faces/parts (cf. constructeur).
+    this.flashMaterials.forEach((m) => {
+      m.transparent = true;
+    });
+    if (this.fireOverlay) this.fireOverlay.visible = false;
     this.data.drops.forEach(({ item, min, max }) => {
       const count = randInt(min, max);
       if (count > 0)
         itemSystem.spawn(this.pos.x, this.pos.y + this.height * 0.5, this.pos.z, item, count);
     });
     playSound('mobDeath');
+  }
+  // Bascule + enfoncement + fondu, jusqu'à DEATH_ANIM_DURATION -- purement
+  // visuel, ne touche ni pos ni la physique (le mob ne bouge plus une fois mort).
+  updateDeath(dt) {
+    this.deathTimer += dt;
+    const t = Math.min(1, this.deathTimer / DEATH_ANIM_DURATION);
+    const eased = easeOutCubic(t);
+    const topple = eased * (Math.PI / 2) * this.deathRotSign;
+    if (this.deathRotAxis === 'x') this.group.rotation.x = topple;
+    else this.group.rotation.z = topple;
+    this.group.position.set(
+      this.pos.x,
+      this.deathBaseY - DEATH_SINK_DISTANCE * eased,
+      this.pos.z,
+    );
+    const fadeT = Math.max(0, (t - DEATH_FADE_START) / (1 - DEATH_FADE_START));
+    const opacity = 1 - fadeT;
+    this.flashMaterials.forEach((m) => (m.opacity = opacity));
+    if (t >= 1) this.finishDeath();
+  }
+  // Fin de l'anim : retire (enfin) le group de la scène et prévient onDeath, qui
+  // fait le ménage côté createMobSystem (mobs[], hitboxes, village, callback UI).
+  finishDeath() {
+    const { scene, onDeath } = this.ctx;
+    scene.remove(this.group);
     onDeath(this);
   }
   hit(dmg, attackerPos) {
+    if (!this.alive || this.dying) return; // déjà mort/en train de mourir : plus de coups qui comptent
     const { playSound } = this.ctx;
     this.health -= dmg;
     playSound('hit');
@@ -570,7 +649,14 @@ export function createMobSystem({
 
   function refreshMobHitboxes() {
     mobHitboxes = [];
-    mobs.forEach((m) => m.hitParts.forEach((p) => mobHitboxes.push(p)));
+    // les mobs en cours d'anim de mort (m.dying) restent dans mobs[] jusqu'à la
+    // fin de l'anim (cf. Mob.finishDeath()) mais ne doivent plus être une cible
+    // valide entre-temps -- hit() les ignore déjà, mais les exclure ici évite en
+    // plus qu'un raycast désigne un cadavre comme "visé" pendant qu'il s'estompe.
+    mobs.forEach((m) => {
+      if (m.dying) return;
+      m.hitParts.forEach((p) => mobHitboxes.push(p));
+    });
   }
 
   function makeCtx() {
@@ -584,6 +670,7 @@ export function createMobSystem({
       itemSystem,
       playSound,
       onPlayerHurt,
+      refreshMobHitboxes,
       onDeath(mob) {
         const idx = mobs.indexOf(mob);
         if (idx >= 0) mobs.splice(idx, 1);
