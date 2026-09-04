@@ -525,6 +525,530 @@ export const BLOCK_TYPES = {
     isChest: true,
     drops: [{ item: 'chest', min: 1, max: 1 }],
   },
+
+  /* ============================================================
+     REDSTONE (Phase 22) : logique de circuit façon vrai Minecraft.
+     Aucune case du chunk ne porte de métadonnées (1 octet/bloc, juste l'id,
+     cf. world/chunk.js) -- exactement comme les portes/escaliers plus haut,
+     TOUT état (niveau de puissance, orientation, allumé/éteint) est donc
+     encodé comme un id de bloc DIFFÉRENT, jamais stocké à part. La simulation
+     elle-même (propagation, délais des répéteurs/torches) vit dans
+     world/redstone.js -- ces entrées ne sont que l'inventaire des variantes
+     et leur apparence.
+     ============================================================ */
+
+  // Minerai de redstone (Phase 22) : même moule que les 4 minerais plus haut,
+  // `vein` suffit à le faire apparaître dans le monde généré (ORE_TYPES est
+  // dérivé automatiquement, cf. plus bas + world/generator.js). Casser une
+  // veine donne l'item 'redstone' (poussière), jamais le minerai lui-même.
+  redstone_ore: {
+    id: 45,
+    name: 'Minerai de redstone',
+    hardness: 2.0,
+    tool: 'pickaxe',
+    textures: { all: 'redstoneBlock' }, // réutilise la texture "bloc de redstone" (aspect minerai simplifié)
+    vein: { minY: 2, maxY: 30, rarity: 0.012, veinSize: 6 },
+    drops: [{ item: 'redstone', min: 2, max: 4 }],
+  },
+
+  // Bloc de redstone : source CONSTANTE (toujours à 15) -- pas besoin de levier
+  // pour tester un circuit. `nonConductor` (lu par world/redstone.js
+  // isRedstoneConductor) : c'est déjà une source en soi, il ne doit pas en plus
+  // agir comme un simple bloc plein qui relaierait un AUTRE signal à travers lui.
+  redstone_block: {
+    id: 46,
+    name: 'Bloc de redstone',
+    hardness: 5,
+    tool: 'pickaxe',
+    textures: { all: 'redstoneBlock' },
+    nonConductor: true,
+    drops: [{ item: 'redstone_block', min: 1, max: 1 }],
+  },
+
+  // Fil de redstone (poussière posée) : 16 variantes, une par niveau de
+  // puissance 0..15 (cf. commentaire ci-dessus). `shape` réduit -- une fine
+  // plaque posée au sol (pas un cube plein) -- + `solid:false` (on marche
+  // dessus sans collision, comme un tapis). Ne tient QUE sur un support plein
+  // (cf. tryPlaceRedstoneWire dans main.js + le nettoyage automatique dans
+  // world/redstone.js si ce support disparaît).
+  redstone_wire_0: {
+    id: 47,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire0' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_1: {
+    id: 48,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire1' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_2: {
+    id: 49,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire2' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_3: {
+    id: 50,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire3' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_4: {
+    id: 51,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire4' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_5: {
+    id: 52,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire5' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_6: {
+    id: 53,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire6' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_7: {
+    id: 54,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire7' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_8: {
+    id: 55,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire8' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_9: {
+    id: 56,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire9' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_10: {
+    id: 57,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire10' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_11: {
+    id: 58,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire11' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_12: {
+    id: 59,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire12' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_13: {
+    id: 60,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire13' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_14: {
+    id: 61,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire14' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_15: {
+    id: 62,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire15' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+
+  // Torche à redstone : source de 15, ET inverseur (porte NON) -- s'éteint quand
+  // le bloc sur lequel elle est posée est lui-même alimenté (cf. world/redstone.js
+  // step()). `emitsLight` uniquement sur la variante allumée.
+  redstone_torch_off: {
+    id: 63,
+    name: 'Torche à redstone',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.2, height: 0.5 },
+    textures: { top: 'redstoneTorchFlameOff', bottom: 'torchWood', side: 'redstoneTorchStick' },
+    drops: [{ item: 'redstone_torch', min: 1, max: 1 }],
+  },
+  redstone_torch_on: {
+    id: 64,
+    name: 'Torche à redstone',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    emitsLight: 10,
+    shape: { width: 0.2, height: 0.5 },
+    textures: { top: 'redstoneTorchFlameOn', bottom: 'torchWood', side: 'redstoneTorchStick' },
+    drops: [{ item: 'redstone_torch', min: 1, max: 1 }],
+  },
+
+  // Levier : source manuelle (clic droit pour basculer, cf. main.js
+  // performSecondaryAction), 15 tant qu'il est ON, 0 sinon -- ne change JAMAIS
+  // tout seul (contrairement au bouton), cf. redstone.js.
+  lever_off: {
+    id: 65,
+    name: 'Levier',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.15, height: 0.3 },
+    textures: { all: 'leverOff' },
+    drops: [{ item: 'lever', min: 1, max: 1 }],
+  },
+  lever_on: {
+    id: 66,
+    name: 'Levier',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.15, height: 0.3 },
+    textures: { all: 'leverOn' },
+    drops: [{ item: 'lever', min: 1, max: 1 }],
+  },
+
+  // Bouton (pierre) : source momentanée -- clic droit passe à ON, revient tout
+  // seul à OFF après BUTTON_TIME secondes (cf. redstone.js), pas besoin de le
+  // rebasculer à la main.
+  button_off: {
+    id: 67,
+    name: 'Bouton',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.25, height: 0.12 },
+    textures: { all: 'buttonOff' },
+    drops: [{ item: 'button', min: 1, max: 1 }],
+  },
+  button_on: {
+    id: 68,
+    name: 'Bouton',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.25, height: 0.12 },
+    textures: { all: 'buttonOn' },
+    drops: [{ item: 'button', min: 1, max: 1 }],
+  },
+
+  // Lampe à redstone : consommateur pur (jamais de source), s'allume dès qu'une
+  // de ses 6 faces touche un signal > 0 -- cube plein classique, donc
+  // `nonConductor` pour ne pas laisser un signal la traverser comme un simple
+  // bloc de pierre (cf. isRedstoneConductor, world/redstone.js).
+  redstone_lamp_off: {
+    id: 69,
+    name: 'Lampe à redstone',
+    hardness: 0.3,
+    tool: null,
+    nonConductor: true,
+    textures: { all: 'redstoneLampOff' },
+    drops: [{ item: 'redstone_lamp', min: 1, max: 1 }],
+  },
+  redstone_lamp_on: {
+    id: 70,
+    name: 'Lampe à redstone',
+    hardness: 0.3,
+    tool: null,
+    nonConductor: true,
+    emitsLight: 14,
+    textures: { all: 'redstoneLampOn' },
+    drops: [{ item: 'redstone_lamp', min: 1, max: 1 }],
+  },
+
+  // Répéteur : 4 orientations (`facing` = sens de sortie du signal, même
+  // convention que les escaliers, cf. FACING_DELTA dans world/redstone.js) x 2
+  // états (verrouillé ON/OFF après son délai). Relit UNIQUEMENT sa face arrière
+  // (opposée à `facing`) et republie 15 en sortie -- ignore tout signal latéral,
+  // contrairement au fil.
+  repeater_north_off: {
+    id: 71,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_north_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_north_on: {
+    id: 72,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_north_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_south_off: {
+    id: 73,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_south_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_south_on: {
+    id: 74,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_south_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_east_off: {
+    id: 75,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_east_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_east_on: {
+    id: 76,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_east_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_west_off: {
+    id: 77,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_west_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_west_on: {
+    id: 78,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_west_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+
+  // Piston (non collant) : `facing` = sens de poussée. Simplification assumée
+  // (cf. commentaire de texPistonTop/Side, render/textures.js) : l'apparence NE
+  // varie PAS selon `facing` -- seul le comportement (quel voisin il pousse)
+  // en dépend, l'id encode quand même l'orientation puisque c'est le seul canal
+  // d'état disponible (1 octet/bloc, cf. le grand commentaire en tête de section).
+  // `nonConductor` : cube plein, mais ne doit pas laisser un signal le traverser
+  // comme un bloc de pierre normal (même raison que la lampe).
+  // Piston (non collant) : `facing` = sens de poussée, ET `frontNormal` (même
+  // vecteur, cf. commentaire de facingDelta dans world/redstone.js) donne
+  // maintenant au mesher (render/mesher.js, Phase 22.1) la face à afficher
+  // avec la texture "avant" (le vérin) -- les 5 autres faces gardent le
+  // blindage plat. Avant cet ajout, les 4 orientations étaient VISUELLEMENT
+  // identiques (limite alors assumée) ; corrigé ici, l'orientation posée se
+  // voit désormais vraiment sur le bloc, comme dans le vrai jeu.
+  piston_base_north: {
+    id: 79,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [0, 0, -1],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  piston_base_south: {
+    id: 80,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [0, 0, 1],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  piston_base_east: {
+    id: 81,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [1, 0, 0],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  piston_base_west: {
+    id: 82,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [-1, 0, 0],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  // Tête du piston (bras étendu) : bloc auxiliaire posé/retiré par
+  // world/redstone.js, jamais par le joueur directement -- incassable et sans
+  // drop propre (casser la base derrière elle la retire proprement, cf.
+  // breakPistonBase dans main.js), comme le panneau de porte ne se pose pas à
+  // la main non plus. `frontNormal` = même sens que sa base : c'est la face
+  // du bras tournée vers l'extérieur (celle que le joueur voit) qui porte le
+  // "visage" du piston.
+  piston_head_north: {
+    id: 83,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [0, 0, -1],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+  piston_head_south: {
+    id: 84,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [0, 0, 1],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+  piston_head_east: {
+    id: 85,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [1, 0, 0],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+  piston_head_west: {
+    id: 86,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [-1, 0, 0],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+};
+
+// facing -> id de bloc, pour repeater_/piston_base_/piston_head_ (utilisé par
+// main.js et world/redstone.js plutôt que de reconstruire la chaîne à chaque fois).
+export const REPEATER_VARIANTS = {
+  off: {
+    north: 'repeater_north_off',
+    south: 'repeater_south_off',
+    east: 'repeater_east_off',
+    west: 'repeater_west_off',
+  },
+  on: {
+    north: 'repeater_north_on',
+    south: 'repeater_south_on',
+    east: 'repeater_east_on',
+    west: 'repeater_west_on',
+  },
+};
+export const PISTON_BASE_VARIANTS = {
+  north: 'piston_base_north',
+  south: 'piston_base_south',
+  east: 'piston_base_east',
+  west: 'piston_base_west',
+};
+export const PISTON_HEAD_VARIANTS = {
+  north: 'piston_head_north',
+  south: 'piston_head_south',
+  east: 'piston_head_east',
+  west: 'piston_head_west',
 };
 
 // les 4 variantes (une par orientation) pour chaque matériau d'escalier --
@@ -558,6 +1082,15 @@ export const LIQUID_IDS = new Set(
 export const TRANSPARENT_IDS = new Set(
   Object.values(BLOCK_TYPES)
     .filter((b) => b.transparent)
+    .map((b) => b.id),
+);
+
+// blocs pleins qui ne doivent PAS relayer un signal de redstone comme un simple
+// bloc de pierre (lampe/bloc de redstone/piston, cf. leurs commentaires plus
+// haut) -- lu par world/redstone.js isRedstoneConductor().
+export const NONCONDUCTOR_IDS = new Set(
+  Object.values(BLOCK_TYPES)
+    .filter((b) => b.nonConductor)
     .map((b) => b.id),
 );
 

@@ -58,6 +58,18 @@ export const ITEM_NAMES = {
   diamond_leggings: 'Jambières en diamant',
   diamond_boots: 'Bottes en diamant',
   chest: 'Coffre',
+  // Redstone (Phase 22) : cf. data/blocks.js pour le détail des variantes
+  // (fil/torche/répéteur/piston n'ont pas de bloc "1 pour 1" avec leur item,
+  // exactement comme le lit/la porte -- voir tryPlaceRedstoneWire et consorts
+  // dans main.js).
+  redstone: 'Redstone',
+  redstone_torch: 'Torche à redstone',
+  lever: 'Levier',
+  button: 'Bouton',
+  redstone_lamp: 'Lampe à redstone',
+  redstone_block: 'Bloc de redstone',
+  repeater: 'Répéteur',
+  piston: 'Piston',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
@@ -416,6 +428,64 @@ export const RECIPES = [
     pattern: ['GGG', 'GAG', 'GGG'],
     key: { G: 'gold_ingot', A: 'apple' },
     give: { golden_apple: 1 },
+    needsTable: true,
+  },
+  // Redstone (Phase 22) : formes calquées sur le vrai jeu. La poussière elle-même
+  // ne se craft pas (minée directement, cf. redstone_ore dans data/blocks.js) --
+  // seuls les mécanismes qui la consomment ont une recette ici.
+  {
+    id: 'redstone_torch',
+    name: 'Torche à redstone',
+    pattern: ['R', 'S'],
+    key: { R: 'redstone', S: 'stick' },
+    give: { redstone_torch: 2 },
+    needsTable: false,
+  },
+  {
+    id: 'lever',
+    name: 'Levier',
+    pattern: ['S', 'C'],
+    key: { S: 'stick', C: 'stone' },
+    give: { lever: 1 },
+    needsTable: false,
+  },
+  {
+    id: 'button',
+    name: 'Bouton',
+    shapeless: { stone: 1 },
+    give: { button: 1 },
+    needsTable: false,
+  },
+  {
+    id: 'redstone_lamp',
+    name: 'Lampe à redstone',
+    pattern: ['.G.', 'GRG', '.G.'],
+    key: { G: 'glass', R: 'redstone' },
+    give: { redstone_lamp: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'redstone_block',
+    name: 'Bloc de redstone',
+    pattern: ['RRR', 'RRR', 'RRR'],
+    key: { R: 'redstone' },
+    give: { redstone_block: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'repeater',
+    name: 'Répéteur',
+    pattern: ['TRT', 'SSS'],
+    key: { T: 'redstone_torch', R: 'redstone', S: 'stone' },
+    give: { repeater: 1 },
+    needsTable: true,
+  },
+  {
+    id: 'piston',
+    name: 'Piston',
+    pattern: ['PPP', 'SRS', 'SIS'],
+    key: { P: 'planks', S: 'stone', R: 'redstone', I: 'iron_ingot' },
+    give: { piston: 1 },
     needsTable: true,
   },
 ];

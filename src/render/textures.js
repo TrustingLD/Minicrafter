@@ -1481,3 +1481,225 @@ export function texChestSide() {
 
   return canvasToTexture(c);
 }
+
+/* ============================================================
+   REDSTONE (Phase 22) : fil (poussière), torche à redstone, levier,
+   bouton, lampe, bloc de redstone, répéteur, piston.
+   ============================================================ */
+
+// Fil de redstone : un chemin sombre/terne à l'arrêt (power=0), de plus en plus
+// vif et incandescent à mesure que `power` (0..15) monte -- même principe que la
+// vraie poussière de redstone (rouge sombre -> rouge/orange vif). Une texture PAR
+// niveau (0..15) plutôt qu'une seule recolorée à la volée : le mesher (Phase 5)
+// suppose une texture fixe par id de bloc, et l'état "puissance" est justement
+// encodé comme un id de bloc différent par niveau (cf. data/blocks.js) -- pas de
+// canal de métadonnées par bloc dans ce moteur (Uint8Array 1 octet/bloc).
+export function texRedstoneWire(power) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  const t = power / 15;
+  // interpolation sombre (t=0) -> vif (t=1)
+  const lerp = (a, b) => Math.round(a + (b - a) * t);
+  const r = lerp(60, 255);
+  const g = lerp(6, 60);
+  const b = lerp(6, 10);
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  // croix centrale (rappel visuel du "+" que dessine le fil dans le vrai jeu)
+  ctx.fillStyle = `rgb(${lerp(90, 255)}, ${lerp(10, 130)}, ${lerp(10, 20)})`;
+  ctx.fillRect(TEX_SIZE * 0.3, 2, TEX_SIZE * 0.4, TEX_SIZE - 4);
+  ctx.fillRect(2, TEX_SIZE * 0.3, TEX_SIZE - 4, TEX_SIZE * 0.4);
+  if (power > 0) {
+    // lueur centrale, seulement si alimenté
+    ctx.fillStyle = `rgba(255, ${lerp(120, 220)}, 80, ${0.25 + 0.5 * t})`;
+    ctx.beginPath();
+    ctx.arc(TEX_SIZE / 2, TEX_SIZE / 2, 3 + 3 * t, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  speckle(ctx, [`rgba(0,0,0,0.25)`], 10);
+  return canvasToTexture(c);
+}
+
+// Manche de la torche à redstone : gris pierre (contrairement à la torche normale,
+// en bois) -- partagé par les 2 états (allumée/éteinte), seule la tête (flamme) change.
+export function texRedstoneTorchStick() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.fillStyle = '#8d8d8d';
+  ctx.fillRect(TEX_SIZE * 0.35, TEX_SIZE * 0.15, TEX_SIZE * 0.3, TEX_SIZE * 0.85);
+  speckle(ctx, ['#6f6f6f', '#a8a8a8'], 14, 1);
+  return canvasToTexture(c);
+}
+
+// Tête (flamme) de la torche à redstone : rouge vif et lumineuse allumée, terne et
+// sombre éteinte -- c'est ce contraste qui rend l'inversion (Phase 22, redstone.js)
+// lisible d'un coup d'œil, comme la vraie torche de redstone.
+export function texRedstoneTorchFlame(on) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.fillStyle = '#8d8d8d';
+  ctx.fillRect(TEX_SIZE * 0.35, TEX_SIZE * 0.15, TEX_SIZE * 0.3, TEX_SIZE * 0.85);
+  ctx.fillStyle = on ? '#ff2e19' : '#4a1610';
+  ctx.beginPath();
+  ctx.arc(TEX_SIZE / 2, TEX_SIZE * 0.22, TEX_SIZE * 0.16, 0, Math.PI * 2);
+  ctx.fill();
+  if (on) {
+    ctx.fillStyle = 'rgba(255, 200, 120, 0.6)';
+    ctx.beginPath();
+    ctx.arc(TEX_SIZE / 2, TEX_SIZE * 0.22, TEX_SIZE * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return canvasToTexture(c);
+}
+
+// Levier : petite base de pierre + le manche, couché à plat (éteint) ou dressé
+// (allumé) -- ici simplifié en un seul aplat texturé (le vrai relief 3D vient du
+// `shape` réduit défini dans data/blocks.js, pas de la texture).
+export function texLever(on) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.fillStyle = '#8d8d8d';
+  ctx.fillRect(TEX_SIZE * 0.15, TEX_SIZE * 0.72, TEX_SIZE * 0.7, TEX_SIZE * 0.26);
+  speckle(ctx, ['#6f6f6f'], 8, 1);
+  ctx.fillStyle = '#4a3420';
+  ctx.fillRect(TEX_SIZE * 0.44, on ? TEX_SIZE * 0.08 : TEX_SIZE * 0.4, TEX_SIZE * 0.12, TEX_SIZE * 0.62);
+  ctx.fillStyle = on ? '#ff2e19' : '#7a7a7a';
+  ctx.fillRect(TEX_SIZE * 0.4, on ? TEX_SIZE * 0.04 : TEX_SIZE * 0.36, TEX_SIZE * 0.2, TEX_SIZE * 0.1);
+  return canvasToTexture(c);
+}
+
+// Bouton (pierre) : petite plaquette qui ressort du support quand relâché (éteint),
+// s'enfonce/s'illumine brièvement une fois pressée (allumé) -- cf. BUTTON_TIME
+// dans redstone.js pour le minutage du relâchement automatique.
+export function texButton(on) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#9c9c9c';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#8c8c8c', '#adadad'], 8, 1.5, 3);
+  ctx.fillStyle = on ? '#ff5533' : '#6b6b6b';
+  ctx.fillRect(TEX_SIZE * 0.28, TEX_SIZE * 0.36, TEX_SIZE * 0.44, TEX_SIZE * 0.28);
+  return canvasToTexture(c);
+}
+
+// Lampe à redstone : globe terne (éteinte) ou jaune incandescent (allumée) --
+// `emitsLight` (data/blocks.js) ne s'applique qu'à la variante allumée.
+export function texRedstoneLamp(on) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = on ? '#f4c542' : '#8a7a52';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.strokeStyle = on ? '#c99a1e' : '#5c5136';
+  ctx.lineWidth = 1;
+  for (let i = 4; i < TEX_SIZE; i += 6) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, TEX_SIZE);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(TEX_SIZE, i);
+    ctx.stroke();
+  }
+  if (on) {
+    ctx.fillStyle = 'rgba(255, 240, 180, 0.5)';
+    ctx.beginPath();
+    ctx.arc(TEX_SIZE / 2, TEX_SIZE / 2, TEX_SIZE * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return canvasToTexture(c);
+}
+
+// Bloc de redstone : source constante (toujours allumée), rouge profond et
+// incandescent -- l'équivalent "je n'ai pas besoin d'un levier pour tester mon
+// circuit" du vrai jeu.
+export function texRedstoneBlock() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#a81f10';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#8f190c', '#c93a1e'], 14, 1.5, 3.5);
+  speckle(ctx, ['#ff6a3d'], 20);
+  ctx.strokeStyle = '#5c0f06';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(0.75, 0.75, TEX_SIZE - 1.5, TEX_SIZE - 1.5);
+  return canvasToTexture(c);
+}
+
+// Dessus du répéteur : 2 "torches" (points) sur une plaque de pierre, la paire la
+// plus proche du bord `facing` représentant la sortie -- la flèche donne le sens
+// de propagation en un coup d'œil, comme les rails/flèches du vrai répéteur.
+// `facing` = direction de sortie du signal (cf. redstone.js FACING_DELTA).
+export function texRepeaterTop(facing, on) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#9c9c9c';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#8c8c8c', '#adadad'], 6, 1.5, 3);
+  const dot = (cx, cy) => {
+    ctx.fillStyle = on ? '#ff2e19' : '#5c5c5c';
+    ctx.beginPath();
+    ctx.arc(cx, cy, TEX_SIZE * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  const mid = TEX_SIZE / 2;
+  const near = TEX_SIZE * 0.22,
+    far = TEX_SIZE * 0.78;
+  // point "entrée" toujours au centre, point "sortie" décalé vers `facing`
+  dot(mid, mid);
+  if (facing === 'north') dot(mid, near);
+  else if (facing === 'south') dot(mid, far);
+  else if (facing === 'east') dot(far, mid);
+  else dot(near, mid);
+  // flèche fine dans l'axe de propagation
+  ctx.strokeStyle = on ? '#ff6a4d' : '#707070';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (facing === 'north') {
+    ctx.moveTo(mid, far);
+    ctx.lineTo(mid, near);
+  } else if (facing === 'south') {
+    ctx.moveTo(mid, near);
+    ctx.lineTo(mid, far);
+  } else if (facing === 'east') {
+    ctx.moveTo(near, mid);
+    ctx.lineTo(far, mid);
+  } else {
+    ctx.moveTo(far, mid);
+    ctx.lineTo(near, mid);
+  }
+  ctx.stroke();
+  return canvasToTexture(c);
+}
+
+// Piston : dessus métallique clair (la face du "vérin"), côtés en bois/pierre
+// composite -- même texture réutilisée sur les 4 orientations ET sur la tête
+// mobile (cf. data/blocks.js piston_base_*/piston_head_* : l'orientation change
+// le comportement, pas l'apparence -- simplification assumée, cf. commentaire
+// dédié dans blocks.js).
+export function texPistonTop() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#b9b09a';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  speckle(ctx, ['#a39a84', '#cfc6b0'], 20);
+  ctx.strokeStyle = '#5c5540';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, TEX_SIZE - 2, TEX_SIZE - 2);
+  ctx.fillStyle = '#6b6450';
+  ctx.fillRect(TEX_SIZE * 0.4, TEX_SIZE * 0.4, TEX_SIZE * 0.2, TEX_SIZE * 0.2);
+  return canvasToTexture(c);
+}
+export function texPistonSide() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8a7a56';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#786a49', '#9c8c63'], 10, 1.5, 3);
+  ctx.fillStyle = '#b9b09a';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE * 0.18);
+  return canvasToTexture(c);
+}

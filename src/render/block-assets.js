@@ -185,7 +185,22 @@ export function createBlockAssets() {
     // de texPlanks (#daa44c/#e2b261) et texStone (#8e8e8e/#7c7c7c) pour rester
     // cohérent avec la texture du bloc réel, arêtes plus sombres pour le relief.
     tStairsWoodIcon = tex.texStairsIcon('#daa44c', '#e2b261', '#59300e'),
-    tStairsStoneIcon = tex.texStairsIcon('#8e8e8e', '#9d9d9d', '#4a4a4a');
+    tStairsStoneIcon = tex.texStairsIcon('#8e8e8e', '#9d9d9d', '#4a4a4a'),
+    // Redstone (Phase 22) : icônes hotbar/inventaire + rendu "tenu en main"/"au
+    // sol". `redstone` (poussière), `redstone_torch`, `lever`, `button`,
+    // `repeater` restent des icônes plates (comme la torche/le bâtonnet
+    // au-dessus) -- ce ne sont pas de vrais cubes en jeu. `redstone_lamp` et
+    // `piston` SONT de vrais cubes pleins, donc ont aussi une entrée dans
+    // `materials`/`iconFaces3D` plus bas pour un rendu 3D correct.
+    tRedstoneWireIcon = tex.texRedstoneWire(15), // pleine puissance -- plus lisible en icône qu'à 0
+    tRedstoneTorchIcon = tex.texRedstoneTorchFlame(true),
+    tLeverIcon = tex.texLever(false),
+    tButtonIcon = tex.texButton(false),
+    tRepeaterIcon = tex.texRepeaterTop('south', false),
+    tRedstoneLamp = tex.texRedstoneLamp(false),
+    tRedstoneBlockTex = tex.texRedstoneBlock(),
+    tPistonTop = tex.texPistonTop(),
+    tPistonSide = tex.texPistonSide();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -236,6 +251,68 @@ export function createBlockAssets() {
       mat(tChestTop),
       mat(tChestSide),
       mat(tChestSide),
+    ],
+    // Redstone (Phase 22) : même principe que `torch` plus haut -- une seule
+    // texture reprise sur les 6 faces pour l'aperçu tenu en main/lâché au sol,
+    // même pour les items dont le VRAI bloc en jeu a une forme réduite (fil,
+    // torche, levier, bouton, répéteur ne sont pas de vrais cubes une fois
+    // posés, cf. leur `shape` dans data/blocks.js -- seul cet aperçu l'est).
+    redstone: [
+      mat(tRedstoneWireIcon),
+      mat(tRedstoneWireIcon),
+      mat(tRedstoneWireIcon),
+      mat(tRedstoneWireIcon),
+      mat(tRedstoneWireIcon),
+      mat(tRedstoneWireIcon),
+    ],
+    redstone_torch: [
+      mat(tRedstoneTorchIcon),
+      mat(tRedstoneTorchIcon),
+      mat(tRedstoneTorchIcon),
+      mat(tRedstoneTorchIcon),
+      mat(tRedstoneTorchIcon),
+      mat(tRedstoneTorchIcon),
+    ],
+    lever: [mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon)],
+    button: [
+      mat(tButtonIcon),
+      mat(tButtonIcon),
+      mat(tButtonIcon),
+      mat(tButtonIcon),
+      mat(tButtonIcon),
+      mat(tButtonIcon),
+    ],
+    repeater: [
+      mat(tRepeaterIcon),
+      mat(tRepeaterIcon),
+      mat(tRepeaterIcon),
+      mat(tRepeaterIcon),
+      mat(tRepeaterIcon),
+      mat(tRepeaterIcon),
+    ],
+    redstone_lamp: [
+      mat(tRedstoneLamp),
+      mat(tRedstoneLamp),
+      mat(tRedstoneLamp),
+      mat(tRedstoneLamp),
+      mat(tRedstoneLamp),
+      mat(tRedstoneLamp),
+    ],
+    redstone_block: [
+      mat(tRedstoneBlockTex),
+      mat(tRedstoneBlockTex),
+      mat(tRedstoneBlockTex),
+      mat(tRedstoneBlockTex),
+      mat(tRedstoneBlockTex),
+      mat(tRedstoneBlockTex),
+    ],
+    piston: [
+      mat(tPistonSide),
+      mat(tPistonSide),
+      mat(tPistonTop),
+      mat(tPistonTop),
+      mat(tPistonSide),
+      mat(tPistonSide),
     ],
     sand: [mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand)],
     sandstone: [
@@ -488,6 +565,22 @@ export function createBlockAssets() {
         return tGoldenApple.image;
       case 'stick':
         return null; // drawn separately
+      case 'redstone':
+        return tRedstoneWireIcon.image;
+      case 'redstone_torch':
+        return tRedstoneTorchIcon.image;
+      case 'lever':
+        return tLeverIcon.image;
+      case 'button':
+        return tButtonIcon.image;
+      case 'repeater':
+        return tRepeaterIcon.image;
+      case 'redstone_lamp':
+        return tRedstoneLamp.image;
+      case 'redstone_block':
+        return tRedstoneBlockTex.image;
+      case 'piston':
+        return tPistonTop.image;
       default:
         return tStone.image;
     }
@@ -544,6 +637,19 @@ export function createBlockAssets() {
         return { top: tPlanks.image, left: tPlanks.image, right: tPlanks.image, shape: 'stairs' };
       case 'stairs_stone':
         return { top: tStone.image, left: tStone.image, right: tStone.image, shape: 'stairs' };
+      // Redstone (Phase 22) : seuls les 3 VRAIS cubes pleins ont droit à l'aperçu
+      // 3D CSS -- fil/torche/levier/bouton/répéteur retombent sur iconCanvas
+      // (icône plate) ci-dessus, comme la torche normale/le bâtonnet.
+      case 'redstone_lamp':
+        return { top: tRedstoneLamp.image, left: tRedstoneLamp.image, right: tRedstoneLamp.image };
+      case 'redstone_block':
+        return {
+          top: tRedstoneBlockTex.image,
+          left: tRedstoneBlockTex.image,
+          right: tRedstoneBlockTex.image,
+        };
+      case 'piston':
+        return { top: tPistonTop.image, left: tPistonSide.image, right: tPistonSide.image };
       default:
         return null;
     }

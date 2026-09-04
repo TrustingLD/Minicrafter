@@ -46,7 +46,32 @@ const TEXTURE_FN = {
   glass: tex.texGlass,
   chestTop: tex.texChestTop,
   chestSide: tex.texChestSide,
+  redstoneTorchStick: tex.texRedstoneTorchStick,
+  redstoneTorchFlameOff: () => tex.texRedstoneTorchFlame(false),
+  redstoneTorchFlameOn: () => tex.texRedstoneTorchFlame(true),
+  leverOff: () => tex.texLever(false),
+  leverOn: () => tex.texLever(true),
+  buttonOff: () => tex.texButton(false),
+  buttonOn: () => tex.texButton(true),
+  redstoneLampOff: () => tex.texRedstoneLamp(false),
+  redstoneLampOn: () => tex.texRedstoneLamp(true),
+  redstoneBlock: tex.texRedstoneBlock,
+  pistonTop: tex.texPistonTop,
+  pistonSide: tex.texPistonSide,
 };
+// Fil de redstone (Phase 22) : 16 textures, une par niveau de puissance 0..15 --
+// cf. le commentaire de texRedstoneWire (render/textures.js) sur pourquoi une
+// texture par niveau plutôt qu'une recoloration dynamique.
+for (let p = 0; p <= 15; p++) {
+  TEXTURE_FN[`redstoneWire${p}`] = () => tex.texRedstoneWire(p);
+}
+// Dessus du répéteur (Phase 22) : 4 orientations x 2 états (allumé/éteint) --
+// cf. texRepeaterTop. bas/côtés réutilisent la texture 'stone' déjà dans l'atlas.
+for (const facing of ['north', 'south', 'east', 'west']) {
+  for (const on of [false, true]) {
+    TEXTURE_FN[`repeaterTop_${facing}_${on ? 'on' : 'off'}`] = () => tex.texRepeaterTop(facing, on);
+  }
+}
 
 // construit l'atlas + la table d'UV. Appelé une seule fois au boot.
 export function buildBlockAtlas() {
@@ -95,16 +120,23 @@ export function buildBlockAtlas() {
   // affichaient la neige, l'herbe affichait le minerai de fer).
   texture.flipY = false;
 
-  // blockId -> { top, bottom, side } chacun [u0,v0,u1,v1]
+  // blockId -> { top, bottom, side, front?, frontNormal? } chacun [u0,v0,u1,v1]
+  // (`front`/`frontNormal` : uniquement les blocs orientés, ex. le piston --
+  // cf. data/blocks.js + le commentaire de faceSlot, render/mesher.js).
   const uvByBlockId = {};
   for (const name in BLOCK_TYPES) {
     const b = BLOCK_TYPES[name];
     const t = b.textures;
-    uvByBlockId[b.id] = {
+    const entry = {
       top: rectByKey[t.all || t.top],
       bottom: rectByKey[t.all || t.bottom],
       side: rectByKey[t.all || t.side],
     };
+    if (t.front && b.frontNormal) {
+      entry.front = rectByKey[t.front];
+      entry.frontNormal = b.frontNormal;
+    }
+    uvByBlockId[b.id] = entry;
   }
 
   return { texture, uvByBlockId };

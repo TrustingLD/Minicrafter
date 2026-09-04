@@ -10,7 +10,15 @@ import { parseCommand } from './core/commands.js';
 import { COMMANDS } from './data/commands.js';
 import { createBlockAssets } from './render/block-assets.js';
 import { texCrackStage } from './render/textures.js';
-import { BLOCK_TYPES, TOOL_FOR_BLOCK, STAIRS_VARIANTS } from './data/blocks.js';
+import {
+  BLOCK_TYPES,
+  TOOL_FOR_BLOCK,
+  STAIRS_VARIANTS,
+  REPEATER_VARIANTS,
+  PISTON_BASE_VARIANTS,
+  PISTON_HEAD_VARIANTS,
+} from './data/blocks.js';
+import { createRedstoneSystem, isRedstoneRelevant, facingDelta } from './world/redstone.js';
 import {
   ITEM_NAMES,
   RECIPES,
@@ -560,6 +568,18 @@ const itemSystem = createItemEntitySystem({
   collidesAtBox: worldApi.collidesAtBox,
   playSound: sfx.playSound,
 });
+// Redstone (Phase 22) : `toggleDoor` est une function declaration définie plus
+// bas dans ce fichier -- hissée (hoisting) au sommet de son scope module comme
+// toute déclaration `function`, donc valide à référencer ici même si le texte
+// de sa définition vient plus loin. spawnDrop réutilise itemSystem, déjà prêt
+// juste au-dessus.
+const redstone = createRedstoneSystem({
+  getBlock: worldApi.getBlock,
+  setBlock: worldApi.setBlock,
+  spawnDrop: (x, y, z, item) => itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, item, 1),
+  toggleDoor: (x, y, z, type) => toggleDoor(x, y, z, type),
+});
+
 // appelé par itemSystem.update() quand une entité au sol est à portée de ramassage ;
 // retourne la quantité réellement absorbée (l'inventaire peut être plein).
 function pickupItem(item, count) {
@@ -1322,6 +1342,18 @@ function breakBlockAt(x, y, z, type) {
     breakDoor(x, y, z, type);
     return;
   }
+  // Casser la base d'un piston étendu doit aussi retirer sa tête (Phase 22) --
+  // sinon un bras "orphelin" reste planté dans le décor sans plus aucun bloc
+  // pour le justifier, cf. breakDoor ci-dessus pour le même principe (2
+  // cellules liées, une seule casse déclenchée par le joueur).
+  if (type.startsWith('piston_base_')) {
+    const facing = type.split('_')[2];
+    const [hdx, hdy, hdz] = facingDelta(facing);
+    if (worldApi.getBlock(x + hdx, y + hdy, z + hdz) === PISTON_HEAD_VARIANTS[facing]) {
+      worldApi.setBlock(x + hdx, y + hdy, z + hdz, null);
+      redstone.notify(x + hdx, y + hdy, z + hdz, false);
+    }
+  }
   const multiplier = hasRightToolFor(type) ? 2 : 1;
   const drops = BLOCK_TYPES[type]?.drops || [];
   drops.forEach(({ item, min, max, chance }) => {
@@ -1332,6 +1364,7 @@ function breakBlockAt(x, y, z, type) {
     if (count > 0) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, item, count);
   });
   worldApi.setBlock(x, y, z, null);
+  redstone.notify(x, y, z, false);
   particleSystem.burst(x + 0.5, y + 0.5, z + 0.5, type, 10);
   if (type === 'furnace') {
     const state = blockEntities.remove(x, y, z);
@@ -1403,9 +1436,11 @@ function breakDoor(x, y, z, type) {
   const otherY = isBottom ? y + 1 : y - 1;
   const otherType = worldApi.getBlock(x, otherY, z);
   worldApi.setBlock(x, y, z, null);
+  redstone.notify(x, y, z, false);
   particleSystem.burst(x + 0.5, y + 0.5, z + 0.5, type, 10);
   if (otherType && otherType.startsWith('door_')) {
     worldApi.setBlock(x, otherY, z, null);
+    redstone.notify(x, otherY, z, false);
     particleSystem.burst(x + 0.5, otherY + 0.5, z + 0.5, otherType, 10);
   }
   itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, 'door', 1);
@@ -1705,6 +1740,8 @@ function tryPlaceDoor() {
 
   worldApi.setBlock(x, y, z, `door_bottom_${axis}_closed`);
   worldApi.setBlock(x, y + 1, z, `door_top_${axis}_closed`);
+  redstone.notify(x, y, z, true);
+  redstone.notify(x, y + 1, z, true);
   triggerPlaceFeedback(x, y, z);
   triggerHandSwing();
   removeItem(slots, 'door', 1);
@@ -1733,6 +1770,158 @@ function toggleDoor(x, y, z, type) {
   sfx.playSound('door');
 }
 
+/* ---------- Pose des mécanismes de redstone (Phase 22) ---------- */
+// Un support plein est requis en dessous (posés "au sol", comme la vraie
+// torche/le vrai levier/le vrai bouton/le vrai fil) -- sinon ils se
+// détacheraient tout seuls au tic suivant (cf. world/redstone.js step()),
+// autant refuser la pose plutôt que de laisser l'item retomber aussitôt.
+function hasFloorSupport(x, y, z) {
+  const below = worldApi.getBlock(x, y - 1, z);
+  if (!below) return false;
+  const b = BLOCK_TYPES[below];
+  return !!b && b.solid !== false && !b.liquid;
+}
+
+// direction regardée, arrondie à l'axe N/S/E/O dominant -- même calcul que
+// tryPlaceStairs/tryPlaceBed, réutilisé ici pour l'orientation du répéteur/
+// piston (cf. FACINGS/facingDelta dans world/redstone.js pour la convention).
+function lookFacing() {
+  const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, yaw, 0, 'YXZ'));
+  if (Math.abs(dir.x) > Math.abs(dir.z)) return dir.x > 0 ? 'east' : 'west';
+  return dir.z > 0 ? 'south' : 'north';
+}
+
+// Sens de poussée du piston : à l'OPPOSÉ du bloc contre lequel on le pose (comme
+// le vrai jeu) -- pas la direction regardée. `blockHit.block` = le bloc plein
+// visé, `blockHit.place` = la case vide adjacente où le piston atterrit ; le
+// vecteur de l'un vers l'autre EST la face cliquée, donc le sens dans lequel le
+// piston doit pousser pour "continuer tout droit" loin de cette face.
+// Repli sur lookFacing() uniquement si on a posé sur le dessus/dessous d'un
+// bloc (dy != 0) : le piston ne gère que les 4 orientations horizontales, donc
+// pas de référence utilisable dans ce cas précis.
+function pushFacingFromClick(blockHit) {
+  const dx = blockHit.place.x - blockHit.block.x;
+  const dy = blockHit.place.y - blockHit.block.y;
+  const dz = blockHit.place.z - blockHit.block.z;
+  if (dy !== 0) return lookFacing();
+  if (dx === 1) return 'east';
+  if (dx === -1) return 'west';
+  if (dz === 1) return 'south';
+  if (dz === -1) return 'north';
+  return lookFacing();
+}
+
+function insidePlayerCell(x, y, z) {
+  const px = Math.floor(player.pos.x),
+    py0 = Math.floor(player.pos.y),
+    py1 = Math.floor(player.pos.y + player.height),
+    pz = Math.floor(player.pos.z);
+  return x === px && z === pz && (y === py0 || y === py1);
+}
+
+// Poser un fil/une torche/un levier/un bouton : 1 item -> 1 bloc précis (l'état
+// de départ, jamais "l'item lui-même" puisqu'aucun de ces items ne correspond à
+// un id de bloc direct -- cf. le commentaire en tête de data/blocks.js §REDSTONE).
+function tryPlaceFloorGadget(item, blockType) {
+  if (countOf(slots, item) <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place;
+  if (insidePlayerCell(x, y, z)) return;
+  if (worldApi.getBlock(x, y, z) || !hasFloorSupport(x, y, z)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  worldApi.setBlock(x, y, z, blockType);
+  redstone.notify(x, y, z, true);
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, item, 1);
+  bus.emit('inventory:changed');
+  sfx.playSound('place');
+}
+function tryPlaceRedstoneWire() {
+  tryPlaceFloorGadget('redstone', 'redstone_wire_0');
+}
+
+// Poser une lampe : comme un bloc plein normal (n'importe quelle face, pas
+// besoin d'un support en dessous), juste sous un nom d'item différent du bloc.
+function tryPlaceSimpleAs(item, blockType) {
+  if (countOf(slots, item) <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place;
+  if (insidePlayerCell(x, y, z)) return;
+  if (worldApi.getBlock(x, y, z)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  worldApi.setBlock(x, y, z, blockType);
+  redstone.notify(x, y, z, true);
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, item, 1);
+  bus.emit('inventory:changed');
+  sfx.playSound('place');
+}
+
+// Poser un répéteur : posé au sol comme le fil, mais avec une orientation
+// (sens de sortie du signal) prise sur la direction regardée -- comme
+// l'escalier, sauf qu'ici `facing` EST directement la direction regardée
+// (pas son inverse) : le signal sort "devant soi" au moment de la pose.
+function tryPlaceRepeater() {
+  if (countOf(slots, 'repeater') <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place;
+  if (insidePlayerCell(x, y, z)) return;
+  if (worldApi.getBlock(x, y, z) || !hasFloorSupport(x, y, z)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  worldApi.setBlock(x, y, z, REPEATER_VARIANTS.off[lookFacing()]);
+  redstone.notify(x, y, z, true);
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, 'repeater', 1);
+  bus.emit('inventory:changed');
+  sfx.playSound('place');
+}
+
+// Poser un piston : comme la lampe (n'importe quelle face, pas de support
+// requis), avec la même orientation "sens du regard" que le répéteur --
+// `facing` est le sens dans lequel il poussera (cf. extendPiston, redstone.js).
+function tryPlacePiston() {
+  if (countOf(slots, 'piston') <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place;
+  if (insidePlayerCell(x, y, z)) return;
+  if (worldApi.getBlock(x, y, z)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  worldApi.setBlock(x, y, z, PISTON_BASE_VARIANTS[pushFacingFromClick(blockHit)]);
+  redstone.notify(x, y, z, true);
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, 'piston', 1);
+  bus.emit('inventory:changed');
+  sfx.playSound('place');
+}
+
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
 function performSecondaryAction() {
   if (tryShear()) return;
@@ -1748,6 +1937,28 @@ function performSecondaryAction() {
   if (targetedType && targetedType.startsWith('door_')) {
     toggleDoor(tx, ty, tz, targetedType);
     return;
+  }
+  // Levier/bouton (Phase 22) : clic droit bascule/presse, comme le vrai jeu --
+  // interceptés avant la table/le fourneau/le coffre puisqu'ils partagent le
+  // même geste (clic droit sur le bloc visé) mais n'ouvrent aucune interface.
+  if (targetedType === 'lever_off' || targetedType === 'lever_on') {
+    const wanted = targetedType === 'lever_off' ? 'lever_on' : 'lever_off';
+    worldApi.setBlock(tx, ty, tz, wanted);
+    redstone.notify(tx, ty, tz, true);
+    triggerHandSwing();
+    sfx.playSound('door'); // pas de sfx dédié -- le clic de porte fait un bruit de mécanisme correct
+    return;
+  }
+  if (targetedType === 'button_off') {
+    worldApi.setBlock(tx, ty, tz, 'button_on');
+    redstone.notify(tx, ty, tz, true);
+    redstone.pressButton(tx, ty, tz);
+    triggerHandSwing();
+    sfx.playSound('door');
+    return;
+  }
+  if (targetedType === 'button_on') {
+    return; // déjà pressé, le minuteur (redstone.js) le relâchera tout seul
   }
   if (targetedType === 'crafting_table') {
     openCraft();
@@ -1773,6 +1984,37 @@ function performSecondaryAction() {
     tryPlaceDoor();
     return;
   }
+  // Redstone (Phase 22) : comme le lit/l'escalier/la porte plus haut, ces items
+  // n'ont pas de bloc "1 pour 1" (l'id réel dépend de l'état/l'orientation), donc
+  // interceptés ici plutôt que de passer par le placement générique plus bas.
+  if (selectedBlock === 'redstone') {
+    tryPlaceRedstoneWire();
+    return;
+  }
+  if (selectedBlock === 'redstone_torch') {
+    tryPlaceFloorGadget('redstone_torch', 'redstone_torch_on');
+    return;
+  }
+  if (selectedBlock === 'lever') {
+    tryPlaceFloorGadget('lever', 'lever_off');
+    return;
+  }
+  if (selectedBlock === 'button') {
+    tryPlaceFloorGadget('button', 'button_off');
+    return;
+  }
+  if (selectedBlock === 'redstone_lamp') {
+    tryPlaceSimpleAs('redstone_lamp', 'redstone_lamp_off');
+    return;
+  }
+  if (selectedBlock === 'repeater') {
+    tryPlaceRepeater();
+    return;
+  }
+  if (selectedBlock === 'piston') {
+    tryPlacePiston();
+    return;
+  }
   if (NON_PLACEABLE.has(selectedBlock)) {
     hotbarUI.flashEmptySlot(selectedIndex);
     return;
@@ -1788,6 +2030,7 @@ function performSecondaryAction() {
     pz = Math.floor(player.pos.z);
   if (!(x === px && z === pz && (y === py0 || y === py1)) && !worldApi.getBlock(x, y, z)) {
     worldApi.setBlock(x, y, z, selectedBlock);
+    if (isRedstoneRelevant(selectedBlock)) redstone.notify(x, y, z, true); // ex: bloc de redstone
     triggerPlaceFeedback(x, y, z);
     triggerHandSwing(); // un seul coup de main au moment de poser, pas de mouvement continu
     removeItem(slots, selectedBlock, 1);
@@ -2056,6 +2299,7 @@ function animate() {
     );
 
   blockEntities.update(dt, SMELTING, FUELS);
+  redstone.update(dt);
   if (furnaceOpen) renderFurnace();
   if (chestOpen) renderChest();
 

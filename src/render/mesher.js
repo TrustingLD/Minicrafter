@@ -74,7 +74,15 @@ const FACES = [
     ],
   },
 ];
-function faceSlot(nx, ny) {
+// `uv` (optionnel) : table UV du bloc courant -- si elle porte `frontNormal`
+// (bloc orienté, ex: le piston, cf. data/blocks.js) ET que la face normale
+// (nx,ny,nz) correspond exactement à cette direction, on utilise `front` au
+// lieu de `side` -- c'est ce qui rend l'orientation du piston VISIBLE (avant
+// cette extension, les 4 faces latérales étaient togours identiques quelle
+// que soit l'orientation posée, cf. son commentaire dans blocks.js).
+function faceSlot(nx, ny, nz, uv) {
+  if (uv && uv.frontNormal && nx === uv.frontNormal[0] && ny === uv.frontNormal[1] && nz === uv.frontNormal[2])
+    return 'front';
   if (ny === 1) return 'top';
   if (ny === -1) return 'bottom';
   return 'side';
@@ -360,7 +368,7 @@ export function meshChunk(data, uvByBlockId, lightData, liquidIds, shapeById, tr
           const neighborId = get(x + nx, y + ny, z + nz);
           if (transparents.has(id) && neighborId === id) continue;
           if (!shape && isOpaque(x + nx, y + ny, z + nz)) continue; // face cachée
-          const rect = uv[faceSlot(nx, ny)];
+          const rect = uv[faceSlot(nx, ny, nz, uv)] || uv.side;
           const base = vertCount;
           // lumière plate par face (pas de lissage entre coins) : le niveau de la
           // cellule voisine exposée, celle-là même qui a fait accepter la face.
