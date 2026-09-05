@@ -70,6 +70,14 @@ export const ITEM_NAMES = {
   redstone_block: 'Bloc de redstone',
   repeater: 'Répéteur',
   piston: 'Piston',
+  // Seau (Phase 23) : 3 états séparés (comme la torche à redstone plus haut,
+  // aucun canal de métadonnées sur les ITEMS non plus dans ce moteur -- juste
+  // un inventaire de piles item+quantité, cf. entities/inventory.js) --
+  // "seau vide" et "seau plein d'eau/de lave" sont 3 items bien distincts,
+  // jamais le même item avec un état caché.
+  bucket: 'Seau',
+  water_bucket: "Seau d'eau",
+  lava_bucket: 'Seau de lave',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
@@ -486,6 +494,18 @@ export const RECIPES = [
     pattern: ['PPP', 'SRS', 'SIS'],
     key: { P: 'planks', S: 'stone', R: 'redstone', I: 'iron_ingot' },
     give: { piston: 1 },
+    needsTable: true,
+  },
+  // Seau (Phase 23) : seul le seau VIDE se craft -- un seau d'eau/de lave
+  // s'obtient uniquement en remplissant un seau vide sur le liquide
+  // correspondant (cf. performSecondaryAction, main.js), jamais au craft,
+  // comme le vrai jeu.
+  {
+    id: 'bucket',
+    name: 'Seau',
+    pattern: ['I.I', '.I.'],
+    key: { I: 'iron_ingot' },
+    give: { bucket: 1 },
     needsTable: true,
   },
 ];

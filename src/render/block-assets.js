@@ -200,7 +200,12 @@ export function createBlockAssets() {
     tRedstoneLamp = tex.texRedstoneLamp(false),
     tRedstoneBlockTex = tex.texRedstoneBlock(),
     tPistonTop = tex.texPistonTop(),
-    tPistonSide = tex.texPistonSide();
+    tPistonSide = tex.texPistonSide(),
+    // Seau (Phase 23) : icône PLATE uniquement (comme `stick` ci-dessous) --
+    // c'est un item 2D façon vrai jeu, jamais un cube tenu en main.
+    tBucketEmptyIcon = tex.texBucket(null),
+    tBucketWaterIcon = tex.texBucket('water'),
+    tBucketLavaIcon = tex.texBucket('lava');
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -565,6 +570,12 @@ export function createBlockAssets() {
         return tGoldenApple.image;
       case 'stick':
         return null; // drawn separately
+      case 'bucket':
+        return tBucketEmptyIcon.image;
+      case 'water_bucket':
+        return tBucketWaterIcon.image;
+      case 'lava_bucket':
+        return tBucketLavaIcon.image;
       case 'redstone':
         return tRedstoneWireIcon.image;
       case 'redstone_torch':

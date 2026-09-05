@@ -1922,6 +1922,38 @@ function tryPlacePiston() {
   sfx.playSound('place');
 }
 
+// Verser un seau plein : pose le liquide dans la case vide adjacente visée
+// (mêmes règles que poser un bloc normal, cf. insidePlayerCell plus haut),
+// l'enregistre dans la file d'écoulement (world/world.js enqueueFluidSource)
+// pour qu'il se comporte comme une vraie source qui s'étale -- pas un bloc
+// figé -- puis rend un seau vide. Simplification assumée : contrairement au
+// vrai jeu, verser de l'eau sur de la lave (ou l'inverse) ne crée ni
+// obsidienne ni pierre, les deux liquides s'écoulent juste l'un à côté de
+// l'autre.
+function tryPourBucket(liquidType) {
+  const item = liquidType === 'water' ? 'water_bucket' : 'lava_bucket';
+  if (countOf(slots, item) <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x, y, z } = blockHit.place;
+  if (insidePlayerCell(x, y, z)) return;
+  if (worldApi.getBlock(x, y, z)) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  worldApi.setBlock(x, y, z, liquidType);
+  worldApi.enqueueFluidSource(x, y, z, liquidType);
+  triggerPlaceFeedback(x, y, z);
+  triggerHandSwing();
+  removeItem(slots, item, 1);
+  addItem(slots, 'bucket', 1);
+  bus.emit('inventory:changed');
+  sfx.playSound(liquidType === 'water' ? 'footstepWater' : 'place');
+}
+
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
 function performSecondaryAction() {
   if (tryShear()) return;
@@ -1959,6 +1991,22 @@ function performSecondaryAction() {
   }
   if (targetedType === 'button_on') {
     return; // déjà pressé, le minuteur (redstone.js) le relâchera tout seul
+  }
+  // Seau vide (Phase 23) : clic droit sur de l'eau/de la lave -> se remplit et
+  // retire le liquide visé. Sur n'importe quoi d'autre on NE RETOURNE PAS ici
+  // (pas de `return`) : le clic droit continue normalement plus bas -- ouvrir
+  // un coffre/four/table avec un seau en main doit rester possible, comme le
+  // vrai jeu. Simplification assumée (cf. world/fluid.js) : ce moteur ne
+  // distingue pas source/coulée, donc N'IMPORTE QUELLE case d'eau/lave peut
+  // être ramassée, pas seulement une source "infinie" comme en vanilla.
+  if (selectedBlock === 'bucket' && (targetedType === 'water' || targetedType === 'lava')) {
+    worldApi.setBlock(tx, ty, tz, null);
+    removeItem(slots, 'bucket', 1);
+    addItem(slots, targetedType === 'water' ? 'water_bucket' : 'lava_bucket', 1);
+    bus.emit('inventory:changed');
+    triggerHandSwing();
+    sfx.playSound(targetedType === 'water' ? 'footstepWater' : 'place'); // pas de sfx dédié "seau" -- le clapot d'eau est le plus proche
+    return;
   }
   if (targetedType === 'crafting_table') {
     openCraft();
@@ -2013,6 +2061,17 @@ function performSecondaryAction() {
   }
   if (selectedBlock === 'piston') {
     tryPlacePiston();
+    return;
+  }
+  // Seau plein (Phase 23) : "poser" = verser -- même intercepté ici, hors du
+  // placement générique plus bas, puisque l'item ('water_bucket'/'lava_bucket')
+  // ne correspond à aucun bloc du même nom (cf. commentaire de tryPourBucket).
+  if (selectedBlock === 'water_bucket') {
+    tryPourBucket('water');
+    return;
+  }
+  if (selectedBlock === 'lava_bucket') {
+    tryPourBucket('lava');
     return;
   }
   if (NON_PLACEABLE.has(selectedBlock)) {

@@ -1703,3 +1703,52 @@ export function texPistonSide() {
   ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE * 0.18);
   return canvasToTexture(c);
 }
+
+/* ============================================================
+   SEAU (Phase 23) : icône plate 2D façon vrai jeu (pas un cube tenu en main
+   comme la torche/le levier -- cf. le commentaire dédié dans block-assets.js).
+   `fill` : null (vide), 'water', ou 'lava'.
+   ============================================================ */
+export function texBucket(fill) {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  const s = TEX_SIZE;
+  // contenu (dessiné D'ABORD, sous le bord du seau, pour qu'il déborde un peu
+  // à l'intérieur comme un vrai liquide dans un récipient)
+  if (fill) {
+    ctx.fillStyle = fill === 'water' ? '#3d6fd6' : '#e0601a';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.28, s * 0.42);
+    ctx.lineTo(s * 0.72, s * 0.42);
+    ctx.lineTo(s * 0.62, s * 0.78);
+    ctx.lineTo(s * 0.38, s * 0.78);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = fill === 'water' ? 'rgba(255,255,255,0.35)' : 'rgba(255,220,120,0.4)';
+    ctx.fillRect(s * 0.34, s * 0.46, s * 0.1, s * 0.24);
+  }
+  // corps du seau (métal argenté, forme trapézoïdale -- plus étroit en bas)
+  ctx.strokeStyle = '#cfd3d8';
+  ctx.lineWidth = s * 0.07;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(s * 0.22, s * 0.38);
+  ctx.lineTo(s * 0.32, s * 0.82);
+  ctx.lineTo(s * 0.68, s * 0.82);
+  ctx.lineTo(s * 0.78, s * 0.38);
+  ctx.stroke();
+  ctx.strokeStyle = '#8b9096';
+  ctx.lineWidth = s * 0.045;
+  ctx.beginPath();
+  ctx.moveTo(s * 0.22, s * 0.38);
+  ctx.lineTo(s * 0.78, s * 0.38);
+  ctx.stroke();
+  // anse
+  ctx.strokeStyle = '#4a4d51';
+  ctx.lineWidth = s * 0.045;
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.36, s * 0.22, Math.PI, 0);
+  ctx.stroke();
+  return canvasToTexture(c);
+}

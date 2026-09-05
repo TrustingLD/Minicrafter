@@ -341,6 +341,15 @@ export function createWorld({
     }
   }
 
+  // Seau (Phase 23) : verser un liquide doit le faire se comporter comme une
+  // vraie source qui s'écoule, pas juste un bloc statique posé -- on le
+  // rajoute donc directement à la file active de fluid.js, comme le fait déjà
+  // enqueueFluidNeighbors ci-dessus pour un liquide existant qui découvre de
+  // l'air à côté de lui.
+  function enqueueFluidSource(x, y, z, type) {
+    fluidQueue.push({ x, y, z, type, dist: 0 });
+  }
+
   function setBlock(x, y, z, type) {
     if (y < 0 || y >= CHUNK_Y) return;
     const [cx, cz] = worldToChunk(x, z);
@@ -585,6 +594,7 @@ export function createWorld({
   return {
     getBlock,
     setBlock,
+    enqueueFluidSource,
     isSolid,
     isInLava,
     isInWater,
