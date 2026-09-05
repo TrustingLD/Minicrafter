@@ -58,6 +58,7 @@ const TEXTURE_FN = {
   redstoneBlock: tex.texRedstoneBlock,
   pistonTop: tex.texPistonTop,
   pistonSide: tex.texPistonSide,
+  obsidian: tex.texObsidian,
 };
 // Fil de redstone (Phase 22) : 16 textures, une par niveau de puissance 0..15 --
 // cf. le commentaire de texRedstoneWire (render/textures.js) sur pourquoi une

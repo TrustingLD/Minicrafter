@@ -19,6 +19,7 @@ export const ITEM_NAMES = {
   stone_axe: 'Hache en pierre',
   stone_sword: 'Épée en pierre',
   iron_pickaxe: 'Pioche en fer',
+  diamond_pickaxe: 'Pioche en diamant',
   iron_axe: 'Hache en fer',
   iron_sword: 'Épée en fer',
   coal_ore: 'Minerai de charbon',
@@ -78,6 +79,7 @@ export const ITEM_NAMES = {
   bucket: 'Seau',
   water_bucket: "Seau d'eau",
   lava_bucket: 'Seau de lave',
+  obsidian: 'Obsidienne',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
@@ -100,6 +102,7 @@ export const TOOL_CATEGORY = {
   wood_pickaxe: 'pickaxe',
   stone_pickaxe: 'pickaxe',
   iron_pickaxe: 'pickaxe',
+  diamond_pickaxe: 'pickaxe',
   wood_axe: 'axe',
   stone_axe: 'axe',
   iron_axe: 'axe',
@@ -233,6 +236,20 @@ export const RECIPES = [
     pattern: ['III', '.S.', '.S.'],
     key: { I: 'iron_ingot', S: 'stick' },
     give: { iron_pickaxe: 1 },
+    needsTable: true,
+  },
+  // Pioche en diamant (Phase 24) : seul outil capable d'extraire l'obsidienne
+  // (cf. `requiresTool` sur le bloc, data/blocks.js) -- les autres pioches
+  // (bois/pierre/fer) restent toutes équivalentes entre elles pour tout le
+  // reste (ce moteur ne connaît pas de palier de dureté générique, cf. le
+  // commentaire de hasRightToolFor dans main.js), la diamant est la première
+  // exception à cette règle.
+  {
+    id: 'diamond_pickaxe',
+    name: 'Pioche en diamant',
+    pattern: ['DDD', '.S.', '.S.'],
+    key: { D: 'diamond', S: 'stick' },
+    give: { diamond_pickaxe: 1 },
     needsTable: true,
   },
   {

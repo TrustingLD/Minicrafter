@@ -426,6 +426,31 @@ export function createWorld({
     propagateSkylightColumn(record.data, record.lightData, lx, lz, isOpaqueBlock);
 
     remesh(record);
+
+    // Obsidienne (Phase 24) : contact DIRECT eau/lave -> obsidienne, vérifié à
+    // chaque fois qu'une case devient de l'eau OU de la lave -- que ce soit un
+    // seau versé (main.js) ou l'écoulement naturel (updateFluids ci-dessous,
+    // qui passe par CE même setBlock pour chaque case gagnée). C'est
+    // TOUJOURS la lave qui se change en obsidienne, l'eau survit -- comme le
+    // vrai jeu (simplifié : pas de distinction source/coulée qui donnerait
+    // parfois de la pierre/du cobble à la place, cf. world/fluid.js).
+    if (type === 'water' || type === 'lava') checkObsidianContact(x, y, z, type);
+  }
+
+  // Obsidienne (Phase 24) : contact DIRECT eau/lave -> obsidienne (mêmes 6
+  // directions que FLUID_NEIGHBORS ci-dessus, réutilisées telles quelles).
+  function checkObsidianContact(x, y, z, type) {
+    const other = type === 'water' ? 'lava' : 'water';
+    for (const [dx, dy, dz] of FLUID_NEIGHBORS) {
+      const nx = x + dx,
+        ny = y + dy,
+        nz = z + dz;
+      if (getBlock(nx, ny, nz) === other) {
+        if (type === 'lava') setBlock(x, y, z, 'obsidian');
+        else setBlock(nx, ny, nz, 'obsidian');
+        return; // une conversion suffit ici -- un tic fluide ultérieur retraitera le reste si besoin
+      }
+    }
   }
 
   // appelée au tic (FLUID_TICK_RATE, pas la frame) : avance la file active d'écoulement

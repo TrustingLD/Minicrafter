@@ -136,6 +136,7 @@ export function createBlockAssets() {
     tIronSword = tex.texIronSword(),
     tIronPickaxe = tex.texIronPickaxe(),
     tIronAxe = tex.texIronAxe(),
+    tDiamondPickaxe = tex.texDiamondPickaxe(),
     tSnow = tex.texSnow(),
     tMeat = tex.texMeat(),
     tCookedMeat = tex.texCookedMeat(),
@@ -205,7 +206,8 @@ export function createBlockAssets() {
     // c'est un item 2D façon vrai jeu, jamais un cube tenu en main.
     tBucketEmptyIcon = tex.texBucket(null),
     tBucketWaterIcon = tex.texBucket('water'),
-    tBucketLavaIcon = tex.texBucket('lava');
+    tBucketLavaIcon = tex.texBucket('lava'),
+    tObsidian = tex.texObsidian();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -318,6 +320,16 @@ export function createBlockAssets() {
       mat(tPistonTop),
       mat(tPistonSide),
       mat(tPistonSide),
+    ],
+    // Obsidienne (Phase 24) : bloc 3D normal (cube plein), visible tenu en
+    // main/lâché au sol exactement comme la pierre -- demandé explicitement.
+    obsidian: [
+      mat(tObsidian),
+      mat(tObsidian),
+      mat(tObsidian),
+      mat(tObsidian),
+      mat(tObsidian),
+      mat(tObsidian),
     ],
     sand: [mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand)],
     sandstone: [
@@ -445,6 +457,7 @@ export function createBlockAssets() {
     iron_sword: tIronSword,
     iron_pickaxe: tIronPickaxe,
     iron_axe: tIronAxe,
+    diamond_pickaxe: tDiamondPickaxe,
     // pomme / pomme dorée : réutilise le mécanisme "icône plate tenue en main"
     // (cf. entities/player.js buildHeldItemMesh) déjà utilisé pour les outils --
     // ni un cube (materials[type]) ni un escalier, donc sinon rien ne s'affichait
@@ -550,6 +563,8 @@ export function createBlockAssets() {
         return tIronPickaxe.image;
       case 'iron_axe':
         return tIronAxe.image;
+      case 'diamond_pickaxe':
+        return tDiamondPickaxe.image;
       case 'coal_ore':
         return tCoalOre.image;
       case 'iron_ore':
@@ -592,6 +607,8 @@ export function createBlockAssets() {
         return tRedstoneBlockTex.image;
       case 'piston':
         return tPistonTop.image;
+      case 'obsidian':
+        return tObsidian.image;
       default:
         return tStone.image;
     }
@@ -661,6 +678,8 @@ export function createBlockAssets() {
         };
       case 'piston':
         return { top: tPistonTop.image, left: tPistonSide.image, right: tPistonSide.image };
+      case 'obsidian':
+        return { top: tObsidian.image, left: tObsidian.image, right: tObsidian.image };
       default:
         return null;
     }

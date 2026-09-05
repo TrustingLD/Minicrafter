@@ -1020,6 +1020,26 @@ export const BLOCK_TYPES = {
     textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
     drops: [],
   },
+
+  // Obsidienne (Phase 24) : se forme quand de l'eau touche de la lave (cf.
+  // world/obsidian.js -- même esprit que fluid.js : PURE, `getBlock`/
+  // `setBlock` injectés, appelée depuis le tic de main.js). Extrêmement dure
+  // à la main (`hardness: 240` = 4 min, formule générale hardness/1 sans le
+  // bon outil, cf. breakTimeFor dans main.js) et surtout : `requiresTool`
+  // exige l'item EXACT 'diamond_pickaxe' (pas juste la catégorie "pioche"
+  // comme pour la pierre/le minerai -- cf. hasRightToolFor, main.js) pour
+  // espérer un drop. Avec elle : `toolHardness: 10` court-circuite la
+  // formule /2 habituelle (10s, pas 120s).
+  obsidian: {
+    id: 87,
+    name: 'Obsidienne',
+    tool: 'pickaxe',
+    hardness: 240,
+    toolHardness: 10,
+    requiresTool: 'diamond_pickaxe',
+    textures: { all: 'obsidian' },
+    drops: [{ item: 'obsidian', min: 1, max: 1 }],
+  },
 };
 
 // facing -> id de bloc, pour repeater_/piston_base_/piston_head_ (utilisé par

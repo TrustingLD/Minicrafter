@@ -1320,15 +1320,25 @@ function refreshAimCache() {
 // la donnée ajoutée en Phase 2 sert enfin à quelque chose de visible.
 // hasRightTool compare des CATÉGORIES d'outil ('pickaxe'/'axe'), pas un item précis :
 // n'importe quel tier de pioche (bois/pierre/fer) donne le bonus sur la pierre.
+// EXCEPTION (Phase 24, `requiresTool`) : un bloc peut exiger un item PRÉCIS
+// (l'obsidienne ne cède qu'à la pioche en diamant, cf. data/blocks.js) --
+// dans ce cas la catégorie ne suffit plus, seul cet item exact compte.
 function hasRightToolFor(type) {
+  const required = BLOCK_TYPES[type]?.requiresTool;
+  if (required) return selectedBlock === required && countOf(slots, selectedBlock) > 0;
   const category = TOOL_FOR_BLOCK[type];
   return (
     !!category && TOOL_CATEGORY[selectedBlock] === category && countOf(slots, selectedBlock) > 0
   );
 }
+// `toolHardness` (Phase 24, optionnel) : temps de cassage EXACT avec le bon outil,
+// pour les blocs où la formule générale hardness/2 ne suffit pas (l'obsidienne
+// passe de 240s à la main à 10s à la pioche en diamant, pas 120s) -- les blocs
+// sans ce champ gardent l'ancienne formule /2 inchangée.
 function breakTimeFor(type) {
   const hardness = BLOCK_TYPES[type]?.hardness ?? 1;
-  return hasRightToolFor(type) ? hardness / 2 : hardness;
+  if (!hasRightToolFor(type)) return hardness;
+  return BLOCK_TYPES[type]?.toolHardness ?? hardness / 2;
 }
 // Phase 10 : casser un bloc ne remplit plus l'inventaire directement — il fait
 // apparaître ses `drops` (data/blocks.js) au sol, à ramasser comme n'importe quel
@@ -1354,7 +1364,13 @@ function breakBlockAt(x, y, z, type) {
       redstone.notify(x + hdx, y + hdy, z + hdz, false);
     }
   }
-  const multiplier = hasRightToolFor(type) ? 2 : 1;
+  // `requiresTool` (Phase 24) : contrairement au reste du jeu (bonus x2 avec
+  // le bon OUTIL, x1 sinon -- jamais 0), un bloc qui exige un item PRÉCIS ne
+  // rend RIEN sans lui (l'obsidienne cassée à la main ou avec une pioche en
+  // fer disparaît pour de vrai, aucun item ne tombe) -- comme le vrai jeu.
+  const requiresTool = BLOCK_TYPES[type]?.requiresTool;
+  const rightTool = hasRightToolFor(type);
+  const multiplier = requiresTool ? (rightTool ? 1 : 0) : rightTool ? 2 : 1;
   const drops = BLOCK_TYPES[type]?.drops || [];
   drops.forEach(({ item, min, max, chance }) => {
     // `chance` optionnel (ex: 0.2 pour la pomme des feuilles) : une entrée sans

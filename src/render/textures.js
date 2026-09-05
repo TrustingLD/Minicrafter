@@ -354,6 +354,8 @@ export const texStoneSword = () => texWoodSword('#a3a3a3', '#cccccc');
 export const texIronPickaxe = () => texWoodPickaxe('#ffffff');
 export const texIronAxe = () => texWoodAxe('#ffffff');
 export const texIronSword = () => texWoodSword('#ffffff', '#ffffff');
+// Phase 24 : pioche en diamant -- même forme, tête cyan/turquoise translucide.
+export const texDiamondPickaxe = () => texWoodPickaxe('#5eead4');
 // Neige. L'ancienne version était du blanc pur specké de blanc pur sur des taches
 // blanches : strictement invisible, le bloc rendait comme un aplat. Une surface
 // enneigée se lit par son OMBRE, pas par son blanc — d'où des creux bleutés froids
@@ -1750,5 +1752,25 @@ export function texBucket(fill) {
   ctx.beginPath();
   ctx.arc(s * 0.5, s * 0.36, s * 0.22, Math.PI, 0);
   ctx.stroke();
+  return canvasToTexture(c);
+}
+
+// Obsidienne (Phase 24) : se forme au contact eau/lave (cf. world/obsidian.js).
+// Noir violacé profond avec des reflets vitreux -- extrêmement dense/dure
+// visuellement, à la hauteur de son hardness (240s à la main, cf. blocks.js).
+export function texObsidian() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0d0716';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#1a0f2e', '#150a24'], 10, 1.5, 3.5);
+  // reflets vitreux violets, épars
+  ctx.fillStyle = 'rgba(140, 90, 220, 0.35)';
+  for (let i = 0; i < 8; i++) {
+    const px = Math.random() * TEX_SIZE,
+      py = Math.random() * TEX_SIZE;
+    ctx.fillRect(px, py, 1.5, 1.5);
+  }
+  speckle(ctx, ['rgba(0,0,0,0.4)'], 14);
   return canvasToTexture(c);
 }
