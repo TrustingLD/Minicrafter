@@ -1774,3 +1774,20 @@ export function texObsidian() {
   speckle(ctx, ['rgba(0,0,0,0.4)'], 14);
   return canvasToTexture(c);
 }
+
+// Gravier (Phase 25) : proche de la pierre (même famille visuelle, se trouve
+// aux mêmes endroits) mais teinte plus chaude/brune, et surtout PLEIN de
+// petits points (galets) partout -- contrairement à texStone() qui a peu de
+// taches, ici on en met beaucoup, petites et denses, dans des tons variés
+// (sombre/clair/brun) pour bien lire "amas de cailloux" au premier coup d'œil.
+export function texGravel() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8c8478';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#797266', '#948b7c'], 10, 2, 4);
+  // les fameux "points partout" : beaucoup de petits galets ronds, tons variés
+  blotches(ctx, ['#5c5348', '#6e6558', '#a89d8a', '#3f3931', '#b8ada0'], 46, 0.6, 1.6);
+  speckle(ctx, ['#2e2a24', '#c7bcac'], 40, 1);
+  return canvasToTexture(c);
+}

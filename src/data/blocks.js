@@ -1040,6 +1040,19 @@ export const BLOCK_TYPES = {
     textures: { all: 'obsidian' },
     drops: [{ item: 'obsidian', min: 1, max: 1 }],
   },
+
+  // Gravier (Phase 25) : tapisse les parois des cavernes (10% gravier / 90%
+  // pierre, cf. world/generator.js isCaveAdjacent) -- se casse aussi vite que
+  // la terre (pas de catégorie "pelle" dans ce moteur, cf. commentaire dans
+  // items.js), n'importe quel outil convient.
+  gravel: {
+    id: 88,
+    name: 'Gravier',
+    hardness: 0.6,
+    tool: null,
+    textures: { all: 'gravel' },
+    drops: [{ item: 'gravel', min: 1, max: 1 }],
+  },
 };
 
 // facing -> id de bloc, pour repeater_/piston_base_/piston_head_ (utilisé par

@@ -207,7 +207,8 @@ export function createBlockAssets() {
     tBucketEmptyIcon = tex.texBucket(null),
     tBucketWaterIcon = tex.texBucket('water'),
     tBucketLavaIcon = tex.texBucket('lava'),
-    tObsidian = tex.texObsidian();
+    tObsidian = tex.texObsidian(),
+    tGravel = tex.texGravel();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -331,6 +332,7 @@ export function createBlockAssets() {
       mat(tObsidian),
       mat(tObsidian),
     ],
+    gravel: [mat(tGravel), mat(tGravel), mat(tGravel), mat(tGravel), mat(tGravel), mat(tGravel)],
     sand: [mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand)],
     sandstone: [
       mat(tSandstone),
@@ -609,6 +611,8 @@ export function createBlockAssets() {
         return tPistonTop.image;
       case 'obsidian':
         return tObsidian.image;
+      case 'gravel':
+        return tGravel.image;
       default:
         return tStone.image;
     }
@@ -680,6 +684,8 @@ export function createBlockAssets() {
         return { top: tPistonTop.image, left: tPistonSide.image, right: tPistonSide.image };
       case 'obsidian':
         return { top: tObsidian.image, left: tObsidian.image, right: tObsidian.image };
+      case 'gravel':
+        return { top: tGravel.image, left: tGravel.image, right: tGravel.image };
       default:
         return null;
     }

@@ -209,6 +209,28 @@ function caveCarves(wx, wy, wz, surfaceH) {
   return tunnelA > threshold || tunnelB > threshold;
 }
 
+// Gravier (Phase 25) : 10% de la pierre qui borde une caverne (paroi, sol,
+// plafond -- un des 6 voisins est de l'air creusé) devient du gravier, 90%
+// reste de la pierre -- vérifié UNIQUEMENT sur cette pierre-là, pas la pierre
+// "pleine" ailleurs sous terre, pour que le gravier se voie vraiment en
+// explorant les grottes plutôt que d'être semé au hasard partout sous terre.
+// `hash3` (déjà utilisé par les veines de minerai plus bas) donne un tirage
+// stable et déterministe par bloc -- pas un Math.random() qui changerait la
+// distribution à chaque rechargement du chunk. Seed dédiée (9001) pour ne
+// jamais corréler ce tirage avec celui d'un minerai au même endroit.
+const GRAVEL_CAVE_CHANCE = 0.1;
+const GRAVEL_SEED = 9001;
+function isCaveWall(wx, wy, wz, surfaceH) {
+  return (
+    caveCarves(wx + 1, wy, wz, surfaceH) ||
+    caveCarves(wx - 1, wy, wz, surfaceH) ||
+    caveCarves(wx, wy + 1, wz, surfaceH) ||
+    caveCarves(wx, wy - 1, wz, surfaceH) ||
+    caveCarves(wx, wy, wz + 1, surfaceH) ||
+    caveCarves(wx, wy, wz - 1, surfaceH)
+  );
+}
+
 // Fix 2 (entrées de grotte "un peu partout") : le fix ci-dessus rend une ouverture
 // possible, mais ça reste un coup de chance ponctuel -- il fallait que le bruit 3D de
 // `caveCarves` dépasse un seuil déjà élevé PRÉCISÉMENT là où le relief passe sous
@@ -411,7 +433,14 @@ export function generateChunk(cx, cz) {
         let type;
         if (y === h) type = h > SNOW_LEVEL ? 'snow' : biome.surface;
         else if (y > h - 3) type = h > SNOW_LEVEL ? 'dirt' : biome.subsurface;
-        else type = 'stone';
+        else {
+          type = 'stone';
+          // cf. le commentaire de isCaveWall/GRAVEL_CAVE_CHANCE plus haut --
+          // seule la pierre au bord d'une caverne peut devenir du gravier.
+          if (isCaveWall(wx, y, wz, h) && hash3(wx, y, wz, GRAVEL_SEED) < GRAVEL_CAVE_CHANCE) {
+            type = 'gravel';
+          }
+        }
         data[idx(lx, y, lz)] = BLOCK_ID[type];
       }
       // lac : le terrain de cette colonne s'arrête sous le niveau de la mer -> on

@@ -80,6 +80,7 @@ export const ITEM_NAMES = {
   water_bucket: "Seau d'eau",
   lava_bucket: 'Seau de lave',
   obsidian: 'Obsidienne',
+  gravel: 'Gravier',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
