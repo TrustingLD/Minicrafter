@@ -1791,3 +1791,44 @@ export function texGravel() {
   speckle(ctx, ['#2e2a24', '#c7bcac'], 40, 1);
   return canvasToTexture(c);
 }
+
+// Silex (Phase 26) : icône PLATE 2D (comme le seau plus haut -- item tenu en
+// main tel quel, jamais un cube). Éclat de pierre taillée : un triangle
+// IRRÉGULIER (pas un triangle parfait, cf. les décalages aléatoires sur
+// chaque sommet), noir/gris très foncé avec un léger reflet plus clair sur
+// une arête pour suggérer le tranchant.
+export function texFlint() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  const s = TEX_SIZE;
+  const jitter = () => (Math.random() - 0.5) * s * 0.08;
+  const p1 = [s * 0.5 + jitter(), s * 0.12 + jitter()];
+  const p2 = [s * 0.88 + jitter(), s * 0.78 + jitter()];
+  const p3 = [s * 0.62 + jitter(), s * 0.9 + jitter()];
+  const p4 = [s * 0.14 + jitter(), s * 0.62 + jitter()];
+  ctx.fillStyle = '#1c1a1e';
+  ctx.beginPath();
+  ctx.moveTo(...p1);
+  ctx.lineTo(...p2);
+  ctx.lineTo(...p3);
+  ctx.lineTo(...p4);
+  ctx.closePath();
+  ctx.fill();
+  // reflet clair sur une arête (le "tranchant")
+  ctx.strokeStyle = 'rgba(180,180,190,0.55)';
+  ctx.lineWidth = s * 0.035;
+  ctx.beginPath();
+  ctx.moveTo(...p1);
+  ctx.lineTo(...p4);
+  ctx.stroke();
+  // quelques éclats/facettes internes
+  ctx.strokeStyle = 'rgba(60,58,64,0.8)';
+  ctx.lineWidth = s * 0.02;
+  ctx.beginPath();
+  ctx.moveTo(p1[0], p1[1]);
+  ctx.lineTo(s * 0.55, s * 0.55);
+  ctx.lineTo(p3[0], p3[1]);
+  ctx.stroke();
+  return canvasToTexture(c);
+}

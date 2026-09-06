@@ -1045,13 +1045,22 @@ export const BLOCK_TYPES = {
   // pierre, cf. world/generator.js isCaveAdjacent) -- se casse aussi vite que
   // la terre (pas de catégorie "pelle" dans ce moteur, cf. commentaire dans
   // items.js), n'importe quel outil convient.
+  // Gravier (Phase 25) : tapisse les parois des cavernes (10% gravier / 90%
+  // pierre, cf. world/generator.js isCaveWall) -- se casse aussi vite que
+  // la terre (pas de catégorie "pelle" dans ce moteur, cf. commentaire dans
+  // items.js), n'importe quel outil convient. `altItem`/`altChance` (Phase
+  // 26) : 10% de chance de silex AU LIEU du gravier lui-même (mutuellement
+  // exclusif, pas un drop en plus -- cf. le forEach des drops dans
+  // breakBlockAt, main.js, différent du `chance` seul déjà utilisé par la
+  // pomme des feuilles plus haut qui s'ajoute, elle, à un drop toujours
+  // garanti).
   gravel: {
     id: 88,
     name: 'Gravier',
     hardness: 0.6,
     tool: null,
     textures: { all: 'gravel' },
-    drops: [{ item: 'gravel', min: 1, max: 1 }],
+    drops: [{ item: 'gravel', min: 1, max: 1, altItem: 'flint', altChance: 0.1 }],
   },
 };
 

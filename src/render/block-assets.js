@@ -208,7 +208,10 @@ export function createBlockAssets() {
     tBucketWaterIcon = tex.texBucket('water'),
     tBucketLavaIcon = tex.texBucket('lava'),
     tObsidian = tex.texObsidian(),
-    tGravel = tex.texGravel();
+    tGravel = tex.texGravel(),
+    // Silex (Phase 26) : icône plate uniquement (comme le seau ci-dessus) --
+    // item 2D tenu tel quel, jamais un cube.
+    tFlintIcon = tex.texFlint();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -593,6 +596,8 @@ export function createBlockAssets() {
         return tBucketWaterIcon.image;
       case 'lava_bucket':
         return tBucketLavaIcon.image;
+      case 'flint':
+        return tFlintIcon.image;
       case 'redstone':
         return tRedstoneWireIcon.image;
       case 'redstone_torch':

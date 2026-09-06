@@ -1372,12 +1372,17 @@ function breakBlockAt(x, y, z, type) {
   const rightTool = hasRightToolFor(type);
   const multiplier = requiresTool ? (rightTool ? 1 : 0) : rightTool ? 2 : 1;
   const drops = BLOCK_TYPES[type]?.drops || [];
-  drops.forEach(({ item, min, max, chance }) => {
+  drops.forEach(({ item, min, max, chance, altItem, altChance }) => {
     // `chance` optionnel (ex: 0.2 pour la pomme des feuilles) : une entrée sans
     // `chance` tombe toujours, comme avant (cf. commentaire de data/blocks.js).
     if (chance !== undefined && Math.random() >= chance) return;
+    // `altItem`/`altChance` optionnels (Phase 26, silex du gravier) : remplace
+    // `item` par `altItem` avec probabilité `altChance` -- MUTUELLEMENT
+    // exclusif (un seul des deux tombe), contrairement à `chance` seul qui
+    // s'ajoute à un drop garanti.
+    const finalItem = altItem && Math.random() < altChance ? altItem : item;
     const count = (min + Math.floor(Math.random() * (max - min + 1))) * multiplier;
-    if (count > 0) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, item, count);
+    if (count > 0) itemSystem.spawn(x + 0.5, y + 0.3, z + 0.5, finalItem, count);
   });
   worldApi.setBlock(x, y, z, null);
   redstone.notify(x, y, z, false);
