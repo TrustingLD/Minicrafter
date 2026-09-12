@@ -246,6 +246,11 @@ function computeArmorReduction() {
 // ces sources. Comme dans Minecraft, la faim et la noyade ignorent l'armure --
 // ces deux-là continuent d'appeler player.health directement, sans passer par ici.
 function damagePlayer(amount) {
+  // /godmode (Phase 28) : `damagePlayer` est le SEUL point de passage de toute
+  // perte de vie (coup de mob, lave, feu, noyade, chute -- cf. les 5 appels
+  // dans ce fichier), donc un seul check ici suffit à couvrir toutes les
+  // sources d'un coup, plutôt que d'en ajouter un à chaque site d'appel.
+  if (player.invincible) return;
   const reduced = amount * (1 - computeArmorReduction());
   player.health = Math.max(0, player.health - reduced);
   bus.emit('player:health');
@@ -717,6 +722,10 @@ const commandHandlers = {
     player.health = player.maxHealth;
     bus.emit('player:health');
     return 'Vie remplie.';
+  },
+  godmode() {
+    player.invincible = !player.invincible;
+    return player.invincible ? 'Invincibilité activée.' : 'Invincibilité désactivée.';
   },
   fly() {
     player.flying = !player.flying;
@@ -2551,10 +2560,13 @@ function animate() {
     if (player.flying) {
       const vertical = (keys[keybinds.jump] ? 1 : 0) - (crouching ? 1 : 0);
       resolveFlyingVertical(player, dt, vertical, worldApi.collidesAtBox);
-    } else if (underwater) {
-      // Nage (Phase 16) : flottabilité (chute très ralentie, pas de "coulé comme une
-      // pierre") + Espace nage vers la surface au lieu d'un saut plein — la même
-      // résolution de collision que la gravité normale, juste une échelle différente.
+    } else if (underwater || inLava) {
+      // Nage (Phase 16, étendu Phase 28 à la lave) : flottabilité (chute très
+      // ralentie, pas de "coulé comme une pierre") + Espace nage vers la
+      // surface au lieu d'un saut plein -- même résolution de collision que
+      // la gravité normale, juste une échelle différente. La lave applique
+      // toujours ses dégâts en tic (cf. plus haut) -- ça ne change QUE le
+      // déplacement vertical, pas la survivabilité.
       resolveVerticalPhysics(player, dt, worldApi.collidesAtBox, 0.25);
       if (keys[keybinds.jump]) player.velY = Math.max(player.velY, 2.2);
     } else {

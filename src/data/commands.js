@@ -13,5 +13,6 @@ export const COMMANDS = {
   tp: { args: ['x', 'y', 'z'], help: '/tp <x> <y> <z> — téléportation' },
   time: { args: ['value'], help: "/time <day|night|0-1> — règle l'heure" },
   heal: { args: [], help: '/heal — remplit la vie' },
+  godmode: { args: [], help: '/godmode — bascule l\'invincibilité (aucun dégât)' },
   help: { args: [], help: '/help — liste les commandes' },
 };
