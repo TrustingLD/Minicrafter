@@ -489,6 +489,13 @@ export function texGoldOre() {
 export function texDiamondOre() {
   return texOre(['#71fafa', '#c4ffff']);
 }
+// Redstone (Phase 22, corrigé) : même moule que les autres minerais (pierre de
+// base + points colorés) plutôt que la texture du bloc de redstone plein --
+// des points ROUGE vif, comme demandé, pour bien lire "minerai" et pas "bloc
+// de redstone".
+export function texRedstoneOre() {
+  return texOre(['#e0261a', '#ff5a3d']);
+}
 // Torche (Phase 13) : simplification assumée -- rendue comme un bloc plein via le
 // mesher de chunk (pas une croix/tige fine à géométrie dédiée, cf. commentaire dans
 // world/world.js), donc la texture doit rester lisible comme "torche" même en cube complet.

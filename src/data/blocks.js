@@ -546,7 +546,7 @@ export const BLOCK_TYPES = {
     name: 'Minerai de redstone',
     hardness: 2.0,
     tool: 'pickaxe',
-    textures: { all: 'redstoneBlock' }, // réutilise la texture "bloc de redstone" (aspect minerai simplifié)
+    textures: { all: 'redstoneOre' }, // pierre + points rouges, même moule que les autres minerais
     vein: { minY: 2, maxY: 30, rarity: 0.012, veinSize: 6 },
     drops: [{ item: 'redstone', min: 2, max: 4 }],
   },

@@ -25,6 +25,7 @@ const TEXTURE_FN = {
   ironOre: tex.texIronOre,
   goldOre: tex.texGoldOre,
   diamondOre: tex.texDiamondOre,
+  redstoneOre: tex.texRedstoneOre,
   bedrock: tex.texBedrock,
   torchStick: tex.texTorchStick,
   torchFlame: tex.texTorchFlame,
