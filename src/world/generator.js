@@ -218,16 +218,39 @@ function caveCarves(wx, wy, wz, surfaceH) {
 // stable et déterministe par bloc -- pas un Math.random() qui changerait la
 // distribution à chaque rechargement du chunk. Seed dédiée (9001) pour ne
 // jamais corréler ce tirage avec celui d'un minerai au même endroit.
+//
+// PERF (mesuré après coup, cf. le commit qui a suivi celui-ci) : la première
+// version appelait caveCarves() 6 fois DE PLUS par bloc de pierre (un par
+// voisin), en plus de l'appel déjà fait par la boucle principale pour DÉCIDER
+// si CE bloc est une caverne -- x3 le temps de génération d'un chunk (30ms ->
+// 89ms), un vrai coup de frein perceptible à chaque frontière de chunk
+// traversée, et un vrai gel de plusieurs secondes au spawn (préchargement
+// synchrone de ~49 chunks, cf. world/world.js INITIAL_RADIUS). isCaveWall()
+// ne recalcule donc plus RIEN : generateChunk() pré-calcule maintenant le
+// statut caverne de CHAQUE case du chunk une seule fois dans `caveGrid`
+// (même nombre total d'appels à caveCarves qu'AVANT l'ajout du gravier), et
+// cette fonction ne fait plus que 6 lectures de tableau.
 const GRAVEL_CAVE_CHANCE = 0.1;
 const GRAVEL_SEED = 9001;
-function isCaveWall(wx, wy, wz, surfaceH) {
+function isCaveWallFromGrid(caveGrid, lx, y, lz) {
+  // hors des bords du chunk (colonne voisine pas encore générée) : on ne
+  // sait pas, on considère juste "pas caverne" plutôt que de rappeler
+  // caveCarves -- limite assumée, seules les toutes dernières colonnes en
+  // bordure de chunk peuvent sous-estimer légèrement le gravier là où une
+  // vraie grotte du chunk voisin les frôle. Invisible en jeu (le gravier
+  // reste abondant partout ailleurs), et ça évite de réintroduire le coût
+  // qu'on vient d'éliminer.
+  const at = (ax, ay, az) => {
+    if (ax < 0 || ax >= CHUNK_X || az < 0 || az >= CHUNK_Z || ay < 0 || ay >= CHUNK_Y) return false;
+    return caveGrid[idx(ax, ay, az)] === 1;
+  };
   return (
-    caveCarves(wx + 1, wy, wz, surfaceH) ||
-    caveCarves(wx - 1, wy, wz, surfaceH) ||
-    caveCarves(wx, wy + 1, wz, surfaceH) ||
-    caveCarves(wx, wy - 1, wz, surfaceH) ||
-    caveCarves(wx, wy, wz + 1, surfaceH) ||
-    caveCarves(wx, wy, wz - 1, surfaceH)
+    at(lx + 1, y, lz) ||
+    at(lx - 1, y, lz) ||
+    at(lx, y + 1, lz) ||
+    at(lx, y - 1, lz) ||
+    at(lx, y, lz + 1) ||
+    at(lx, y, lz - 1)
   );
 }
 
@@ -393,18 +416,47 @@ export function generateChunk(cx, cz) {
   // villages.js) -- `village` reste `null` pour l'immense majorité des chunks.
   const village = findVillageForChunk(originX, originZ);
 
-  // 1) colonnes de terrain + cavernes creusées au passage
+  // 1a) hauteurs de colonne (+ empreinte de village) -- calculées à part, en amont
+  // de tout le reste, car la passe caverne (1b) ET la passe d'assignation (1c) en
+  // ont toutes les deux besoin sans avoir à rappeler getHeight/villageFootprintAt.
+  const footprints = new Int32Array(CHUNK_X * CHUNK_Z).fill(-1); // -1 = pas d'empreinte ici
   for (let lx = 0; lx < CHUNK_X; lx++) {
     for (let lz = 0; lz < CHUNK_Z; lz++) {
       const wx = originX + lx,
         wz = originZ + lz;
-      // sous l'empreinte d'une maison ou du puits : la colonne est aplanie à la
-      // fondation propre de CE bâtiment (`footprint`), qui suit le relief local --
-      // pas une plateforme unique pour tout le village (cf. villages.js). `footprint`
-      // vaut `null` presque partout (hors empreinte, ou village absent de ce chunk).
       const footprint = village ? villageFootprintAt(village, wx, wz) : null;
       const h = footprint != null ? footprint : getHeight(wx, wz);
       heights[lz * CHUNK_X + lx] = h;
+      if (footprint != null) footprints[lz * CHUNK_X + lx] = footprint;
+    }
+  }
+
+  // 1b) statut caverne de CHAQUE case du chunk, calculé UNE SEULE fois (cf. le
+  // commentaire d'isCaveWallFromGrid plus haut -- c'est ce pré-calcul qui a
+  // remplacé les 6 rappels de caveCarves par bloc de pierre par 6 simples
+  // lectures de tableau dans la passe 1c ci-dessous).
+  const caveGrid = new Uint8Array(CHUNK_X * CHUNK_Y * CHUNK_Z);
+  for (let lx = 0; lx < CHUNK_X; lx++) {
+    for (let lz = 0; lz < CHUNK_Z; lz++) {
+      if (footprints[lz * CHUNK_X + lx] !== -1) continue; // jamais de caverne sous une fondation
+      const wx = originX + lx,
+        wz = originZ + lz;
+      const h = heights[lz * CHUNK_X + lx];
+      for (let y = 2; y < CHUNK_Y && y <= h; y++) {
+        if (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz)) {
+          caveGrid[idx(lx, y, lz)] = 1;
+        }
+      }
+    }
+  }
+
+  // 1c) colonnes de terrain, à partir des passes 1a/1b ci-dessus (plus aucun appel
+  // à caveCarves ici -- seulement des lectures de `heights`/`caveGrid`).
+  for (let lx = 0; lx < CHUNK_X; lx++) {
+    for (let lz = 0; lz < CHUNK_Z; lz++) {
+      const wx = originX + lx,
+        wz = originZ + lz;
+      const h = heights[lz * CHUNK_X + lx];
       // biome : une seule fois par colonne (pas par bloc de la colonne) -- même
       // raison que `h`, le mtMask/continentalness sous-jacents ne changent pas avec y.
       const biome = BIOMES[getBiome(wx, wz)];
@@ -422,9 +474,7 @@ export function generateChunk(cx, cz) {
           data[idx(lx, y, lz)] = BLOCK_ID.lava;
           continue;
         }
-        // sous une maison/le puits : jamais de caverne qui évide le sol --
-        // colonne pleine garantie, socle solide pour la fondation.
-        if (footprint == null && (caveCarves(wx, y, wz, h) || caveEntranceCarves(wx, y, wz))) {
+        if (caveGrid[idx(lx, y, lz)] === 1) {
           // caverne (naturelle ou puits d'entrée) : on laisse de l'air, sauf poche de
           // lave en profondeur
           if (lavaPoolAt(wx, y, wz)) data[idx(lx, y, lz)] = BLOCK_ID.lava;
@@ -435,9 +485,9 @@ export function generateChunk(cx, cz) {
         else if (y > h - 3) type = h > SNOW_LEVEL ? 'dirt' : biome.subsurface;
         else {
           type = 'stone';
-          // cf. le commentaire de isCaveWall/GRAVEL_CAVE_CHANCE plus haut --
+          // cf. le commentaire d'isCaveWallFromGrid/GRAVEL_CAVE_CHANCE plus haut --
           // seule la pierre au bord d'une caverne peut devenir du gravier.
-          if (isCaveWall(wx, y, wz, h) && hash3(wx, y, wz, GRAVEL_SEED) < GRAVEL_CAVE_CHANCE) {
+          if (isCaveWallFromGrid(caveGrid, lx, y, lz) && hash3(wx, y, wz, GRAVEL_SEED) < GRAVEL_CAVE_CHANCE) {
             type = 'gravel';
           }
         }

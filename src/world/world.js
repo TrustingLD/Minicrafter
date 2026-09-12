@@ -147,8 +147,18 @@ export function createWorld({
       /* quota pleine ou stockage indisponible : tant pis, on continue sans persister */
     }
   }
-  setInterval(flushDiffs, 2000);
-  window.addEventListener('beforeunload', flushDiffs);
+  // Sérialiser `diffs` en JSON coûte O(nombre total de cases modifiées) --
+  // négligeable pour l'usage normal (poser/casser quelques blocs), mais un
+  // circuit de redstone actif peut faire grossir cet ensemble bien plus vite
+  // (chaque case de fil/mécanisme distincte qui change au moins une fois
+  // ajoute une entrée permanente). Plutôt que de bloquer une frame de rendu
+  // pile au moment où le minuteur de 2s tombe, on laisse le navigateur
+  // choisir un moment creux (requestIdleCallback) -- repli sur setTimeout(0)
+  // si l'API n'existe pas (Safari, cf. https://caniuse.com/requestidlecallback).
+  const scheduleIdle =
+    typeof requestIdleCallback === 'function' ? requestIdleCallback : (fn) => setTimeout(fn, 0);
+  setInterval(() => scheduleIdle(flushDiffs), 2000);
+  window.addEventListener('beforeunload', flushDiffs); // ici, synchrone : la page se ferme, pas de "moment creux" à attendre
 
   const chunks = new Map(); // "cx,cz" -> record
 
