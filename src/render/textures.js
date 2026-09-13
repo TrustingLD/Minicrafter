@@ -1983,3 +1983,36 @@ export function texQuartz() {
   ctx.stroke();
   return canvasToTexture(c);
 }
+
+// Bâton : icône PLATE 2D (comme le silex/le seau plus haut -- jamais un cube
+// tenu en main), une simple diagonale de bois brun avec les 2 bouts un peu
+// plus sombres (marques d'usure), même esprit que le vrai jeu.
+export function texStick() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  const s = TEX_SIZE;
+  ctx.save();
+  ctx.translate(s / 2, s / 2);
+  ctx.rotate(Math.PI / 4); // diagonale, coin bas-gauche -> coin haut-droit
+  ctx.fillStyle = '#a9773f';
+  ctx.fillRect(-s * 0.09, -s * 0.62, s * 0.18, s * 1.24);
+  // grain du bois : quelques traits plus clairs/sombres dans le sens de la longueur
+  ctx.strokeStyle = 'rgba(90,58,25,0.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.03, -s * 0.58);
+  ctx.lineTo(-s * 0.03, s * 0.58);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(200,160,100,0.45)';
+  ctx.beginPath();
+  ctx.moveTo(s * 0.03, -s * 0.55);
+  ctx.lineTo(s * 0.03, s * 0.55);
+  ctx.stroke();
+  // bouts plus sombres (usure)
+  ctx.fillStyle = '#6e4b24';
+  ctx.fillRect(-s * 0.09, -s * 0.62, s * 0.18, s * 0.12);
+  ctx.fillRect(-s * 0.09, s * 0.5, s * 0.18, s * 0.12);
+  ctx.restore();
+  return canvasToTexture(c);
+}

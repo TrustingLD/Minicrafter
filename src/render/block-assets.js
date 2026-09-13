@@ -219,7 +219,8 @@ export function createBlockAssets() {
     tQuartzIcon = tex.texQuartz(),
     // Silex (Phase 26) : icône plate uniquement (comme le seau ci-dessus) --
     // item 2D tenu tel quel, jamais un cube.
-    tFlintIcon = tex.texFlint();
+    tFlintIcon = tex.texFlint(),
+    tStickIcon = tex.texStick();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -630,7 +631,7 @@ export function createBlockAssets() {
       case 'golden_apple':
         return tGoldenApple.image;
       case 'stick':
-        return null; // drawn separately
+        return tStickIcon.image;
       case 'bucket':
         return tBucketEmptyIcon.image;
       case 'water_bucket':
