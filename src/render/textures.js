@@ -1839,3 +1839,147 @@ export function texFlint() {
   ctx.stroke();
   return canvasToTexture(c);
 }
+
+/* ============================================================
+   NETHER (Phase 29) : textures du terrain de la dimension Nether.
+   ============================================================ */
+
+// Netherrack : brun-rouge sombre, criblé de petites alvéoles plus sombres --
+// l'équivalent "pierre" du Nether, en beaucoup moins régulier que la vraie pierre.
+export function texNetherrack() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#5c2420';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#4a1a17', '#6e2c26'], 16, 1.5, 4);
+  speckle(ctx, ['#2e0f0d', '#7a382f'], 50);
+  return canvasToTexture(c);
+}
+
+// Sable des âmes : gris-brun terne, quelques traces sombres façon racines/
+// filaments à la surface -- reconnaissable sans être criard.
+export function texSoulSand() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#4a3f38';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#403630', '#564943'], 14, 1.5, 4);
+  ctx.strokeStyle = 'rgba(20,16,14,0.5)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    let x = Math.random() * TEX_SIZE,
+      y = Math.random() * TEX_SIZE;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    for (let s = 0; s < 3; s++) {
+      x += (Math.random() - 0.5) * 6;
+      y += (Math.random() - 0.5) * 6;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  speckle(ctx, ['#2c2420', '#6b5c52'], 26);
+  return canvasToTexture(c);
+}
+
+// Basalte : dessus/dessous avec un anneau concentrique (coupe d'une colonne),
+// côtés avec des stries verticales -- même bloc, 2 textures différentes selon
+// la face (cf. `top`/`bottom`/`side` dans data/blocks.js), comme le vrai jeu.
+export function texBasaltEnd() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#2b2b2e';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.strokeStyle = '#454548';
+  ctx.lineWidth = 1.2;
+  for (let r = TEX_SIZE * 0.12; r < TEX_SIZE * 0.5; r += TEX_SIZE * 0.09) {
+    ctx.beginPath();
+    ctx.arc(TEX_SIZE / 2, TEX_SIZE / 2, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  speckle(ctx, ['#1a1a1c', '#3c3c40'], 20);
+  return canvasToTexture(c);
+}
+export function texBasaltSide() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#333336';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  ctx.strokeStyle = '#26262a';
+  ctx.lineWidth = 1;
+  for (let x = 2; x < TEX_SIZE; x += 5) {
+    ctx.beginPath();
+    ctx.moveTo(x + (Math.random() - 0.5) * 1.5, 0);
+    ctx.lineTo(x + (Math.random() - 0.5) * 1.5, TEX_SIZE);
+    ctx.stroke();
+  }
+  speckle(ctx, ['#1c1c1e', '#48484c'], 16);
+  return canvasToTexture(c);
+}
+
+// Lueur de pierre : jaune chaud lumineux, alvéoles cellulaires plus sombres --
+// la source de lumière la plus forte du jeu (emitsLight:15), la texture doit
+// se lire "allumée" même sans ombrage dynamique dessus.
+export function texGlowstone() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f2d98a';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#d9b85c', '#fff2c2'], 12, 2, 4.5);
+  ctx.strokeStyle = 'rgba(150,110,40,0.5)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 10; i++) {
+    ctx.beginPath();
+    ctx.arc(Math.random() * TEX_SIZE, Math.random() * TEX_SIZE, 1.5 + Math.random() * 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  speckle(ctx, ['#fffbe0'], 24);
+  return canvasToTexture(c);
+}
+
+// Minerai de quartz : même moule que texOre() (render/textures.js) mais sur
+// une base de netherrack (pas de pierre grise) -- ce minerai n'apparaît QUE
+// dans le Nether, cf. nether-generator.js.
+export function texNetherQuartzOre() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#5c2420';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#4a1a17', '#6e2c26'], 10, 1.5, 3.5);
+  speckle(ctx, ['#3a1512', '#7a382f'], 24);
+  blotches(ctx, ['#f5f0e6', '#ffffff'], 8, 1.6, 3);
+  return canvasToTexture(c);
+}
+
+// Quartz (item, Phase 29) : icône plate 2D façon éclat de cristal blanc/crème,
+// même esprit que texDiamond() plus haut mais silhouette plus allongée et
+// moins symétrique (le quartz du Nether est un fragment brut, pas taillé).
+export function texQuartz() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  const s = TEX_SIZE;
+  ctx.fillStyle = '#f2ece0';
+  ctx.beginPath();
+  ctx.moveTo(s * 0.46, s * 0.08);
+  ctx.lineTo(s * 0.68, s * 0.3);
+  ctx.lineTo(s * 0.6, s * 0.92);
+  ctx.lineTo(s * 0.38, s * 0.86);
+  ctx.lineTo(s * 0.3, s * 0.34);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(s * 0.46, s * 0.08);
+  ctx.lineTo(s * 0.56, s * 0.26);
+  ctx.lineTo(s * 0.42, s * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(150,140,120,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(s * 0.46, s * 0.08);
+  ctx.lineTo(s * 0.44, s * 0.9);
+  ctx.stroke();
+  return canvasToTexture(c);
+}

@@ -28,6 +28,7 @@ import {
   SEA_LEVEL,
   WORLD_BORDER,
 } from './generator.js';
+import { generateNetherChunk, findNetherLanding, NETHER_LAVA_LEVEL } from './nether-generator.js';
 import {
   BLOCK_ID,
   BLOCK_BY_ID,
@@ -75,9 +76,9 @@ const DIFF_STORAGE_KEY = 'minicrafter_diffs_v1';
 const FLUID_TICK_RATE = 0.2; // 5 Hz
 const FLUID_BUDGET = 48;
 
-function loadDiffs() {
+function loadDiffs(storageKey) {
   try {
-    return JSON.parse(localStorage.getItem(DIFF_STORAGE_KEY) || '{}');
+    return JSON.parse(localStorage.getItem(storageKey) || '{}');
   } catch {
     return {};
   }
@@ -97,10 +98,25 @@ export function createWorld({
   // même perf tradeoff que sun.castShadow (main.js) et moonLight.castShadow (sky.js) :
   // pas d'ombre projetée par le terrain lui-même sur tactile.
   touchMode = false,
+  // Dimensions (Phase 29) : 'overworld' (défaut) ou 'nether' -- change le
+  // générateur appelé (cf. world/nether-generator.js), la clé de stockage des
+  // diffs (2 mondes distincts ne doivent jamais partager leurs modifications),
+  // et regroupe tous les meshes de CE monde sous un même THREE.Group (cf. plus
+  // bas) pour que main.js puisse basculer l'affichage d'un monde entier en une
+  // seule ligne (`group.visible = false`) plutôt que de parcourir tous les
+  // chunks un par un.
+  dimension = 'overworld',
 }) {
   const RENDER_DISTANCE = renderDistance;
   const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
   const { texture: atlasTexture, uvByBlockId } = buildBlockAtlas();
+  const genChunk = dimension === 'nether' ? generateNetherChunk : generateChunk;
+  const diffStorageKey = dimension === 'nether' ? 'minicrafter_diffs_nether_v1' : DIFF_STORAGE_KEY;
+  // Groupe racine de CE monde (Phase 29) : un seul `scene.add`, tous les chunks
+  // de cette dimension y sont ajoutés (au lieu de `scene` directement) -- cf.
+  // le commentaire de `dimension` ci-dessus.
+  const worldGroup = new THREE.Group();
+  scene.add(worldGroup);
   // vertexColors (Phase 13) : le mesher écrit un niveau de lumière par sommet dans
   // l'attribut 'color' -- zéro appel de rendu de plus, juste un buffer de plus.
   // alphaTest (pas `transparent: true`) : découpe les pixels à alpha quasi-nul
@@ -136,13 +152,13 @@ export function createWorld({
   // intérêt visuel comme signal de danger sous un Lambert assombri par l'ambiance nocturne.
   const lavaMaterial = new THREE.MeshBasicMaterial({ map: lavaTexture });
 
-  const diffs = loadDiffs(); // "cx,cz" -> { localIdx: blockId }
+  const diffs = loadDiffs(diffStorageKey); // "cx,cz" -> { localIdx: blockId }
   let diffsDirty = false;
   function flushDiffs() {
     if (!diffsDirty) return;
     diffsDirty = false;
     try {
-      localStorage.setItem(DIFF_STORAGE_KEY, JSON.stringify(diffs));
+      localStorage.setItem(diffStorageKey, JSON.stringify(diffs));
     } catch {
       /* quota pleine ou stockage indisponible : tant pis, on continue sans persister */
     }
@@ -250,13 +266,13 @@ export function createWorld({
     // projetée PAR elle aurait l'air d'un bloc plein) -- un arbre ou une
     // falaise qui surplombe une mare doit s'y voir ombré.
     record.waterMesh.receiveShadow = true;
-    scene.add(record.waterMesh);
+    worldGroup.add(record.waterMesh);
     record.lavaMesh = new THREE.Mesh(
       buildLiquidGeometry(record.data, BLOCK_ID.lava, record.lightData),
       lavaMaterial,
     );
     record.lavaMesh.position.set(record.cx * CHUNK_X, 0, record.cz * CHUNK_Z);
-    scene.add(record.lavaMesh);
+    worldGroup.add(record.lavaMesh);
   }
 
   function ensureChunk(cx, cz) {
@@ -264,7 +280,7 @@ export function createWorld({
     let record = chunks.get(key);
     if (record) return record;
 
-    const { data } = generateChunk(cx, cz);
+    const { data } = genChunk(cx, cz);
     applySavedDiffs(key, data);
     const { lightData, torches } = computeInitialLight(data);
     for (const t of torches) onTorchesChanged(cx * CHUNK_X + t.lx, t.ly, cz * CHUNK_Z + t.lz, true);
@@ -280,7 +296,7 @@ export function createWorld({
     // tactile comme le reste des ombres (cf. sun.castShadow, main.js).
     record.mesh.castShadow = !touchMode;
     record.mesh.receiveShadow = true;
-    scene.add(record.mesh);
+    worldGroup.add(record.mesh);
 
     buildLiquidMeshes(record);
 
@@ -303,13 +319,13 @@ export function createWorld({
     // torches déchargées, donc invisibles.
     for (const t of record.torches)
       onTorchesChanged(record.cx * CHUNK_X + t.lx, t.ly, record.cz * CHUNK_Z + t.lz, false);
-    scene.remove(record.mesh);
+    worldGroup.remove(record.mesh);
     record.mesh.geometry.dispose();
     // waterMaterial/lavaMaterial sont partagés par tous les chunks : jamais disposés
     // ici, seulement la géométrie (propre à CE chunk) et le retrait de la scène.
-    scene.remove(record.waterMesh);
+    worldGroup.remove(record.waterMesh);
     record.waterMesh.geometry.dispose();
-    scene.remove(record.lavaMesh);
+    worldGroup.remove(record.lavaMesh);
     record.lavaMesh.geometry.dispose();
     chunks.delete(record.key);
     // NB: `diffs` n'est PAS nettoyé ici — les modifications du joueur doivent survivre
@@ -546,8 +562,17 @@ export function createWorld({
   // Si le chunk n'est pas chargé, getBlock renvoie `undefined` partout et le scan
   // retournerait 1 (= le joueur/mob apparaîtrait sous terre). On retombe alors sur
   // la hauteur de terrain analytique du bruit, qui ne demande aucun chunk.
+  // Nether (Phase 29) : `computeGroundHeight` (scan depuis le HAUT du chunk) n'a
+  // aucun sens ici -- la case la plus haute est TOUJOURS de la bedrock (le
+  // plafond), le scan s'arrêterait donc immédiatement dessus au lieu de trouver
+  // une vraie poche où atterrir. `findNetherLanding` (nether-generator.js) fait
+  // le bon scan pour cette dimension.
   function getGroundHeight(x, z) {
     const [cx, cz] = worldToChunk(x, z);
+    if (dimension === 'nether') {
+      if (!chunks.has(chunkKey(cx, cz))) return NETHER_LAVA_LEVEL + 10; // repli grossier, chunk pas encore chargé
+      return findNetherLanding(getBlock, x, z);
+    }
     if (!chunks.has(chunkKey(cx, cz))) return getHeight(Math.round(x), Math.round(z)) + 1;
     return computeGroundHeight(getBlock, x, z);
   }
@@ -639,5 +664,11 @@ export function createWorld({
     update,
     waterTexture,
     lavaTexture,
+    // Dimensions (Phase 29) : `group` regroupe tout le rendu de CE monde --
+    // main.js bascule `group.visible` pour afficher/masquer une dimension
+    // entière d'un coup au changement (/nether, /overworld). `dimension` est
+    // juste la donnée brute passée en entrée, utile pour un log/affichage.
+    group: worldGroup,
+    dimension,
   };
 }

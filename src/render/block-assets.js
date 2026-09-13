@@ -209,6 +209,14 @@ export function createBlockAssets() {
     tBucketLavaIcon = tex.texBucket('lava'),
     tObsidian = tex.texObsidian(),
     tGravel = tex.texGravel(),
+    // Nether (Phase 29)
+    tNetherrack = tex.texNetherrack(),
+    tSoulSand = tex.texSoulSand(),
+    tBasaltEnd = tex.texBasaltEnd(),
+    tBasaltSide = tex.texBasaltSide(),
+    tGlowstone = tex.texGlowstone(),
+    tNetherQuartzOre = tex.texNetherQuartzOre(),
+    tQuartzIcon = tex.texQuartz(),
     // Silex (Phase 26) : icône plate uniquement (comme le seau ci-dessus) --
     // item 2D tenu tel quel, jamais un cube.
     tFlintIcon = tex.texFlint();
@@ -336,6 +344,39 @@ export function createBlockAssets() {
       mat(tObsidian),
     ],
     gravel: [mat(tGravel), mat(tGravel), mat(tGravel), mat(tGravel), mat(tGravel), mat(tGravel)],
+    // Nether (Phase 29)
+    netherrack: [
+      mat(tNetherrack),
+      mat(tNetherrack),
+      mat(tNetherrack),
+      mat(tNetherrack),
+      mat(tNetherrack),
+      mat(tNetherrack),
+    ],
+    soul_sand: [
+      mat(tSoulSand),
+      mat(tSoulSand),
+      mat(tSoulSand),
+      mat(tSoulSand),
+      mat(tSoulSand),
+      mat(tSoulSand),
+    ],
+    basalt: [
+      mat(tBasaltSide),
+      mat(tBasaltSide),
+      mat(tBasaltEnd),
+      mat(tBasaltEnd),
+      mat(tBasaltSide),
+      mat(tBasaltSide),
+    ],
+    glowstone: [
+      mat(tGlowstone),
+      mat(tGlowstone),
+      mat(tGlowstone),
+      mat(tGlowstone),
+      mat(tGlowstone),
+      mat(tGlowstone),
+    ],
     sand: [mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand), mat(tSand)],
     sandstone: [
       mat(tSandstone),
@@ -618,6 +659,18 @@ export function createBlockAssets() {
         return tObsidian.image;
       case 'gravel':
         return tGravel.image;
+      case 'netherrack':
+        return tNetherrack.image;
+      case 'soul_sand':
+        return tSoulSand.image;
+      case 'basalt':
+        return tBasaltSide.image;
+      case 'glowstone':
+        return tGlowstone.image;
+      case 'nether_quartz_ore':
+        return tNetherQuartzOre.image;
+      case 'quartz':
+        return tQuartzIcon.image;
       default:
         return tStone.image;
     }
@@ -691,6 +744,14 @@ export function createBlockAssets() {
         return { top: tObsidian.image, left: tObsidian.image, right: tObsidian.image };
       case 'gravel':
         return { top: tGravel.image, left: tGravel.image, right: tGravel.image };
+      case 'netherrack':
+        return { top: tNetherrack.image, left: tNetherrack.image, right: tNetherrack.image };
+      case 'soul_sand':
+        return { top: tSoulSand.image, left: tSoulSand.image, right: tSoulSand.image };
+      case 'basalt':
+        return { top: tBasaltEnd.image, left: tBasaltSide.image, right: tBasaltSide.image };
+      case 'glowstone':
+        return { top: tGlowstone.image, left: tGlowstone.image, right: tGlowstone.image };
       default:
         return null;
     }

@@ -14,5 +14,7 @@ export const COMMANDS = {
   time: { args: ['value'], help: "/time <day|night|0-1> — règle l'heure" },
   heal: { args: [], help: '/heal — remplit la vie' },
   godmode: { args: [], help: '/godmode — bascule l\'invincibilité (aucun dégât)' },
+  nether: { args: [], help: '/nether — voyage vers le Nether' },
+  overworld: { args: [], help: '/overworld — retour au monde normal' },
   help: { args: [], help: '/help — liste les commandes' },
 };

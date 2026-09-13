@@ -1062,6 +1062,74 @@ export const BLOCK_TYPES = {
     textures: { all: 'gravel' },
     drops: [{ item: 'gravel', min: 1, max: 1, altItem: 'flint', altChance: 0.1 }],
   },
+
+  /* ============================================================
+     NETHER (Phase 29) : terrain de la dimension Nether -- cf.
+     world/nether-generator.js pour la génération elle-même. Portée assumée
+     (demandé explicitement "juste la génération") : pas de portail, pas de
+     structures propres au Nether, pas de mobs -- seuls ces blocs de terrain.
+     ============================================================ */
+
+  // Netherrack : l'équivalent "pierre" du Nether -- un peu plus tendre que la
+  // vraie pierre (comme le vrai jeu), n'importe quel outil casse, la pioche
+  // accélère juste.
+  netherrack: {
+    id: 89,
+    name: 'Netherrack',
+    hardness: 0.4,
+    tool: 'pickaxe',
+    textures: { all: 'netherrack' },
+    drops: [{ item: 'netherrack', min: 1, max: 1 }],
+  },
+
+  // Sable des âmes : sol des vallées d'âme (cf. netherRegionAt,
+  // nether-generator.js). `slows` (Phase 29, lu dans main.js comme
+  // underwater/inLava) : ralentit la marche, comme le vrai jeu.
+  soul_sand: {
+    id: 90,
+    name: 'Sable des âmes',
+    hardness: 0.5,
+    tool: null,
+    slows: true,
+    textures: { all: 'soul_sand' },
+    drops: [{ item: 'soul_sand', min: 1, max: 1 }],
+  },
+
+  // Basalte : sol/piliers des deltas de basalte (cf. netherRegionAt +
+  // piliers, nether-generator.js) -- dur comme la pierre.
+  basalt: {
+    id: 91,
+    name: 'Basalte',
+    hardness: 1.25,
+    tool: 'pickaxe',
+    textures: { top: 'basaltEnd', bottom: 'basaltEnd', side: 'basaltSide' },
+    drops: [{ item: 'basalt', min: 1, max: 1 }],
+  },
+
+  // Lueur de pierre : source de lumière qui se forme accrochée aux plafonds
+  // de poches ouvertes (cf. nether-generator.js) -- la plus forte du jeu,
+  // comme le vrai jeu (le Nether n'a pas de ciel, sa seule autre source de
+  // lumière ambiante est la lave).
+  glowstone: {
+    id: 92,
+    name: 'Lueur de pierre',
+    hardness: 0.3,
+    tool: null,
+    emitsLight: 15,
+    textures: { all: 'glowstone' },
+    drops: [{ item: 'glowstone', min: 1, max: 1 }],
+  },
+
+  // Minerai de quartz : semé (tirage par bloc, cf. nether-generator.js) dans
+  // le netherrack. Donne l'item 'quartz', jamais le bloc lui-même.
+  nether_quartz_ore: {
+    id: 93,
+    name: 'Minerai de quartz',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    textures: { all: 'netherQuartzOre' },
+    drops: [{ item: 'quartz', min: 1, max: 2 }],
+  },
 };
 
 // facing -> id de bloc, pour repeater_/piston_base_/piston_head_ (utilisé par

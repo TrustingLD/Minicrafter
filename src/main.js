@@ -172,7 +172,18 @@ const blockAssets = createBlockAssets();
 const particleSystem = createParticleSystem({ scene, blockAssets });
 const renderDistance = touchMode ? 4 : 6;
 const torchPositions = new Map(); // "x,y,z" -> {x,y,z} — alimenté par worldApi, cf. plus bas
-const worldApi = createWorld({
+
+// Dimensions (Phase 29) : `overworldApi` existe toujours dès le lancement ;
+// `netherApi` n'est créé qu'au premier /nether (cf. travelToDimension plus
+// bas) -- sans quoi TOUS les joueurs paieraient un 2e préchargement
+// synchrone de ~49 chunks au démarrage, même ceux qui ne mettent jamais les
+// pieds dans le Nether (même leçon que le fix de perf de la génération plus
+// haut, appliquée ici par construction). `worldApi`, lui, ne change JAMAIS de
+// référence : c'est un simple relais vers `activeWorld` (mutable, cf.
+// dessous) -- tout le reste de ce fichier (des centaines d'appels à
+// worldApi.xxx, y compris ceux déjà capturés par redstone.js plus bas) reste
+// donc inchangé et bascule automatiquement de dimension avec lui.
+const overworldApi = createWorld({
   scene,
   renderDistance,
   preloadAt: { x: SPAWN_COLUMN.x, z: SPAWN_COLUMN.z },
@@ -183,6 +194,78 @@ const worldApi = createWorld({
     else torchPositions.delete(key);
   },
 });
+let netherApi = null;
+let activeWorld = overworldApi;
+const worldApi = {
+  getBlock: (...a) => activeWorld.getBlock(...a),
+  setBlock: (...a) => activeWorld.setBlock(...a),
+  enqueueFluidSource: (...a) => activeWorld.enqueueFluidSource(...a),
+  isSolid: (...a) => activeWorld.isSolid(...a),
+  isInLava: (...a) => activeWorld.isInLava(...a),
+  isInWater: (...a) => activeWorld.isInWater(...a),
+  isTouchingCactus: (...a) => activeWorld.isTouchingCactus(...a),
+  collidesAtBox: (...a) => activeWorld.collidesAtBox(...a),
+  getGroundHeight: (...a) => activeWorld.getGroundHeight(...a),
+  update: (...a) => activeWorld.update(...a),
+  // waterTexture/lavaTexture (Phase 29, bug trouvé après coup) : PROPRIÉTÉS,
+  // pas des méthodes -- accédées telles quelles ailleurs dans main.js
+  // (`worldApi.waterTexture.offset.x = ...` dans animate()), pas appelées.
+  // Un simple champ figé ici aurait gardé la texture de l'OVERWORLD pour
+  // toujours, même dans le Nether (et plantait carrément : ce champ n'existait
+  // pas du tout sur le premier jet de ce relais, cause du "vide absolu"
+  // rapporté juste après -- `undefined.offset` à chaque frame). Un getter
+  // résout `activeWorld` à chaque accès, comme les méthodes ci-dessus.
+  get waterTexture() {
+    return activeWorld.waterTexture;
+  },
+  get lavaTexture() {
+    return activeWorld.lavaTexture;
+  },
+};
+
+// /nether, /overworld (Phase 29, cf. data/commands.js) : bascule quelle
+// dimension est "active" (celle que le relais worldApi ci-dessus interroge),
+// affiche/masque le groupe de rendu de chacune (world.js `group`), et
+// téléporte le joueur à un point d'atterrissage sûr de la dimension
+// d'arrivée -- même position x/z (pas d'échelle 1:8 comme le vrai jeu, cf.
+// simplification assumée), hauteur recalculée pour CETTE dimension
+// (getGroundHeight est dimension-aware côté world.js).
+//
+// Limite assumée (portée demandée : "juste la génération") : les systèmes
+// suivis par POSITION plutôt que par état interne pur (redstone -- cf. le
+// gate ci-dessous qui coupe son tic hors overworld ; mobs, items au sol) ne
+// sont pas dimension-aware. Un mob ou un item lâché dans une dimension reste
+// à ses coordonnées même une fois l'autre dimension affichée -- invisible
+// tant qu'on n'y retourne pas, sans dégât ni incohérence si on n'interagit
+// pas avec depuis l'autre dimension.
+function travelToDimension(name) {
+  if (name === 'nether') {
+    if (!netherApi) {
+      netherApi = createWorld({
+        scene,
+        renderDistance,
+        preloadAt: { x: player.pos.x, z: player.pos.z },
+        touchMode,
+        dimension: 'nether',
+        // pas d'onTorchesChanged ici : une torche posée dans le Nether n'aura
+        // pas de PointLight dynamique en plus de son éclairage de bloc (cf.
+        // torchPositions, partagé pour l'overworld uniquement) -- limite
+        // assumée, l'éclairage de bloc (lightmap) fonctionne quand même.
+      });
+    }
+    overworldApi.group.visible = false;
+    netherApi.group.visible = true;
+    activeWorld = netherApi;
+  } else {
+    if (netherApi) netherApi.group.visible = false;
+    overworldApi.group.visible = true;
+    activeWorld = overworldApi;
+  }
+  const groundY = activeWorld.getGroundHeight(player.pos.x, player.pos.z);
+  player.pos.y = groundY + 0.05;
+  player.velY = 0;
+}
+
 const cloudsApi = createClouds({ scene });
 const skyApi = createSky({ scene, ambientLight: ambient, sunLight: sun, touchMode });
 const snowWeatherApi = createSnowWeather({ scene });
@@ -726,6 +809,16 @@ const commandHandlers = {
   godmode() {
     player.invincible = !player.invincible;
     return player.invincible ? 'Invincibilité activée.' : 'Invincibilité désactivée.';
+  },
+  nether() {
+    if (activeWorld === netherApi) return 'Déjà dans le Nether.';
+    travelToDimension('nether');
+    return 'Direction le Nether...';
+  },
+  overworld() {
+    if (activeWorld === overworldApi) return 'Déjà dans le monde normal.';
+    travelToDimension('overworld');
+    return 'Retour au monde normal.';
   },
   fly() {
     player.flying = !player.flying;
@@ -2241,6 +2334,13 @@ function isInLava() {
   return worldApi.isInLava(player.pos.x, player.pos.y, player.pos.z);
 }
 
+// Sable des âmes (Phase 29) : ralentit la marche, comme le vrai jeu -- lu sur
+// le bloc juste sous les pieds (comme un sol normal, pas un point à
+// l'intérieur d'un bloc comme isInLava/isUnderwater).
+function isOnSoulSand() {
+  return worldApi.getBlock(Math.floor(player.pos.x), Math.floor(player.pos.y - 0.01), Math.floor(player.pos.z)) === 'soul_sand';
+}
+
 let gameOverOpen = false;
 const gameOverScreen = document.getElementById('gameOverScreen');
 const respawnBtn = document.getElementById('respawnBtn');
@@ -2388,7 +2488,14 @@ function animate() {
     );
 
   blockEntities.update(dt, SMELTING, FUELS);
-  redstone.update(dt);
+  // Dimensions (Phase 29) : la redstone est suivie par POSITION (x,y,z), pas
+  // par dimension (cf. le commentaire de travelToDimension plus haut) -- la
+  // laisser tourner pendant qu'on est dans le Nether la ferait lire les blocs
+  // du NETHER aux mêmes coordonnées qu'un circuit overworld, désabonnant en
+  // silence tout ce qui ne matche plus. Geler son tic hors overworld évite
+  // ça : le circuit reste tel quel, fige plutôt que de se corrompre, et
+  // reprend normalement au retour.
+  if (activeWorld === overworldApi) redstone.update(dt);
   if (furnaceOpen) renderFurnace();
   if (chestOpen) renderChest();
 
@@ -2407,11 +2514,13 @@ function animate() {
     if (crouching) sprinting = false;
     const underwater = isUnderwater();
     const inLava = isInLava();
+    const onSoulSand = !underwater && !inLava && !player.flying && isOnSoulSand();
     const speed =
       player.speed *
       (sprinting ? 1.6 : 1) *
       (crouching ? 0.6 : 1) *
       (underwater || inLava ? 0.5 : 1) *
+      (onSoulSand ? 0.6 : 1) *
       (player.flying ? player.flySpeedMultiplier || 1 : 1); // /speedfly, pas d'effet hors vol
 
     // dégâts en tic (pas à chaque frame) tant qu'on reste dans la lave -- même

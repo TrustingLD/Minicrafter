@@ -82,6 +82,12 @@ export const ITEM_NAMES = {
   obsidian: 'Obsidienne',
   gravel: 'Gravier',
   flint: 'Silex',
+  // Nether (Phase 29)
+  netherrack: 'Netherrack',
+  soul_sand: 'Sable des âmes',
+  basalt: 'Basalte',
+  glowstone: 'Lueur de pierre',
+  quartz: 'Quartz',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
