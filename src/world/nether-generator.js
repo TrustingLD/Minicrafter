@@ -49,12 +49,29 @@ const BEDROCK_ID = BLOCK_ID.bedrock;
 // calculer sur tout le volume d'un chunk de 128 de haut (pas juste un sous-sol).
 const QUARTZ_CHANCE = 0.025;
 const QUARTZ_SEED = 6665;
-// Lueur de pierre (Phase 29) : même principe, tirage par bloc plutôt que de
-// vrais amas -- un bloc de netherrack qui touche du vide PAR LE DESSUS (donc
-// "accroché au plafond" d'une poche, comme le vrai jeu) a une chance de
-// devenir de la lueur de pierre.
-const GLOWSTONE_CHANCE = 0.09;
+// Lueur de pierre (Phase 29, ajusté Phase 30) : même principe, tirage par bloc
+// plutôt que de vrais amas -- un bloc de netherrack qui touche du vide PAR LE
+// DESSUS (donc "accroché au plafond" d'une poche, comme le vrai jeu) a une
+// chance de devenir de la lueur de pierre. Rendue BEAUCOUP plus rare qu'au
+// premier jet (0.09 -> 0.012, ~7x moins) : demandé explicitement, elle
+// éclairait presque tous les plafonds de poche, ce qui étouffait l'ambiance
+// sombre propre au Nether (sa seule autre source de lumière est la lave).
+const GLOWSTONE_CHANCE = 0.012;
 const GLOWSTONE_SEED = 6666;
+
+// Chutes de lave (Phase 30) : partent d'un point du plafond d'une poche
+// (repéré comme la lueur de pierre ci-dessus, mais en zone "wastes"
+// uniquement -- jamais dans les biomes régionaux, pour ne pas dénaturer leur
+// identité visuelle) et tombent tout droit jusqu'au premier obstacle (sol,
+// autre liquide déjà là) ou une longueur max. Simplification assumée : un
+// simple tirage PAR COLONNE (pas une vraie mécanique d'écoulement -- ce
+// moteur ne fait pas propager tout seuls les liquides posés à la génération,
+// cf. le commentaire de la mer de lave plus bas) -- l'animation existante de
+// la texture de lave (cf. main.js, `worldApi.lavaTexture.offset`) suffit à
+// donner une impression de mouvement même sur une colonne figée.
+const LAVAFALL_CHANCE = 0.006;
+const LAVAFALL_SEED = 6667;
+const LAVAFALL_MAX_LENGTH = 40;
 
 // Régions du Nether (Phase 29) : bruit à TRÈS basse fréquence -> de vastes
 // zones cohérentes (des centaines de blocs), pas une mosaïque bruitée bloc
@@ -173,6 +190,23 @@ export function generateNetherChunk(cx, cz) {
         while (y < CHUNK_Y - 1 && open(lx, y, lz)) {
           data[idx(lx, y, lz)] = BASALT_ID;
           y++;
+        }
+      }
+
+      // Chutes de lave (Phase 30, cf. LAVAFALL_CHANCE plus haut) : une seule
+      // par colonne tirée, part du premier plafond de poche trouvé en
+      // scannant du haut vers le bas (zone "wastes" uniquement).
+      if (region === 'wastes' && hash3(wx, 0, wz, LAVAFALL_SEED) < LAVAFALL_CHANCE) {
+        for (let y = CEIL_ROUGH_FROM_Y - 2; y > NETHER_LAVA_LEVEL + 4; y--) {
+          if (!open(lx, y, lz) || !open(lx, y - 1, lz)) continue; // pas un plafond de poche ici
+          let yy = y - 1,
+            fallen = 0;
+          while (yy > 0 && open(lx, yy, lz) && fallen < LAVAFALL_MAX_LENGTH) {
+            data[idx(lx, yy, lz)] = LAVA_ID;
+            yy--;
+            fallen++;
+          }
+          break; // une seule chute par colonne, on s'arrête au premier plafond valable
         }
       }
     }

@@ -507,15 +507,24 @@ export function meshLiquid(data, targetId, liquidIds, lightData, topOnly) {
     for (let y = 0; y < CHUNK_Y; y++) {
       for (let z = 0; z < CHUNK_Z; z++) {
         if (get(x, y, z) !== targetId) continue;
+        // Surface légèrement enfoncée (0.875 au lieu de 1) -- lisible comme un
+        // niveau d'eau/de lave, pas un cube plein à ras bord (cf. PLAN.md Phase
+        // 16.2). MAIS seulement si CETTE case est vraiment la case du DESSUS
+        // d'un volume de liquide (rien du même liquide juste au-dessus) --
+        // sinon une colonne de plusieurs cases empilées (chute de lave, Phase
+        // 30) affichait un "cran" enfoncé au sommet de CHAQUE case, y compris
+        // en plein milieu de la colonne où il n'y a pourtant aucune vraie
+        // surface : on aurait dit des blocs séparés par des fentes plutôt
+        // qu'une chute continue. Calculé une fois par case (pas par face) --
+        // le dessus ET les 4 côtés d'une même case partagent la même réponse.
+        const isTopOfColumn = get(x, y + 1, z) !== targetId;
         for (const face of facesToUse) {
           const [nx, ny, nz] = face.n;
           if (!shouldDraw(get(x + nx, y + ny, z + nz))) continue;
           const base = vertCount;
           const factor = lightFactor(getLight(x + nx, y + ny, z + nz));
           for (const corner of face.v) {
-            // surface légèrement enfoncée (0.875 au lieu de 1) -- lisible comme un
-            // niveau d'eau, pas un cube plein à ras bord (cf. PLAN.md Phase 16.2)
-            const cy = corner[1] === 1 ? 0.875 : corner[1];
+            const cy = corner[1] === 1 && isTopOfColumn ? 0.875 : corner[1];
             positions[pOff++] = x + corner[0];
             positions[pOff++] = y + cy;
             positions[pOff++] = z + corner[2];

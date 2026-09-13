@@ -264,6 +264,10 @@ function travelToDimension(name) {
   const groundY = activeWorld.getGroundHeight(player.pos.x, player.pos.z);
   player.pos.y = groundY + 0.05;
   player.velY = 0;
+  // Nuages (Phase 30) : aucun sens dans le Nether (pas de ciel, un plafond de
+  // bedrock à la place) -- masqués plutôt que détruits/recréés, pour ne pas
+  // avoir à reconstruire le mesh à chaque aller-retour.
+  cloudsApi.mesh.visible = name !== 'nether';
 }
 
 const cloudsApi = createClouds({ scene });
@@ -2723,7 +2727,14 @@ function animate() {
 
     updateVisuals(dt, isMoving, yaw, pitch, crouching); // positionne la caméra (1ère/3e personne) + anime main et avatar
 
-    mobSystem.update(dt, player.pos);
+    // Dimensions (Phase 30) : le Nether n'a pas de mobs propres pour l'instant
+    // (prévus plus tard) -- et sans ce garde, `trySpawnAroundPlayer` (mob.js)
+    // considérerait TOUT le Nether comme "souterrain" (jamais de ciel visible,
+    // cf. hasSkyAbove) et ferait apparaître des zombies en continu. Même
+    // principe que le gel de la redstone hors overworld : les mobs existants
+    // restent tels quels (suivis par position, pas par dimension), juste plus
+    // aucun nouveau spawn/mise à jour tant qu'on n'est pas revenu.
+    if (activeWorld === overworldApi) mobSystem.update(dt, player.pos);
     itemSystem.update(dt, player.pos, pickupItem);
   }
 
