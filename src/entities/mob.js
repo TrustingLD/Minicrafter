@@ -646,6 +646,14 @@ export function createMobSystem({
   // vague. Une clé est relâchée (cf. releaseVillageIfEmpty) quand plus aucun de ses
   // villageois n'est en vie/à portée -- le village pourra être repeuplé si le joueur revient.
   const spawnedVillages = new Set();
+  // Dimensions (Phase 31) : groupe unique pour TOUS les mobs, exactement comme
+  // world.js `group` pour un monde -- main.js masque `mobSystem.group` en
+  // entrant dans le Nether. Sans ça, un mob de l'overworld (suivi par
+  // POSITION, pas par dimension, cf. le gel de mobSystem.update déjà en place)
+  // resterait visible/rendu tel quel, flottant dans le décor du Nether au lieu
+  // de disparaître avec le reste de l'overworld.
+  const mobsGroup = new THREE.Group();
+  scene.add(mobsGroup);
 
   function refreshMobHitboxes() {
     mobHitboxes = [];
@@ -661,7 +669,12 @@ export function createMobSystem({
 
   function makeCtx() {
     return {
-      scene,
+      // `scene: mobsGroup` (Phase 31) : le SEUL usage de `ctx.scene` dans tout
+      // ce fichier est `ctx.scene.add(this.group)` (Mob, plus haut) -- le
+      // faire pointer vers le groupe partagé plutôt que la scène réelle
+      // suffit à regrouper tous les mobs pour main.js (cf. le commentaire de
+      // `mobsGroup` plus haut), sans toucher au reste du fichier.
+      scene: mobsGroup,
       mobAssets,
       collidesAtBox,
       getGroundHeight,
@@ -872,5 +885,6 @@ export function createMobSystem({
     spawnMobs,
     refreshMobHitboxes,
     update,
+    group: mobsGroup, // Phase 31 : main.js le masque en entrant dans le Nether
   };
 }

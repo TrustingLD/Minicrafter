@@ -268,6 +268,11 @@ function travelToDimension(name) {
   // bedrock à la place) -- masqués plutôt que détruits/recréés, pour ne pas
   // avoir à reconstruire le mesh à chaque aller-retour.
   cloudsApi.mesh.visible = name !== 'nether';
+  // Mobs de l'overworld (Phase 31) : masqués eux aussi -- ils restent suivis
+  // par POSITION (pas par dimension, cf. le gel de mobSystem.update plus bas
+  // dans animate()), donc sans ce masquage un zombie resterait visible,
+  // flottant dans le décor du Nether à ses coordonnées overworld.
+  mobSystem.group.visible = name !== 'nether';
 }
 
 const cloudsApi = createClouds({ scene });
@@ -813,6 +818,10 @@ const commandHandlers = {
   godmode() {
     player.invincible = !player.invincible;
     return player.invincible ? 'Invincibilité activée.' : 'Invincibilité désactivée.';
+  },
+  instant() {
+    player.instantBreak = !player.instantBreak;
+    return player.instantBreak ? 'Cassage instantané activé.' : 'Cassage instantané désactivé.';
   },
   nether() {
     if (activeWorld === netherApi) return 'Déjà dans le Nether.';
@@ -2769,7 +2778,16 @@ function animate() {
       const { x, y, z } = blockHit.block;
       const key = `${x},${y},${z}`;
       const type = worldApi.getBlock(x, y, z);
-      if (type && !BLOCK_TYPES[type]?.unbreakable) {
+      // /instant (Phase 32) : casse au premier passage dans cette branche, même
+      // un bloc `unbreakable`/hardness Infinity (bedrock, tête de piston...) --
+      // contourne complètement breakTimeFor et le check `unbreakable` ci-dessous,
+      // pas juste "plus rapide".
+      if (type && player.instantBreak) {
+        breakBlockAt(x, y, z, type);
+        breakKey = null;
+        breakProgress = 0;
+        crackMesh.visible = false;
+      } else if (type && !BLOCK_TYPES[type]?.unbreakable) {
         if (key !== breakKey) {
           breakKey = key;
           breakProgress = 0;

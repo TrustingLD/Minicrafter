@@ -50,6 +50,7 @@ export function createPlayer({
     flying: false, // /fly (Phase 15) : gravité coupée, Espace/Maj montent/descendent
     flySpeedMultiplier: 1, // /speedfly : multiplie player.speed, mais seulement pendant le vol
     invincible: false, // /godmode (Phase 28) : cf. damagePlayer(), main.js -- seul point de passage de TOUTES les sources de dégâts
+    instantBreak: false, // /instant (Phase 32) : cf. la boucle de cassage progressif, main.js -- casse tout au premier clic, même l'incassable
     // Knockback (coup de zombie, cf. world/physics.js applyPlayerKnockback/
     // resolveKnockback et entities/mob.js) : vitesse horizontale constante
     // appliquée pendant knockbackTimer secondes, puis retombe à 0.
