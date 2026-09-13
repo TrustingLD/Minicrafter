@@ -19,6 +19,11 @@ const LIGHT_DIST = 100; // distance de la position des lumières directionnelles
 const SKY_DAY = new THREE.Color(0x87ceeb);
 const SKY_NIGHT = new THREE.Color(0x060a1f);
 const SKY_DUSK = new THREE.Color(0xff9a5a);
+// Nether (Phase 33) : rouge clair uniforme, ni cycle jour/nuit ni soleil/lune
+// -- demandé explicitement ("rouge clair dans l'entièreté du Nether"), pas
+// l'ambre sombre/brumeux du vrai jeu (volontairement plus clair et net que
+// la vraie teinte de brouillard du Nether).
+const SKY_NETHER = new THREE.Color(0xcc4a3d);
 
 function smoothstep(edge0, edge1, x) {
   const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
@@ -140,6 +145,8 @@ export function createSky({ scene, ambientLight, sunLight, touchMode = false }) 
   // l'état réel du ciel) avant le tout premier update.
   // (même formule que dans update() : sunDir = (cos a, sin a, 0.2).normalize())
   let lastSunHeight = Math.sin(START_CYCLE_T * Math.PI * 2 - Math.PI / 2) / Math.hypot(1, 0.2);
+  // Nether (Phase 33) : cf. setNetherMode plus bas.
+  let netherMode = false;
 
   function update(dt, playerPos) {
     elapsed += dt;
@@ -148,6 +155,23 @@ export function createSky({ scene, ambientLight, sunLight, touchMode = false }) 
     const sunDir = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0.2).normalize();
     const sunHeight = sunDir.y;
     lastSunHeight = sunHeight;
+
+    // Nether (Phase 33) : ciel/fog figés en rouge clair, pas de soleil/lune/
+    // étoiles -- mais `elapsed`/`lastSunHeight` continuent d'avancer ci-dessus
+    // (le cycle jour/nuit de l'overworld ne doit pas se figer pendant qu'on
+    // est ailleurs, cf. le même principe déjà appliqué à la redstone/aux mobs
+    // dans main.js) : seul l'AFFICHAGE est court-circuité ici.
+    if (netherMode) {
+      scene.background = SKY_NETHER;
+      scene.fog.color.copy(SKY_NETHER);
+      ambientLight.intensity = 0.32; // ambiance constante, ni jour ni nuit
+      sunLight.intensity = 0;
+      moonLight.intensity = 0;
+      sunSprite.visible = false;
+      moonSprite.visible = false;
+      starMat.opacity = 0;
+      return;
+    }
 
     const dayAmount = smoothstep(-0.2, 0.15, sunHeight);
     const duskAmount = Math.max(0, 1 - Math.abs(sunHeight) / 0.28);
@@ -195,5 +219,13 @@ export function createSky({ scene, ambientLight, sunLight, touchMode = false }) 
     return lastSunHeight < -0.05;
   }
 
-  return { update, setTime, isNight };
+  // /nether, /overworld (Phase 33, cf. main.js travelToDimension) : bascule
+  // l'affichage ci-dessus dans update(). Le nuage/soleil/lune/étoiles restent
+  // des objets THREE existants (jamais détruits), juste masqués via `visible`/
+  // `opacity` -- rien à reconstruire au retour dans l'overworld.
+  function setNetherMode(active) {
+    netherMode = active;
+  }
+
+  return { update, setTime, isNight, setNetherMode };
 }

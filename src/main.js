@@ -153,6 +153,10 @@ const music = createMusic(
     './mini-city3.mp3',
   ],
   musicHintEl,
+  // Nether (Phase 34) : une seule piste pour l'instant, demandé explicitement
+  // -- cf. le commentaire de `netherUrls` dans audio/music.js pour comment en
+  // ajouter d'autres plus tard.
+  ['./ministep.mp3'],
 );
 document.getElementById('musicHint').addEventListener('click', music.toggleBgmMute);
 document.getElementById('musicNextBtn').addEventListener('click', music.nextTrack);
@@ -273,6 +277,12 @@ function travelToDimension(name) {
   // dans animate()), donc sans ce masquage un zombie resterait visible,
   // flottant dans le décor du Nether à ses coordonnées overworld.
   mobSystem.group.visible = name !== 'nether';
+  // Ciel (Phase 33) : rouge clair uniforme dans le Nether, pas de cycle
+  // jour/nuit ni de soleil/lune visibles -- cf. sky.js setNetherMode.
+  skyApi.setNetherMode(name === 'nether');
+  // Musique (Phase 34) : une seule piste dédiée dans le Nether -- cf.
+  // audio/music.js setNetherMode.
+  music.setNetherMode(name === 'nether');
 }
 
 const cloudsApi = createClouds({ scene });

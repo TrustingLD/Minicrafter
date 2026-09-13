@@ -5,14 +5,25 @@
 // Comportement : au démarrage on tire une piste au hasard parmi `urls`, puis
 // à la fin de chaque piste on enchaîne sur la suivante (en boucle sur la
 // playlist, pas juste répétition de la même piste).
+//
+// Nether (Phase 34) : `netherUrls` (optionnel) est une SECONDE playlist,
+// utilisée à la place de la première tant que `setNetherMode(true)` est actif
+// -- demandé explicitement "que cette musique" dans le Nether, donc une seule
+// piste pour l'instant, mais le paramètre accepte aussi bien un tableau
+// qu'une seule URL (même souplesse que `urls`), pour ajouter d'autres pistes
+// nether plus tard sans revenir sur cette fonction.
 
-export function createMusic(urls, hintEl) {
-  const playlist = Array.isArray(urls) ? urls : [urls];
+export function createMusic(urls, hintEl, netherUrls) {
+  const overworldPlaylist = Array.isArray(urls) ? urls : [urls];
+  const netherPlaylist = netherUrls ? (Array.isArray(netherUrls) ? netherUrls : [netherUrls]) : overworldPlaylist;
 
   const bgm = new Audio();
   bgm.volume = 0.32;
-  bgm.loop = false; // on gère nous-mêmes l'enchaînement piste -> piste
+  bgm.loop = false; // on gère nous-mêmes l'enchaînement piste -> piste (même une playlist
+  // d'une seule piste reboucle correctement via 'ended' ci-dessous : currentIndex
+  // revient à 0 puisque playlist.length === 1)
 
+  let playlist = overworldPlaylist;
   // Ordre de lecture : on démarre sur une piste aléatoire, puis on continue
   // dans l'ordre de la playlist en revenant au début une fois la fin atteinte.
   let currentIndex = Math.floor(Math.random() * playlist.length);
@@ -54,5 +65,18 @@ export function createMusic(urls, hintEl) {
     if (hintEl) hintEl.textContent = bgmMuted ? '🔇 Musique coupée (M)' : '🔊 Musique (M)';
   }
 
-  return { startBgm, toggleBgmMute, nextTrack };
+  // /nether, /overworld (Phase 34, cf. main.js travelToDimension) : bascule la
+  // playlist active et repart du début de celle-ci -- pas de retour à une
+  // position précise dans l'ancienne piste au retour (simplification assumée,
+  // comme `nextTrack` le fait déjà pour un changement manuel).
+  function setNetherMode(active) {
+    const wanted = active ? netherPlaylist : overworldPlaylist;
+    if (wanted === playlist) return; // déjà sur la bonne playlist, rien à faire
+    playlist = wanted;
+    currentIndex = 0;
+    loadCurrentTrack();
+    if (bgmStarted && !bgmMuted) playCurrent();
+  }
+
+  return { startBgm, toggleBgmMute, nextTrack, setNetherMode };
 }

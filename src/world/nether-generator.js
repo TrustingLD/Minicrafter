@@ -59,19 +59,30 @@ const QUARTZ_SEED = 6665;
 const GLOWSTONE_CHANCE = 0.012;
 const GLOWSTONE_SEED = 6666;
 
-// Chutes de lave (Phase 30) : partent d'un point du plafond d'une poche
-// (repéré comme la lueur de pierre ci-dessus, mais en zone "wastes"
-// uniquement -- jamais dans les biomes régionaux, pour ne pas dénaturer leur
-// identité visuelle) et tombent tout droit jusqu'au premier obstacle (sol,
-// autre liquide déjà là) ou une longueur max. Simplification assumée : un
-// simple tirage PAR COLONNE (pas une vraie mécanique d'écoulement -- ce
+// Chutes de lave (Phase 30, corrigé Phase 33) : partent d'un point du plafond
+// d'une poche (repéré comme la lueur de pierre ci-dessus, mais en zone
+// "wastes" uniquement -- jamais dans les biomes régionaux, pour ne pas
+// dénaturer leur identité visuelle) et tombent tout droit jusqu'au premier
+// obstacle (sol, autre liquide déjà là) -- PAS de longueur maximale (retiré
+// après coup : une caverne haute de plus de 40 blocs coupait la chute avant
+// qu'elle touche le sol, donnant une colonne "flottante" qui s'arrêtait en
+// plein vide). La boucle qui suit la poche ouverte vers le bas s'arrête déjà
+// toute seule au premier bloc plein ou à y=0 (bedrock), donc rien ne peut
+// boucler indéfiniment sans ce plafond artificiel. Simplification assumée :
+// un simple tirage PAR COLONNE (pas une vraie mécanique d'écoulement -- ce
 // moteur ne fait pas propager tout seuls les liquides posés à la génération,
 // cf. le commentaire de la mer de lave plus bas) -- l'animation existante de
 // la texture de lave (cf. main.js, `worldApi.lavaTexture.offset`) suffit à
 // donner une impression de mouvement même sur une colonne figée.
 const LAVAFALL_CHANCE = 0.006;
 const LAVAFALL_SEED = 6667;
-const LAVAFALL_MAX_LENGTH = 40;
+// Mare au pied de la chute (Phase 33) : une fois le sol atteint, la lave
+// "continue de couler" latéralement plutôt que de s'arrêter net en pilier --
+// simple remplissage par propagation (BFS), borné en nombre de cases (pas une
+// vraie physique de fluide), qui ne s'étend que sur des cases avec un vrai
+// sol plein juste en dessous (jamais dans le vide, jamais par-dessus une
+// autre poche ouverte).
+const LAVAPOOL_MAX_CELLS = 26;
 
 // Régions du Nether (Phase 29) : bruit à TRÈS basse fréquence -> de vastes
 // zones cohérentes (des centaines de blocs), pas une mosaïque bruitée bloc
@@ -104,6 +115,34 @@ function isCeilingBedrock(wx, wy, wz) {
   if (wy < CEIL_ROUGH_FROM_Y) return false;
   const t = (wy - CEIL_ROUGH_FROM_Y) / (CEIL_SOLID_Y - CEIL_ROUGH_FROM_Y); // 0 en bas de la zone, 1 en haut
   return hash3(wx, wy, wz, 6660) < t;
+}
+
+// cf. le commentaire de LAVAPOOL_MAX_CELLS plus haut -- `open`/`data` viennent
+// de generateNetherChunk (fermeture), pas de paramètres séparés à retenir.
+function spreadLavaPool(data, open, startLx, y, startLz) {
+  const queue = [[startLx, startLz]];
+  const visited = new Set([`${startLx},${startLz}`]);
+  let count = 0;
+  while (queue.length && count < LAVAPOOL_MAX_CELLS) {
+    const [lx, lz] = queue.shift();
+    if (lx < 0 || lx >= CHUNK_X || lz < 0 || lz >= CHUNK_Z) continue;
+    if (!open(lx, y, lz)) continue; // pas de place libre ici (déjà plein/lave)
+    if (open(lx, y - 1, lz)) continue; // pas de vrai sol dessous -- ne coule pas dans le vide
+    data[idx(lx, y, lz)] = LAVA_ID;
+    count++;
+    for (const [dx, dz] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const k = `${lx + dx},${lz + dz}`;
+      if (!visited.has(k)) {
+        visited.add(k);
+        queue.push([lx + dx, lz + dz]);
+      }
+    }
+  }
 }
 
 export function generateNetherChunk(cx, cz) {
@@ -199,13 +238,18 @@ export function generateNetherChunk(cx, cz) {
       if (region === 'wastes' && hash3(wx, 0, wz, LAVAFALL_SEED) < LAVAFALL_CHANCE) {
         for (let y = CEIL_ROUGH_FROM_Y - 2; y > NETHER_LAVA_LEVEL + 4; y--) {
           if (!open(lx, y, lz) || !open(lx, y - 1, lz)) continue; // pas un plafond de poche ici
-          let yy = y - 1,
-            fallen = 0;
-          while (yy > 0 && open(lx, yy, lz) && fallen < LAVAFALL_MAX_LENGTH) {
+          let yy = y - 1;
+          while (yy > 0 && open(lx, yy, lz)) {
             data[idx(lx, yy, lz)] = LAVA_ID;
             yy--;
-            fallen++;
           }
+          // `yy` pointe maintenant la première case NON ouverte sous la chute
+          // (le vrai sol où elle atterrit) -- si elle a atterri au-dessus du
+          // niveau de la mer de lave (donc sur un vrai sol, pas juste
+          // fusionné avec la mer déjà remplie plus bas), elle continue de
+          // couler latéralement plutôt que de s'arrêter net en pilier (cf.
+          // spreadLavaPool plus haut).
+          if (yy + 1 > NETHER_LAVA_LEVEL) spreadLavaPool(data, open, lx, yy + 1, lz);
           break; // une seule chute par colonne, on s'arrête au premier plafond valable
         }
       }
