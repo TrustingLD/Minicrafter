@@ -1,0 +1,1233 @@
+// Registre des types de blocs. Pure donnée : aucun import.
+//
+// id       : identifiant numérique (1-255) stocké dans le Uint8Array du chunk (Phase 4a).
+//            0 est réservé à "air" — ne jamais l'utiliser ici.
+// textures : { all: key } si les 6 faces sont identiques, sinon { top, bottom, side }.
+//            `key` référence une entrée de TEXTURE_FN dans render/atlas.js.
+// hardness : temps de base (secondes) pour casser à mains nues.
+// tool     : catégorie d'outil ('pickaxe' | 'axe' | null) qui donne un bonus de
+//            cassage — une catégorie plutôt qu'un item précis, pour que n'importe
+//            quel tier de pioche (bois/pierre/fer) débloque le bonus sur la pierre.
+// vein     : { minY, maxY, rarity, veinSize } — uniquement les minerais (Phase 4b).
+// unbreakable : bloc qu'on ne peut jamais casser (bedrock, plancher du monde).
+// drops    : [{ item, min, max, chance? }] — ce qui apparaît au sol quand on casse
+//            le bloc (Phase 10). Une seule entrée à quantité fixe = min===max. Un
+//            bloc sans `drops` (ou tableau vide) ne laisse rien tomber. `chance`
+//            optionnel (0..1) : probabilité que CETTE entrée tombe (ex: 0.2 = 20%
+//            de chance) ; une entrée sans `chance` tombe toujours (comportement
+//            historique, cf. breakBlockAt dans main.js).
+
+// Épaisseur du panneau de porte : 3 texels sur les 32 d'une texture (cf.
+// render/textures.js TEX_SIZE) -- « 3 pixels de largeur » demandé, exprimé en
+// fraction 0..1 de la cellule comme le reste du champ `shape`.
+const DOOR_THICKNESS = 3 / 32;
+
+export const BLOCK_TYPES = {
+  grass: {
+    id: 1,
+    name: 'Herbe',
+    hardness: 0.6,
+    tool: null,
+    textures: { top: 'grassTop', bottom: 'dirt', side: 'grassSide' },
+    drops: [{ item: 'dirt', min: 1, max: 1 }],
+  },
+  dirt: {
+    id: 2,
+    name: 'Terre',
+    hardness: 0.5,
+    tool: null,
+    textures: { all: 'dirt' },
+    drops: [{ item: 'dirt', min: 1, max: 1 }],
+  },
+  stone: {
+    id: 3,
+    name: 'Pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    textures: { all: 'stone' },
+    drops: [{ item: 'stone', min: 1, max: 1 }],
+  },
+  wood: {
+    id: 4,
+    name: 'Bois',
+    hardness: 1.2,
+    tool: 'axe',
+    textures: { top: 'woodTop', bottom: 'woodTop', side: 'woodSide' },
+    drops: [{ item: 'wood', min: 1, max: 1 }],
+  },
+  leaves: {
+    id: 5,
+    name: 'Feuilles',
+    hardness: 0.3,
+    tool: null,
+    textures: { all: 'leaves' },
+    // 20% de chance de laisser tomber une pomme (sinon rien, comme avant).
+    drops: [{ item: 'apple', min: 1, max: 1, chance: 0.2 }],
+  },
+  planks: {
+    id: 6,
+    name: 'Planches',
+    hardness: 1.0,
+    tool: null,
+    textures: { all: 'planks' },
+    drops: [{ item: 'planks', min: 1, max: 1 }],
+  },
+  crafting_table: {
+    id: 7,
+    name: 'Table de craft',
+    hardness: 1.2,
+    tool: 'axe',
+    textures: { top: 'craftTop', bottom: 'planks', side: 'craftSide' },
+    drops: [{ item: 'crafting_table', min: 1, max: 1 }],
+  },
+  snow: {
+    id: 8,
+    name: 'Neige',
+    hardness: 0.3,
+    tool: null,
+    textures: { all: 'snow' },
+    drops: [{ item: 'snow', min: 1, max: 1 }],
+  },
+
+  // Minerais (Phase 4b) : placés en veines par world/generator.js selon `vein`.
+  coal_ore: {
+    id: 9,
+    name: 'Minerai de charbon',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    textures: { all: 'coalOre' },
+    vein: { minY: 5, maxY: 60, rarity: 0.02, veinSize: 8 },
+    drops: [{ item: 'coal_ore', min: 1, max: 1 }],
+  },
+  iron_ore: {
+    id: 10,
+    name: 'Minerai de fer',
+    hardness: 2.0,
+    tool: 'pickaxe',
+    textures: { all: 'ironOre' },
+    vein: { minY: 3, maxY: 40, rarity: 0.01, veinSize: 5 },
+    drops: [{ item: 'iron_ore', min: 1, max: 1 }],
+  },
+  gold_ore: {
+    id: 11,
+    name: "Minerai d'or",
+    hardness: 2.5,
+    tool: 'pickaxe',
+    textures: { all: 'goldOre' },
+    vein: { minY: 2, maxY: 22, rarity: 0.004, veinSize: 4 },
+    drops: [{ item: 'gold_ore', min: 1, max: 1 }],
+  },
+  diamond_ore: {
+    id: 12,
+    name: 'Minerai de diamant',
+    hardness: 3.0,
+    tool: 'pickaxe',
+    textures: { all: 'diamondOre' },
+    vein: { minY: 1, maxY: 14, rarity: 0.002, veinSize: 3 },
+    drops: [{ item: 'diamond_ore', min: 1, max: 1 }],
+  },
+  bedrock: {
+    id: 13,
+    name: 'Bedrock',
+    hardness: Infinity,
+    tool: null,
+    textures: { all: 'bedrock' },
+    unbreakable: true,
+    drops: [],
+  },
+  // Torche (Phase 13) : seul bloc non-solide et émetteur de lumière du jeu.
+  // `solid: false` -> ne bloque pas le joueur/les mobs ni la lumière (cf. isOpaque
+  // dans world/world.js). `emitsLight` est lu par le système de lumière (world/light.js)
+  // pour semer le BFS ; les autres blocs n'ont simplement pas ce champ (= n'émettent rien).
+  torch: {
+    id: 14,
+    name: 'Torche',
+    hardness: 0.1,
+    tool: null,
+    solid: false,
+    // 15 = maximum : la lumière perd 1 par bloc parcouru, donc une torche à 15 se
+    // fait encore franchement sentir à 5 blocs (niveau 10) — ce que 14 ne donnait
+    // pas tout à fait. Cf. aussi le PointLight de main.js, qui ajoute de la vraie
+    // lumière 3D par-dessus cette lumière « de bloc » stockée par sommet.
+    emitsLight: 15,
+    // `shape` : ce bloc n'est PAS un cube plein. Le mesher émet une boîte fine et
+    // haute centrée dans la cellule (un bâton), et ne laisse jamais ce bloc masquer
+    // la face d'un voisin. Cf. render/mesher.js.
+    shape: { width: 0.2, height: 0.62 },
+    // trois tuiles distinctes : le bâton sur les côtés (manche + flamme en haut),
+    // la flamme seule sur le dessus, le bois nu en dessous.
+    textures: { top: 'torchFlame', bottom: 'torchWood', side: 'torchStick' },
+    drops: [{ item: 'torch', min: 1, max: 1 }],
+  },
+  // Fourneau (Phase 14) : bloc-entité (état + horloge propres, cf. world/block-entities.js).
+  // Simplification assumée : une seule texture, pas de variante "allumée" -- le mesher
+  // partage un atlas UV PAR TYPE DE BLOC, donc faire varier l'apparence d'UNE instance
+  // précise selon son état demanderait un système à part (comme la lumière par sommet,
+  // Phase 13) ; l'état "allumé" reste visible dans le panneau (jauge de flamme), pas sur
+  // le bloc lui-même pour l'instant.
+  furnace: {
+    id: 15,
+    name: 'Fourneau',
+    hardness: 3.5,
+    tool: 'pickaxe',
+    textures: { all: 'furnace' },
+    isFurnace: true,
+    drops: [{ item: 'furnace', min: 1, max: 1 }],
+  },
+  // Laine (Phase 18) : tondue sur un mouton, ou posée comme bloc plein classique.
+  // Teignable plus tard (backlog) — une seule couleur pour l'instant.
+  wool: {
+    id: 16,
+    name: 'Laine',
+    hardness: 0.8,
+    tool: null,
+    textures: { all: 'wool' },
+    drops: [{ item: 'wool', min: 1, max: 1 }],
+  },
+  // Eau / lave, comme de VRAIS blocs du chunk (Phase 16) : avant, elles vivaient dans
+  // des side-lists (waterCells/lavaCells) dessinées comme des InstancedMesh à part,
+  // donc invisibles pour le mesher -> chaque face de lac était dessinée, y compris
+  // celles enfoncées dans la terre. `solid: false` (non-solide, on peut nager/tomber
+  // dedans), `liquid: true` (marque le mesher + world/fluid.js), incassables (pas de
+  // `tool`, hardness Infinity, `unbreakable`) -- on ne "mine" pas un liquide, on le
+  // déplace en creusant à côté (cf. fluid.js).
+  water: {
+    id: 17,
+    name: 'Eau',
+    hardness: Infinity,
+    tool: null,
+    solid: false,
+    liquid: true,
+    unbreakable: true,
+    textures: { all: 'water' },
+    drops: [],
+  },
+  lava: {
+    id: 18,
+    name: 'Lave',
+    hardness: Infinity,
+    tool: null,
+    solid: false,
+    liquid: true,
+    unbreakable: true,
+    // niveau 11 : le BFS de world/light.js perd 1 niveau par bloc et s'arrête dès
+    // qu'il atteint 1 (il ne propage plus au-delà) -> portée exacte de 10 blocs
+    // (11 - 1) depuis la source, comme demandé.
+    emitsLight: 11, // gratuit maintenant que la lumière existe (Phase 13) -- une mare de lave s'éclaire elle-même
+    textures: { all: 'lava' },
+    drops: [],
+  },
+  // Biomes (Phase 17.2) : blocs de désert/plage + neige-adjacent (glace).
+  sand: {
+    id: 19,
+    name: 'Sable',
+    hardness: 0.5,
+    tool: null,
+    textures: { all: 'sand' },
+    drops: [{ item: 'sand', min: 1, max: 1 }],
+  },
+  sandstone: {
+    id: 20,
+    name: 'Grès',
+    hardness: 1.2,
+    tool: 'pickaxe',
+    textures: { all: 'sandstone' },
+    drops: [{ item: 'sandstone', min: 1, max: 1 }],
+  },
+  cactus: {
+    id: 21,
+    name: 'Cactus',
+    hardness: 0.6,
+    tool: null,
+    textures: { all: 'cactus' },
+    drops: [{ item: 'cactus', min: 1, max: 1 }],
+  },
+  // Buisson mort : comme la torche (Phase 13), pas un cube plein -- un bouquet de
+  // brindilles fines centré dans la cellule (cf. `shape` dans render/mesher.js).
+  // Avant, le buisson occupait toute la cellule avec une texture "icône" dessinée
+  // dessus ; visuellement ça rendait comme un bloc de terre avec un motif, pas
+  // comme un buisson isolé. `solid: false` déjà présent : on marche à travers.
+  // Buisson mort (décor) : même traitement que les mauvaises herbes ci-dessous —
+  // un sprite en croix qui se découpe dans une texture à trous, pas un petit
+  // cube texturé sur ses 6 faces (cf. `shape.cross` dans mesher.js).
+  dead_bush: {
+    id: 22,
+    name: 'Buisson mort',
+    hardness: 0.1,
+    tool: null,
+    solid: false,
+    shape: { height: 0.8, cross: true },
+    textures: { all: 'deadBush' },
+    drops: [],
+  },
+  ice: {
+    id: 23,
+    name: 'Glace',
+    hardness: 0.9,
+    tool: null,
+    textures: { all: 'ice' },
+    drops: [],
+  },
+  // Mauvaises herbes (décor) : contrairement au buisson mort (une boîte fine
+  // texturée sur ses 6 faces), on veut ici de vrais brins qui se découpent dans
+  // une texture à trous — `cross: true` bascule le mesher sur un rendu "en X"
+  // (2 plans diagonaux à travers la cellule, texture avec fond transparent),
+  // le vrai rendu "herbe haute" façon Minecraft plutôt qu'un petit cube vert.
+  // Non pleine (on marche à travers), purement esthétique (aucun drop).
+  weeds: {
+    id: 24,
+    name: 'Mauvaises herbes',
+    hardness: 0.1,
+    tool: null,
+    solid: false,
+    shape: { height: 0.7, cross: true },
+    textures: { all: 'weeds' },
+    drops: [],
+  },
+  // Lit (2 blocs) : posé par tryPlaceBed (main.js) qui pose ces deux moitiés
+  // ENSEMBLE, jamais l'une sans l'autre. `shape: { width: 1, height: 0.5 }` = un
+  // bloc plein en largeur/profondeur mais tassé à mi-hauteur (façon dalle) --
+  // deux de ces demi-blocs posés côte à côte donnent un lit qui s'étend sur
+  // 2 blocs de long et un demi-bloc de haut, comme demandé. Casser une moitié
+  // casse l'autre et ne rend qu'UN item "lit" : logique spéciale dans
+  // breakBed() (main.js), pas dans `drops` ci-dessous (laissé vide exprès).
+  bed_foot: {
+    id: 25,
+    name: 'Lit (pied)',
+    hardness: 0.4,
+    tool: null,
+    solid: false, // comme tout bloc à `shape` custom (torche, herbes...) -- pas de collision fantôme au-dessus du demi-bloc visible
+    shape: { width: 1, height: 0.5 },
+    textures: { top: 'bedFoot', bottom: 'planks', side: 'bedSide' },
+    drops: [],
+  },
+  bed_head: {
+    id: 26,
+    name: 'Lit (tête)',
+    hardness: 0.4,
+    tool: null,
+    solid: false,
+    shape: { width: 1, height: 0.5 },
+    // côté gris clair (et non rouge) pour la moitié tête -- cf. texBedHeadSide,
+    // c'est ce qui donne au lit son extrémité "sommier/oreiller" bien visible
+    // même de profil, comme dans l'image de référence.
+    textures: { top: 'bedPillow', bottom: 'planks', side: 'bedHeadSide' },
+    drops: [],
+  },
+
+  // Escaliers : comme le lit, ce n'est PAS l'item qu'on garde en poche qui est un
+  // bloc du monde -- l'item ('stairs_wood'/'stairs_stone', cf. data/items.js) est
+  // posé via tryPlaceStairs() (main.js), qui choisit lui-même l'une de ces 4
+  // variantes selon la direction regardée par le joueur (même principe que
+  // tryPlaceBed). 4 orientations x 2 matériaux = 8 blocs distincts, chacun avec
+  // sa propre entrée ici, car le chunk ne stocke qu'un seul octet d'id par case
+  // (Uint8Array, Phase 4a) -- pas de champ "rotation" à part.
+  //
+  // `shape: { stairs: true, facing }` : forme dédiée gérée par render/mesher.js
+  // (deux boîtes empilées en décalage = profil en L, cf. son commentaire pour le
+  // détail des 2 boîtes). `facing` = le côté vers lequel s'ouvre la marche basse
+  // (le côté par lequel on aborde l'escalier pour monter) ; convention purement
+  // interne au moteur : 'north'/'south' = axe Z (-z/+z), 'east'/'west' = axe X
+  // (+x/-x) -- ne correspond à aucun point cardinal réel, juste un nom pour les
+  // 4 rotations. Comme tout bloc à `shape`, ce n'est pas un cube plein pour
+  // l'affichage (le mesher ne masque jamais les faces des voisins derrière la
+  // partie "marche"), MAIS on garde `solid` par défaut (true) : la collision du
+  // jeu est binaire par cellule entière (cf. world/world.js isSolid), il n'y a
+  // pas de système de boîte de collision partielle façon vraies marches -- un
+  // escalier bloque donc le joueur comme n'importe quel bloc plein (il faut
+  // sauter pour monter dessus), seul l'ASPECT visuel change. Même compromis
+  // assumé que le lit/la torche (formes réduites) mais dans l'autre sens
+  // (solide plutôt que traversable), documenté ici pour que ça ne surprenne pas.
+  stairs_wood_north: {
+    id: 27,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'north' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_wood_south: {
+    id: 28,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'south' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_wood_east: {
+    id: 29,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'east' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_wood_west: {
+    id: 30,
+    name: 'Escalier en bois',
+    hardness: 1.0,
+    tool: null,
+    shape: { stairs: true, facing: 'west' },
+    textures: { all: 'planks' },
+    drops: [{ item: 'stairs_wood', min: 1, max: 1 }],
+  },
+  stairs_stone_north: {
+    id: 31,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'north' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+  stairs_stone_south: {
+    id: 32,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'south' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+  stairs_stone_east: {
+    id: 33,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'east' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+  stairs_stone_west: {
+    id: 34,
+    name: 'Escalier en pierre',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    shape: { stairs: true, facing: 'west' },
+    textures: { all: 'stone' },
+    drops: [{ item: 'stairs_stone', min: 1, max: 1 }],
+  },
+
+  // Porte (Phase 21) : comme le lit, ce n'est pas l'item en poche ('door') qui est
+  // posé -- tryPlaceDoor() (main.js) pose 2 blocs empilés (door_bottom_*/door_top_*)
+  // d'un coup, verticalement (contrairement au lit qui s'étend à l'horizontale).
+  // Chaque moitié occupe toute la hauteur de sa cellule (`height: 1`, PAS un
+  // demi-bloc comme le lit) -- ce sont les 2 cellules empilées qui donnent les
+  // « 2 blocs de hauteur » demandés, pas un rétrécissement vertical par cellule.
+  // Seule l'EMPRISE AU SOL est réduite : `width`/`depth` (mesher.js, cf. son
+  // commentaire pour la distinction des deux) donnent un panneau plein sur 1 bloc
+  // de long et fin de DOOR_THICKNESS (3px/32 de large), façon vraie porte.
+  //
+  // `x`/`z` dans le nom = l'axe que couvre le panneau QUAND IL EST FERMÉ (choisi à
+  // la pose selon le regard du joueur, cf. tryPlaceDoor) -- ce suffixe ne change
+  // JAMAIS après la pose, ouvrir/fermer (clic droit, cf. toggleDoor) ne fait que
+  // basculer 'closed'<->'open' en gardant cet axe, jamais un axe pour l'autre :
+  // c'est ce qui permet de refermer une porte ouverte sans perdre son orientation
+  // d'origine. Concrètement, ouvrir fait pivoter le panneau de 90° (mêmes
+  // dimensions que la variante `closed` de l'AUTRE axe) et le rend traversable
+  // (`solid: false`) -- une porte fermée bloque le passage comme un bloc plein
+  // (simplification déjà vue pour l'escalier : la collision reste binaire par
+  // cellule, cf. son commentaire), une porte ouverte se traverse librement.
+  door_bottom_x_closed: {
+    id: 35,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_x_closed: {
+    id: 36,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
+  },
+  door_bottom_x_open: {
+    id: 37,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_x_open: {
+    id: 38,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
+  },
+  door_bottom_z_closed: {
+    id: 39,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_z_closed: {
+    id: 40,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    shape: { width: DOOR_THICKNESS, depth: 1, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
+  },
+  door_bottom_z_open: {
+    id: 41,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorBottom' },
+    drops: [],
+  },
+  door_top_z_open: {
+    id: 42,
+    name: 'Porte',
+    hardness: 0.5,
+    tool: 'axe',
+    solid: false,
+    shape: { width: 1, depth: DOOR_THICKNESS, height: 1, flush: true },
+    textures: { all: 'doorTop' },
+    drops: [],
+  },
+  glass: {
+    id: 43,
+    name: 'Verre',
+    hardness: 0.3,
+    tool: null,
+    textures: { all: 'glass' },
+    transparent: true,
+    drops: [{ item: 'glass', min: 1, max: 1 }],
+  },
+  chest: {
+    id: 44,
+    name: 'Coffre',
+    hardness: 2.5,
+    tool: 'axe',
+    textures: { top: 'chestTop', bottom: 'chestTop', side: 'chestSide' },
+    isChest: true,
+    drops: [{ item: 'chest', min: 1, max: 1 }],
+  },
+
+  /* ============================================================
+     REDSTONE (Phase 22) : logique de circuit façon vrai Minecraft.
+     Aucune case du chunk ne porte de métadonnées (1 octet/bloc, juste l'id,
+     cf. world/chunk.js) -- exactement comme les portes/escaliers plus haut,
+     TOUT état (niveau de puissance, orientation, allumé/éteint) est donc
+     encodé comme un id de bloc DIFFÉRENT, jamais stocké à part. La simulation
+     elle-même (propagation, délais des répéteurs/torches) vit dans
+     world/redstone.js -- ces entrées ne sont que l'inventaire des variantes
+     et leur apparence.
+     ============================================================ */
+
+  // Minerai de redstone (Phase 22) : même moule que les 4 minerais plus haut,
+  // `vein` suffit à le faire apparaître dans le monde généré (ORE_TYPES est
+  // dérivé automatiquement, cf. plus bas + world/generator.js). Casser une
+  // veine donne l'item 'redstone' (poussière), jamais le minerai lui-même.
+  redstone_ore: {
+    id: 45,
+    name: 'Minerai de redstone',
+    hardness: 2.0,
+    tool: 'pickaxe',
+    textures: { all: 'redstoneOre' }, // pierre + points rouges, même moule que les autres minerais
+    vein: { minY: 2, maxY: 30, rarity: 0.012, veinSize: 6 },
+    drops: [{ item: 'redstone', min: 2, max: 4 }],
+  },
+
+  // Bloc de redstone : source CONSTANTE (toujours à 15) -- pas besoin de levier
+  // pour tester un circuit. `nonConductor` (lu par world/redstone.js
+  // isRedstoneConductor) : c'est déjà une source en soi, il ne doit pas en plus
+  // agir comme un simple bloc plein qui relaierait un AUTRE signal à travers lui.
+  redstone_block: {
+    id: 46,
+    name: 'Bloc de redstone',
+    hardness: 5,
+    tool: 'pickaxe',
+    textures: { all: 'redstoneBlock' },
+    nonConductor: true,
+    drops: [{ item: 'redstone_block', min: 1, max: 1 }],
+  },
+
+  // Fil de redstone (poussière posée) : 16 variantes, une par niveau de
+  // puissance 0..15 (cf. commentaire ci-dessus). `shape` réduit -- une fine
+  // plaque posée au sol (pas un cube plein) -- + `solid:false` (on marche
+  // dessus sans collision, comme un tapis). Ne tient QUE sur un support plein
+  // (cf. tryPlaceRedstoneWire dans main.js + le nettoyage automatique dans
+  // world/redstone.js si ce support disparaît).
+  redstone_wire_0: {
+    id: 47,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire0' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_1: {
+    id: 48,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire1' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_2: {
+    id: 49,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire2' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_3: {
+    id: 50,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire3' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_4: {
+    id: 51,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire4' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_5: {
+    id: 52,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire5' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_6: {
+    id: 53,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire6' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_7: {
+    id: 54,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire7' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_8: {
+    id: 55,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire8' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_9: {
+    id: 56,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire9' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_10: {
+    id: 57,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire10' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_11: {
+    id: 58,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire11' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_12: {
+    id: 59,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire12' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_13: {
+    id: 60,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire13' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_14: {
+    id: 61,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire14' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+  redstone_wire_15: {
+    id: 62,
+    name: 'Redstone (fil)',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.98, height: 0.08 },
+    textures: { all: 'redstoneWire15' },
+    drops: [{ item: 'redstone', min: 1, max: 1 }],
+  },
+
+  // Torche à redstone : source de 15, ET inverseur (porte NON) -- s'éteint quand
+  // le bloc sur lequel elle est posée est lui-même alimenté (cf. world/redstone.js
+  // step()). `emitsLight` uniquement sur la variante allumée.
+  redstone_torch_off: {
+    id: 63,
+    name: 'Torche à redstone',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.2, height: 0.5 },
+    textures: { top: 'redstoneTorchFlameOff', bottom: 'torchWood', side: 'redstoneTorchStick' },
+    drops: [{ item: 'redstone_torch', min: 1, max: 1 }],
+  },
+  redstone_torch_on: {
+    id: 64,
+    name: 'Torche à redstone',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    emitsLight: 10,
+    shape: { width: 0.2, height: 0.5 },
+    textures: { top: 'redstoneTorchFlameOn', bottom: 'torchWood', side: 'redstoneTorchStick' },
+    drops: [{ item: 'redstone_torch', min: 1, max: 1 }],
+  },
+
+  // Levier : source manuelle (clic droit pour basculer, cf. main.js
+  // performSecondaryAction), 15 tant qu'il est ON, 0 sinon -- ne change JAMAIS
+  // tout seul (contrairement au bouton), cf. redstone.js.
+  lever_off: {
+    id: 65,
+    name: 'Levier',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.15, height: 0.3 },
+    textures: { all: 'leverOff' },
+    drops: [{ item: 'lever', min: 1, max: 1 }],
+  },
+  lever_on: {
+    id: 66,
+    name: 'Levier',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.15, height: 0.3 },
+    textures: { all: 'leverOn' },
+    drops: [{ item: 'lever', min: 1, max: 1 }],
+  },
+
+  // Bouton (pierre) : source momentanée -- clic droit passe à ON, revient tout
+  // seul à OFF après BUTTON_TIME secondes (cf. redstone.js), pas besoin de le
+  // rebasculer à la main.
+  button_off: {
+    id: 67,
+    name: 'Bouton',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.25, height: 0.12 },
+    textures: { all: 'buttonOff' },
+    drops: [{ item: 'button', min: 1, max: 1 }],
+  },
+  button_on: {
+    id: 68,
+    name: 'Bouton',
+    hardness: 0.5,
+    tool: null,
+    solid: false,
+    shape: { width: 0.25, height: 0.12 },
+    textures: { all: 'buttonOn' },
+    drops: [{ item: 'button', min: 1, max: 1 }],
+  },
+
+  // Lampe à redstone : consommateur pur (jamais de source), s'allume dès qu'une
+  // de ses 6 faces touche un signal > 0 -- cube plein classique, donc
+  // `nonConductor` pour ne pas laisser un signal la traverser comme un simple
+  // bloc de pierre (cf. isRedstoneConductor, world/redstone.js).
+  redstone_lamp_off: {
+    id: 69,
+    name: 'Lampe à redstone',
+    hardness: 0.3,
+    tool: null,
+    nonConductor: true,
+    textures: { all: 'redstoneLampOff' },
+    drops: [{ item: 'redstone_lamp', min: 1, max: 1 }],
+  },
+  redstone_lamp_on: {
+    id: 70,
+    name: 'Lampe à redstone',
+    hardness: 0.3,
+    tool: null,
+    nonConductor: true,
+    emitsLight: 14,
+    textures: { all: 'redstoneLampOn' },
+    drops: [{ item: 'redstone_lamp', min: 1, max: 1 }],
+  },
+
+  // Répéteur : 4 orientations (`facing` = sens de sortie du signal, même
+  // convention que les escaliers, cf. FACING_DELTA dans world/redstone.js) x 2
+  // états (verrouillé ON/OFF après son délai). Relit UNIQUEMENT sa face arrière
+  // (opposée à `facing`) et republie 15 en sortie -- ignore tout signal latéral,
+  // contrairement au fil.
+  repeater_north_off: {
+    id: 71,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_north_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_north_on: {
+    id: 72,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_north_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_south_off: {
+    id: 73,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_south_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_south_on: {
+    id: 74,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_south_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_east_off: {
+    id: 75,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_east_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_east_on: {
+    id: 76,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_east_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_west_off: {
+    id: 77,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_west_off', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+  repeater_west_on: {
+    id: 78,
+    name: 'Répéteur',
+    hardness: 0,
+    tool: null,
+    solid: false,
+    shape: { width: 0.95, height: 0.18 },
+    textures: { top: 'repeaterTop_west_on', bottom: 'stone', side: 'stone' },
+    drops: [{ item: 'repeater', min: 1, max: 1 }],
+  },
+
+  // Piston (non collant) : `facing` = sens de poussée. Simplification assumée
+  // (cf. commentaire de texPistonTop/Side, render/textures.js) : l'apparence NE
+  // varie PAS selon `facing` -- seul le comportement (quel voisin il pousse)
+  // en dépend, l'id encode quand même l'orientation puisque c'est le seul canal
+  // d'état disponible (1 octet/bloc, cf. le grand commentaire en tête de section).
+  // `nonConductor` : cube plein, mais ne doit pas laisser un signal le traverser
+  // comme un bloc de pierre normal (même raison que la lampe).
+  // Piston (non collant) : `facing` = sens de poussée, ET `frontNormal` (même
+  // vecteur, cf. commentaire de facingDelta dans world/redstone.js) donne
+  // maintenant au mesher (render/mesher.js, Phase 22.1) la face à afficher
+  // avec la texture "avant" (le vérin) -- les 5 autres faces gardent le
+  // blindage plat. Avant cet ajout, les 4 orientations étaient VISUELLEMENT
+  // identiques (limite alors assumée) ; corrigé ici, l'orientation posée se
+  // voit désormais vraiment sur le bloc, comme dans le vrai jeu.
+  piston_base_north: {
+    id: 79,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [0, 0, -1],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  piston_base_south: {
+    id: 80,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [0, 0, 1],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  piston_base_east: {
+    id: 81,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [1, 0, 0],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  piston_base_west: {
+    id: 82,
+    name: 'Piston',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    nonConductor: true,
+    frontNormal: [-1, 0, 0],
+    textures: { top: 'stone', bottom: 'stone', side: 'pistonSide', front: 'pistonTop' },
+    drops: [{ item: 'piston', min: 1, max: 1 }],
+  },
+  // Tête du piston (bras étendu) : bloc auxiliaire posé/retiré par
+  // world/redstone.js, jamais par le joueur directement -- incassable et sans
+  // drop propre (casser la base derrière elle la retire proprement, cf.
+  // breakPistonBase dans main.js), comme le panneau de porte ne se pose pas à
+  // la main non plus. `frontNormal` = même sens que sa base : c'est la face
+  // du bras tournée vers l'extérieur (celle que le joueur voit) qui porte le
+  // "visage" du piston.
+  piston_head_north: {
+    id: 83,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [0, 0, -1],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+  piston_head_south: {
+    id: 84,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [0, 0, 1],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+  piston_head_east: {
+    id: 85,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [1, 0, 0],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+  piston_head_west: {
+    id: 86,
+    name: 'Piston (tête)',
+    hardness: Infinity,
+    tool: null,
+    unbreakable: true,
+    nonConductor: true,
+    frontNormal: [-1, 0, 0],
+    textures: { top: 'pistonSide', bottom: 'pistonSide', side: 'pistonSide', front: 'pistonTop' },
+    drops: [],
+  },
+
+  // Obsidienne (Phase 24) : se forme quand de l'eau touche de la lave (cf.
+  // world/obsidian.js -- même esprit que fluid.js : PURE, `getBlock`/
+  // `setBlock` injectés, appelée depuis le tic de main.js). Extrêmement dure
+  // à la main (`hardness: 240` = 4 min, formule générale hardness/1 sans le
+  // bon outil, cf. breakTimeFor dans main.js) et surtout : `requiresTool`
+  // exige l'item EXACT 'diamond_pickaxe' (pas juste la catégorie "pioche"
+  // comme pour la pierre/le minerai -- cf. hasRightToolFor, main.js) pour
+  // espérer un drop. Avec elle : `toolHardness: 10` court-circuite la
+  // formule /2 habituelle (10s, pas 120s).
+  obsidian: {
+    id: 87,
+    name: 'Obsidienne',
+    tool: 'pickaxe',
+    hardness: 240,
+    toolHardness: 10,
+    requiresTool: 'diamond_pickaxe',
+    textures: { all: 'obsidian' },
+    drops: [{ item: 'obsidian', min: 1, max: 1 }],
+  },
+
+  // Gravier (Phase 25) : tapisse les parois des cavernes (10% gravier / 90%
+  // pierre, cf. world/generator.js isCaveAdjacent) -- se casse aussi vite que
+  // la terre (pas de catégorie "pelle" dans ce moteur, cf. commentaire dans
+  // items.js), n'importe quel outil convient.
+  // Gravier (Phase 25) : tapisse les parois des cavernes (10% gravier / 90%
+  // pierre, cf. world/generator.js isCaveWall) -- se casse aussi vite que
+  // la terre (pas de catégorie "pelle" dans ce moteur, cf. commentaire dans
+  // items.js), n'importe quel outil convient. `altItem`/`altChance` (Phase
+  // 26) : 10% de chance de silex AU LIEU du gravier lui-même (mutuellement
+  // exclusif, pas un drop en plus -- cf. le forEach des drops dans
+  // breakBlockAt, main.js, différent du `chance` seul déjà utilisé par la
+  // pomme des feuilles plus haut qui s'ajoute, elle, à un drop toujours
+  // garanti).
+  gravel: {
+    id: 88,
+    name: 'Gravier',
+    hardness: 0.6,
+    tool: null,
+    textures: { all: 'gravel' },
+    drops: [{ item: 'gravel', min: 1, max: 1, altItem: 'flint', altChance: 0.1 }],
+  },
+
+  /* ============================================================
+     NETHER (Phase 29) : terrain de la dimension Nether -- cf.
+     world/nether-generator.js pour la génération elle-même. Portée assumée
+     (demandé explicitement "juste la génération") : pas de portail, pas de
+     structures propres au Nether, pas de mobs -- seuls ces blocs de terrain.
+     ============================================================ */
+
+  // Netherrack : l'équivalent "pierre" du Nether -- un peu plus tendre que la
+  // vraie pierre (comme le vrai jeu), n'importe quel outil casse, la pioche
+  // accélère juste.
+  netherrack: {
+    id: 89,
+    name: 'Netherrack',
+    hardness: 0.4,
+    tool: 'pickaxe',
+    textures: { all: 'netherrack' },
+    drops: [{ item: 'netherrack', min: 1, max: 1 }],
+  },
+
+  // Sable des âmes : sol des vallées d'âme (cf. netherRegionAt,
+  // nether-generator.js). `slows` (Phase 29, lu dans main.js comme
+  // underwater/inLava) : ralentit la marche, comme le vrai jeu.
+  soul_sand: {
+    id: 90,
+    name: 'Sable des âmes',
+    hardness: 0.5,
+    tool: null,
+    slows: true,
+    textures: { all: 'soul_sand' },
+    drops: [{ item: 'soul_sand', min: 1, max: 1 }],
+  },
+
+  // Basalte : sol/piliers des deltas de basalte (cf. netherRegionAt +
+  // piliers, nether-generator.js) -- dur comme la pierre.
+  basalt: {
+    id: 91,
+    name: 'Basalte',
+    hardness: 1.25,
+    tool: 'pickaxe',
+    textures: { top: 'basaltEnd', bottom: 'basaltEnd', side: 'basaltSide' },
+    drops: [{ item: 'basalt', min: 1, max: 1 }],
+  },
+
+  // Lueur de pierre : source de lumière qui se forme accrochée aux plafonds
+  // de poches ouvertes (cf. nether-generator.js) -- la plus forte du jeu,
+  // comme le vrai jeu (le Nether n'a pas de ciel, sa seule autre source de
+  // lumière ambiante est la lave).
+  glowstone: {
+    id: 92,
+    name: 'Lueur de pierre',
+    hardness: 0.3,
+    tool: null,
+    emitsLight: 15,
+    textures: { all: 'glowstone' },
+    drops: [{ item: 'glowstone', min: 1, max: 1 }],
+  },
+
+  // Minerai de quartz : semé (tirage par bloc, cf. nether-generator.js) dans
+  // le netherrack. Donne l'item 'quartz', jamais le bloc lui-même.
+  nether_quartz_ore: {
+    id: 93,
+    name: 'Minerai de quartz',
+    hardness: 1.5,
+    tool: 'pickaxe',
+    textures: { all: 'netherQuartzOre' },
+    drops: [{ item: 'quartz', min: 1, max: 2 }],
+  },
+};
+
+// facing -> id de bloc, pour repeater_/piston_base_/piston_head_ (utilisé par
+// main.js et world/redstone.js plutôt que de reconstruire la chaîne à chaque fois).
+export const REPEATER_VARIANTS = {
+  off: {
+    north: 'repeater_north_off',
+    south: 'repeater_south_off',
+    east: 'repeater_east_off',
+    west: 'repeater_west_off',
+  },
+  on: {
+    north: 'repeater_north_on',
+    south: 'repeater_south_on',
+    east: 'repeater_east_on',
+    west: 'repeater_west_on',
+  },
+};
+export const PISTON_BASE_VARIANTS = {
+  north: 'piston_base_north',
+  south: 'piston_base_south',
+  east: 'piston_base_east',
+  west: 'piston_base_west',
+};
+export const PISTON_HEAD_VARIANTS = {
+  north: 'piston_head_north',
+  south: 'piston_head_south',
+  east: 'piston_head_east',
+  west: 'piston_head_west',
+};
+
+// les 4 variantes (une par orientation) pour chaque matériau d'escalier --
+// pratique pour tryPlaceStairs (main.js), qui choisit laquelle poser selon le
+// regard du joueur sans avoir à connaître les noms exacts.
+export const STAIRS_VARIANTS = {
+  stairs_wood: {
+    north: 'stairs_wood_north',
+    south: 'stairs_wood_south',
+    east: 'stairs_wood_east',
+    west: 'stairs_wood_west',
+  },
+  stairs_stone: {
+    north: 'stairs_stone_north',
+    south: 'stairs_stone_south',
+    east: 'stairs_stone_east',
+    west: 'stairs_stone_west',
+  },
+};
+
+// tous les blocs liquides, avec leur id résolu — le mesher (faces séparées,
+// culling) et fluid.js (propagation) n'ont besoin que de cette liste.
+export const LIQUID_IDS = new Set(
+  Object.values(BLOCK_TYPES)
+    .filter((b) => b.liquid)
+    .map((b) => b.id),
+);
+
+// blocs transparents (ex: verre) : la lumière passe à travers et leurs faces
+// adjacentes sont gérées spécialement par le mesher.
+export const TRANSPARENT_IDS = new Set(
+  Object.values(BLOCK_TYPES)
+    .filter((b) => b.transparent)
+    .map((b) => b.id),
+);
+
+// blocs pleins qui ne doivent PAS relayer un signal de redstone comme un simple
+// bloc de pierre (lampe/bloc de redstone/piston, cf. leurs commentaires plus
+// haut) -- lu par world/redstone.js isRedstoneConductor().
+export const NONCONDUCTOR_IDS = new Set(
+  Object.values(BLOCK_TYPES)
+    .filter((b) => b.nonConductor)
+    .map((b) => b.id),
+);
+
+// blocs qui ne remplissent pas leur cellule (`shape`), avec leur id résolu :
+// id -> { width, height }. Le mesher s'en sert pour DEUX choses indissociables —
+// émettre une boîte réduite au lieu d'un cube, et ne jamais laisser ce bloc masquer
+// la face d'un voisin (un bâton fin ne cache pas le mur derrière lui).
+export const SHAPE_BY_ID = Object.fromEntries(
+  Object.values(BLOCK_TYPES)
+    .filter((b) => b.shape)
+    .map((b) => [b.id, b.shape]),
+);
+
+// bloc -> catégorie d'outil qui donne un bonus de récolte, dérivé de BLOCK_TYPES
+export const TOOL_FOR_BLOCK = Object.fromEntries(
+  Object.entries(BLOCK_TYPES)
+    .filter(([, b]) => b.tool)
+    .map(([id, b]) => [id, b.tool]),
+);
+
+// nom de bloc -> id numérique et l'inverse (utilisés par le chunk Uint8Array)
+export const BLOCK_ID = Object.fromEntries(Object.entries(BLOCK_TYPES).map(([k, b]) => [k, b.id]));
+export const BLOCK_BY_ID = Object.fromEntries(
+  Object.entries(BLOCK_TYPES).map(([k, b]) => [b.id, k]),
+);
+
+// tous les minerais, avec leur id résolu — pratique pour le générateur (Phase 4b)
+export const ORE_TYPES = Object.entries(BLOCK_TYPES)
+  .filter(([, b]) => b.vein)
+  .map(([name, b]) => ({ name, id: b.id, ...b.vein }));

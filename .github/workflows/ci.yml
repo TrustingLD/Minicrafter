@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Type check (editor-level, JSDoc via tsc --noEmit)
+        run: npm run typecheck
+
+      # §1bis.2 du PLAN : GitHub Pages est sensible à la casse, Windows/macOS ne le
+      # sont pas. Un import qui marche en local et 404 en prod est la classe de bug
+      # la plus sournoise du projet -- cette règle attrape tout fichier sous src/
+      # dont le nom contient une majuscule, avant que ça n'atteigne la prod.
+      - name: Guard — no uppercase letters in any path under src/
+        run: |
+          BAD=$(find src -depth -regex '.*[A-Z].*' || true)
+          if [ -n "$BAD" ]; then
+            echo "Uppercase letters found in these paths under src/ (GitHub Pages is case-sensitive):"
+            echo "$BAD"
+            exit 1
+          fi
+
+      # §1bis.1 du PLAN : le site est servi depuis un sous-chemin
+      # (trustingld.github.io/Minicrafter/), pas la racine du domaine. Un import ou
+      # un attribut src commençant par "/" résout à la racine du domaine en prod ->
+      # 404 direct, alors que ça marche par accident en dev local à la racine.
+      - name: Guard — no root-absolute imports or src attributes
+        run: |
+          BAD=$(grep -rnE "from *['\"]/|src=['\"]/" --include='*.js' --include='*.html' src index.html || true)
+          if [ -n "$BAD" ]; then
+            echo "Root-absolute path(s) found (breaks under the GitHub Pages sub-path):"
+            echo "$BAD"
+            exit 1
+          fi

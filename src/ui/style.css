@@ -1,0 +1,1326 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  background: #87ceeb;
+  font-family: sans-serif;
+}
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  touch-action: none;
+}
+
+/* ---------- Contrôles tactiles (Phase 6) ---------- */
+#touchControls {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+}
+#tcLookZone {
+  position: absolute;
+  inset: 0;
+  left: 40%;
+  touch-action: none;
+}
+#tcJoystickBase {
+  position: absolute;
+  left: 26px;
+  bottom: 116px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  touch-action: none;
+}
+#tcJoystickStick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+#tcButtons {
+  position: absolute;
+  right: 18px;
+  bottom: 110px;
+  display: grid;
+  grid-template-columns: repeat(2, 56px);
+  gap: 10px;
+  justify-items: center;
+}
+.tcBtn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 22px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tcBtn:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+.tcBtnBig {
+  grid-column: span 2;
+  width: 100%;
+}
+
+#crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+}
+#crosshair::before,
+#crosshair::after {
+  content: '';
+  position: absolute;
+  background: white;
+  box-shadow: 0 0 2px black;
+}
+#crosshair::before {
+  left: 9px;
+  top: 0;
+  width: 2px;
+  height: 20px;
+}
+#crosshair::after {
+  top: 9px;
+  left: 0;
+  width: 20px;
+  height: 2px;
+}
+
+/* Vignette de dégâts (Phase 19) : flash rouge sur les bords à chaque perte de vie,
+   pas à chaque event player:health (la régénération de faim en émet aussi). */
+#hurtVignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(200, 0, 0, 0) 55%,
+    rgba(200, 0, 0, 0.55) 100%
+  );
+  transition: opacity 0.6s ease-out;
+}
+#hurtVignette.flash {
+  opacity: 1;
+  transition: opacity 0.1s ease-in;
+}
+
+/* Écran "en feu" (sortie de lave, cf. player.fireTimer dans main.js) : contrairement
+   au flash ponctuel de #hurtVignette ci-dessus, reste affiché en continu tant qu'on
+   brûle -- halo rouge/orange sur les bords + bandes de flammes qui remontent, pour
+   un signal fort et persistant plutôt qu'un simple clignotement. */
+#fireOverlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  opacity: 0;
+  background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 140, 0, 0.55) 0px,
+      rgba(255, 200, 60, 0.35) 12px,
+      rgba(255, 90, 0, 0.5) 24px
+    ),
+    radial-gradient(ellipse at center, rgba(255, 90, 0, 0) 40%, rgba(200, 40, 0, 0.65) 100%);
+  background-size:
+    100% 48px,
+    100% 100%;
+  animation:
+    fireOverlayRise 0.4s linear infinite,
+    fireOverlayFlicker 0.5s steps(2) infinite;
+  transition: opacity 0.5s ease;
+}
+#fireOverlay.burning {
+  opacity: 1;
+}
+@keyframes fireOverlayRise {
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      0 -48px,
+      0 0;
+  }
+}
+@keyframes fireOverlayFlicker {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+}
+
+#fps {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #9f9;
+  font-size: 12px;
+  font-family: monospace;
+  text-shadow: 1px 1px 2px #000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#chatLog {
+  position: fixed;
+  bottom: 200px;
+  left: 16px;
+  width: 360px;
+  max-height: 160px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 10;
+  pointer-events: none;
+  font-size: 13px;
+}
+#chatLog .msg {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-shadow: 1px 1px 2px #000;
+  width: fit-content;
+  transition: opacity 0.5s;
+}
+.msg.err {
+  color: #ff8080;
+}
+
+/* panneau plein (T maintenu ouvert) : historique scrollable, pas de fondu — cf.
+   ui/chat.js. Recouvre la même zone que #chatLog (masqué pendant ce temps). */
+#chatHistory {
+  position: fixed;
+  bottom: 200px;
+  left: 16px;
+  width: 420px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 14;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 13px;
+}
+#chatHistory .msg {
+  color: #fff;
+  padding: 2px 8px;
+  text-shadow: 1px 1px 2px #000;
+}
+
+#chatInputBox {
+  position: fixed;
+  bottom: 160px;
+  left: 16px;
+  width: 360px;
+  z-index: 15;
+  display: none;
+}
+#chatInputBox input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 14px;
+  border-radius: 3px;
+  border: 1px solid #666;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
+/* Géométrie du HUD du bas, en un seul endroit — les jauges se plaçaient chacune avec
+   un `bottom` en dur, et hungerbar (64px) tombait EN PLEIN DANS la hotbar, qui occupe
+   20px à 78px : les cuisses de poulet se dessinaient par-dessus les cases. Tout est
+   maintenant dérivé de ces variables, donc les rangées ne peuvent plus se croiser. */
+:root {
+  --hotbar-bottom: 20px;
+  --slot-size: 54px;
+  --slot-border: 2px;
+  --slot-gap: 6px;
+  --hotbar-height: calc(var(--slot-size) + 2 * var(--slot-border)); /* 58px */
+  --hotbar-width: calc(9 * var(--hotbar-height) + 8 * var(--slot-gap)); /* 9 cases */
+  /* première rangée de jauges : juste au-dessus de la hotbar, plus une marge */
+  --gauge-row: calc(var(--hotbar-bottom) + var(--hotbar-height) + 6px);
+  --gauge-row-height: 20px;
+}
+
+#hotbar {
+  position: fixed;
+  bottom: var(--hotbar-bottom);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: var(--slot-gap);
+  z-index: 10;
+}
+.slot {
+  width: 54px;
+  height: 54px;
+  border: 2px solid #444;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  position: relative;
+}
+.slot.selected {
+  border-color: #fff;
+  box-shadow: 0 0 8px #fff;
+}
+.slot.flash {
+  border-color: #e33 !important;
+  box-shadow: 0 0 10px #e33 !important;
+}
+.slot.empty {
+  opacity: 0.35;
+}
+.slot .swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: 2px;
+  image-rendering: pixelated;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slot .key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  color: #fff;
+  font-size: 11px;
+  text-shadow: 1px 1px 1px #000;
+  pointer-events: none;
+  z-index: 2;
+}
+.slot .count {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  text-shadow:
+    1px 1px 0 #000,
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    0 2px 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Icône 3D des blocs (hotbar / sac à dos / four, cf. ui/block-icon-3d.js) : un
+   cube en CSS 3D pur, sans perspective (donc pas de distorsion, un rendu
+   isométrique propre qui garde le style pixel art des textures). 3 faces
+   visibles (dessus/gauche/droite). */
+.blockIcon3d {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(-28deg) rotateY(-45deg);
+  margin: auto;
+}
+.blockIcon3dFace {
+  position: absolute;
+  width: var(--bi3d-face);
+  height: var(--bi3d-face);
+  top: calc(50% - var(--bi3d-face) / 2);
+  left: calc(50% - var(--bi3d-face) / 2);
+  background-size: cover;
+  image-rendering: pixelated;
+  backface-visibility: hidden;
+}
+.blockIcon3dFace.top {
+  transform: rotateX(90deg) translateZ(var(--bi3d-half));
+  filter: brightness(1.2);
+}
+.blockIcon3dFace.left {
+  transform: translateZ(var(--bi3d-half));
+  filter: brightness(0.75);
+}
+.blockIcon3dFace.right {
+  transform: rotateY(90deg) translateZ(var(--bi3d-half));
+  filter: brightness(0.95);
+}
+
+#info {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  color: white;
+  font-size: 13px;
+  z-index: 10;
+  text-shadow: 1px 1px 2px #000;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 8px 12px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+/* Vie à GAUCHE, faim à DROITE, sur une même rangée calée sur la largeur de la hotbar
+   (comme dans le jeu dont ça s'inspire). Toutes deux étaient centrées auparavant,
+   donc empilées l'une sur l'autre au milieu — et la faim débordait sur la hotbar. */
+#healthbar {
+  position: fixed;
+  bottom: var(--gauge-row);
+  left: 50%;
+  transform: translateX(calc(var(--hotbar-width) / -2));
+  display: flex;
+  gap: 3px;
+  z-index: 10;
+}
+.heart {
+  width: 18px;
+  height: 16px;
+  background: #d32f2f;
+  clip-path: path(
+    'M9,16 C9,16 0,9.5 0,4.8 C0,1.9 2.2,0 4.7,0 C6.6,0 8.2,1.1 9,2.9 C9.8,1.1 11.4,0 13.3,0 C15.8,0 18,1.9 18,4.8 C18,9.5 9,16 9,16 Z'
+  );
+  filter: drop-shadow(0 0 1px #7a0000) drop-shadow(0 0 1px #7a0000);
+}
+.heart.empty {
+  background: #333;
+  filter: drop-shadow(0 0 1px #111) drop-shadow(0 0 1px #111);
+}
+/* Coeurs bonus de la pomme dorée (10->15 coeurs pendant 30s) : jaune plutôt
+   que rouge, comme les coeurs d'absorption dans Minecraft. */
+.heart.bonus {
+  background: #ffd54f;
+  filter: drop-shadow(0 0 1px #b8860b) drop-shadow(0 0 1px #b8860b);
+}
+.heart.bonus.empty {
+  background: #333;
+  filter: drop-shadow(0 0 1px #111) drop-shadow(0 0 1px #111);
+}
+
+#hungerbar {
+  position: fixed;
+  bottom: var(--gauge-row);
+  left: 50%;
+  /* bord DROIT aligné sur le bord droit de la hotbar : on va au bord, puis on recule
+     de sa propre largeur (translateX(-100%)), qui dépend du nombre de cuisses. */
+  transform: translateX(calc(var(--hotbar-width) / 2)) translateX(-100%);
+  display: flex;
+  gap: 3px;
+  z-index: 10;
+}
+.drumstick {
+  width: 18px;
+  height: 16px;
+  position: relative;
+  filter: drop-shadow(0 0 1px #4a2f10);
+}
+/* Cuisse de poulet : le bulbe de viande rôtie (forme en goutte), dégradé doré/brun
+   pour donner du volume (croûte plus foncée sur les bords) + un reflet clair en
+   haut à gauche façon peau grillée luisante. */
+.drumstick::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 65% 60%, #f0b968 0%, transparent 40%),
+    linear-gradient(135deg, #d99a3f 0%, #b9762a 55%, #8f5a1e 100%);
+  clip-path: path(
+    'M6,3 C4,1.5 2,2 2,4.5 C2,3.5 1,4 1,5.5 C1,10 5,15 10,15.5 C14,16 18,13 18,9 C18,5.5 14.5,3.5 11,4 C9.5,4.2 8,3.5 6,3 Z'
+  );
+}
+/* L'os : un manche clair qui dépasse en haut à gauche, comme la jointure tenue à
+   la main sur une vraie cuisse de poulet. */
+.drumstick::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 2.5px;
+  background: linear-gradient(90deg, #fff8e6, #e8dcc0);
+  border-radius: 2px;
+  top: 1px;
+  left: -3px;
+  transform: rotate(28deg);
+  box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+}
+.drumstick.empty::before {
+  background: #333;
+}
+.drumstick.empty::after {
+  background: #444;
+  box-shadow: none;
+}
+
+/* rangée du dessus : les bulles ne doivent pas écraser la ligne vie/faim */
+#breathbar {
+  position: fixed;
+  bottom: calc(var(--gauge-row) + var(--gauge-row-height));
+  left: 50%;
+  transform: translateX(calc(var(--hotbar-width) / 2)) translateX(-100%);
+  display: none;
+  gap: 3px;
+  z-index: 10;
+}
+.bubble {
+  width: 12px;
+  height: 12px;
+  background: #7ec8e3;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 1px #1c5878);
+}
+.bubble.empty {
+  background: #333;
+  filter: drop-shadow(0 0 1px #111);
+}
+
+#gameOverScreen {
+  position: fixed;
+  inset: 0;
+  background: rgba(120, 0, 0, 0.85);
+  display: none; /* affiché via JS à la mort du joueur */
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: white;
+  z-index: 40; /* au-dessus de tout, y compris #blocker (20) et les panels (30) */
+  text-align: center;
+}
+#gameOverScreen h1 {
+  font-size: 2.4em;
+  margin-bottom: 8px;
+  letter-spacing: 2px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+}
+#gameOverScreen p {
+  margin: 4px 0 22px;
+  color: #eee;
+  opacity: 0.9;
+}
+#respawnBtn {
+  padding: 12px 32px;
+  font-size: 1.1em;
+  color: white;
+  background: #555;
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#respawnBtn:hover {
+  background: #666;
+}
+#respawnBtn:active {
+  background: #444;
+}
+
+/* Vue "allongé dans le lit" (clic droit sur un lit) : pas de fond plein comme
+   #gameOverScreen -- on veut justement VOIR le joueur couché derrière, donc le
+   conteneur est transparent et ne capte pas les clics ; seul le bouton est cliquable. */
+#sleepOverlay {
+  position: fixed;
+  inset: 0;
+  display: none; /* affiché via JS à l'entrée dans le lit */
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8%;
+  pointer-events: none;
+  z-index: 35; /* au-dessus du HUD, sous #gameOverScreen (40) */
+}
+#leaveBedBtn {
+  pointer-events: auto;
+  padding: 12px 32px;
+  font-size: 1.1em;
+  color: white;
+  background: rgba(50, 50, 50, 0.85);
+  border: 1px solid #333;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#leaveBedBtn:hover {
+  background: rgba(70, 70, 70, 0.9);
+}
+#leaveBedBtn:active {
+  background: rgba(40, 40, 40, 0.9);
+}
+
+#blocker {
+  position: fixed;
+  inset: 0;
+  /* fond "terre" carrelé, injecté en JS (cf. index.html) -- image-rendering
+     pixelated + repeat pour garder le côté pixel-art net même agrandi */
+  background-color: #6b4423;
+  background-repeat: repeat;
+  background-size: 96px 96px;
+  image-rendering: pixelated;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* le titre doit être HAUT dans le menu, pas centré verticalement */
+  flex-direction: column;
+  padding-top: 8%;
+  color: white;
+  z-index: 20;
+  text-align: center;
+}
+/* Bloc titre + sous-titre "Javascript Edition" : conteneur commun pour que le
+   sous-titre puisse se positionner en absolu PAR RAPPORT AUX LETTRES (et donc
+   mordre dessus), peu importe leur taille. */
+#titleBlock {
+  position: relative;
+  margin-bottom: 26px;
+}
+/* Titre "MINICRAFTER" façon logo Minecraft : blocs plats + copie sombre
+   décalée en dessous/à droite pour l'ombre portée (cf. script inline), plus
+   une vraie perspective/inclinaison 3D sur l'ensemble du mot (un seul plan,
+   un seul point de fuite -- cf. #title3d ci-dessous). */
+#minicrafterTitle {
+  perspective: 900px;
+}
+#title3d {
+  display: flex;
+  gap: 7px;
+  transform: rotateX(32deg);
+  transform-style: preserve-3d;
+}
+.titleLetterWrap {
+  position: relative;
+}
+.titleLetter {
+  display: grid;
+  grid-template-columns: repeat(5, 16px);
+  grid-template-rows: repeat(7, 16px);
+  /* pas de gap : les blocs doivent être collés les uns aux autres (façon
+     lettres pleines), contrairement aux grilles à petits carreaux espacés
+     utilisées ailleurs (ex. la texture du menu de craft) */
+  gap: 0;
+}
+.titleLetterShadow {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 0;
+}
+.titleLetterFront {
+  position: relative;
+  z-index: 1;
+}
+.stoneCell {
+  width: 16px;
+  height: 16px;
+  background: #dcdcdc;
+}
+.stoneCell.shadowCell {
+  background: #2b2b2b;
+}
+#editionSubtitle {
+  /* "mord" sur le bas des lettres, au premier plan par-dessus -- d'où le
+     z-index élevé et la remontée par margin négatif plutôt qu'un flux normal */
+  position: relative;
+  z-index: 5;
+  margin: -14px 6px 0 0;
+  text-align: right;
+  font-size: 0.85em;
+  font-style: italic;
+  color: #e0d200;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+#menuButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+/* Boutons façon Minecraft classique : barres grises pleine largeur avec un
+   biseau "outset" (clair en haut/gauche, sombre en bas/droite) plutôt que le
+   style bouton web plat utilisé ailleurs dans le jeu (craft/fourneau/lit). */
+.menuBtn {
+  width: 300px;
+  padding: 11px 0;
+  font-size: 1em;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #e8e8e8;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  background: #8b8b8b;
+  border-top: 2px solid #d6d6d6;
+  border-left: 2px solid #d6d6d6;
+  border-right: 2px solid #373737;
+  border-bottom: 2px solid #373737;
+  outline: 2px solid #1a1a1a;
+  cursor: pointer;
+}
+.menuBtn:hover {
+  background: #9d9d9d;
+  color: #ffffa0;
+}
+.menuBtn:active {
+  background: #7a7a7a;
+  border-top-color: #373737;
+  border-left-color: #373737;
+  border-right-color: #d6d6d6;
+  border-bottom-color: #d6d6d6;
+}
+#blocker h1 {
+  margin-bottom: 10px;
+}
+#blockerSubtitle {
+  margin: -8px 0 14px;
+  font-size: 0.75em;
+  color: #ddd;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  font-weight: normal;
+}
+#blocker p {
+  margin: 4px 0;
+  color: #eee;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* Écran "reprise" (perte du pointer lock en pleine partie, cf.
+   showResumeBlocker() dans main.js) : on masque le menu principal (titre,
+   boutons Solo/Multi/Options, sous-titre) et on n'affiche qu'un message
+   court -- fermer l'inventaire (E) ne doit pas donner l'impression de
+   revenir au menu principal. */
+#blocker.paused #titleBlock,
+#blocker.paused #menuButtons,
+#blocker.paused #blockerSubtitle {
+  display: none;
+}
+#resumeHint {
+  display: none;
+  margin-top: 12%;
+  font-size: 1.3em;
+  color: #eee;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+#blocker.paused #resumeHint {
+  display: block;
+}
+#pausedOptionsBtn {
+  display: none;
+  margin-top: 16px;
+}
+#blocker.paused #pausedOptionsBtn {
+  display: inline-block;
+}
+
+#hint {
+  position: fixed;
+  bottom: 145px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 13px;
+  text-shadow: 1px 1px 2px #000;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: none;
+}
+
+#craftPanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+/* ---------- Panneaux Solo et Options (menu principal) ---------- */
+#soloPanel,
+#optionsPanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#soloBox,
+#optionsBox {
+  background: #545454;
+  border: 4px solid #2b2b2b;
+  border-radius: 8px;
+  padding: 22px 28px;
+  width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: #f0e6d2;
+  font-size: 14px;
+  text-align: center;
+}
+#soloBox h2,
+#optionsBox h2 {
+  margin-top: 0;
+}
+.optionsScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.optionsScreen .menuBtn {
+  width: 100%;
+}
+#optionsSensitivity label,
+#optionsLanguage label {
+  font-size: 1em;
+}
+#sensitivitySlider {
+  width: 100%;
+}
+#keybindList {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.keybindRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid #2b2b2b;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+.keybindRow .keybindLabel {
+  text-align: left;
+}
+.keybindRow .keybindKeyBtn {
+  min-width: 100px;
+  padding: 6px 10px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #e8e8e8;
+  background: #8b8b8b;
+  border-top: 2px solid #d6d6d6;
+  border-left: 2px solid #d6d6d6;
+  border-right: 2px solid #373737;
+  border-bottom: 2px solid #373737;
+  outline: 2px solid #1a1a1a;
+  cursor: pointer;
+}
+.keybindRow .keybindKeyBtn:hover {
+  background: #9d9d9d;
+  color: #ffffa0;
+}
+.keybindRow .keybindKeyBtn.listening {
+  background: #6a6a2b;
+  color: #ffffa0;
+}
+#languageSelect {
+  width: 100%;
+  padding: 8px;
+  font-family: 'Courier New', monospace;
+  background: #8b8b8b;
+  color: #1a1a1a;
+  border: 2px solid #2b2b2b;
+  cursor: pointer;
+}
+
+#craftBox {
+  /* rectangle gris façon inventaire Minecraft, plutôt que le panneau marron
+     d'origine (cf. capture fournie par l'utilisateur) */
+  background: #545454;
+  border: 4px solid #2b2b2b;
+  border-radius: 8px;
+  padding: 18px;
+  width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: #f0e6d2;
+  font-size: 14px;
+}
+#craftBox h2 {
+  margin-top: 0;
+}
+
+/* ---------- Haut du panneau : armure + aperçu du personnage ---------- */
+#invTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#armorSlots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.armorSlot {
+  width: 48px;
+  height: 48px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid #2b2b2b;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 22px;
+  opacity: 0.55;
+}
+.armorSlot:hover {
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0.85;
+}
+.armorSlot.filled {
+  opacity: 1;
+}
+.armorSlot img,
+.armorSlot .ic {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+.armorSlot .blockIcon3d {
+  margin: 0;
+}
+#charPreview {
+  flex: 1;
+  height: calc(4 * 48px + 3 * 6px); /* même hauteur que la colonne des 4 cases d'armure */
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid #2b2b2b;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* aperçu 3D du joueur (Phase 20) : un <canvas> rendu par ui/char-preview.js,
+   littéralement le même modèle (mêmes matériaux/textures) que l'avatar en jeu
+   à la 3e personne (F5) -- la tête suit le curseur tant que l'inventaire est
+   ouvert, cf. char-preview.js. */
+#charPreviewCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.invGrid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.hotbarGrid {
+  margin-bottom: 16px;
+  padding-top: 8px;
+  border-top: 2px solid rgba(0, 0, 0, 0.35);
+}
+.invItem {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #6b5a45;
+  border-radius: 4px;
+  padding: 6px;
+  text-align: center;
+  font-size: 11px;
+  cursor: pointer;
+}
+.invItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.invItem.selected {
+  border-color: #fff;
+  box-shadow: 0 0 8px #fff;
+}
+.invItem.empty {
+  opacity: 0.35;
+  cursor: default;
+}
+.invItem img,
+.invItem .ic {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+  display: block;
+  margin: 0 auto 4px;
+  border-radius: 2px;
+}
+.invItem .blockIcon3d {
+  margin-bottom: 4px;
+}
+/* ---------- Grille de craft 3x3 (Phase 18) ---------- */
+#craftArea {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+#craftGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 40px);
+  grid-template-rows: repeat(3, 40px);
+  gap: 4px;
+}
+/* .itemCell : apparence commune à toute case affichant un objet (grille de
+   craft, résultat, curseur flottant) -- .craftCell/#craftOutput/#craftCursor
+   n'ajoutent que ce qui leur est spécifique par-dessus. */
+.itemCell {
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #6b5a45;
+  border-radius: 4px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  user-select: none;
+}
+.itemCell.empty {
+  opacity: 0.5;
+}
+.itemCell img,
+.itemCell .ic {
+  width: 26px;
+  height: 26px;
+  image-rendering: pixelated;
+  border-radius: 2px;
+}
+.itemCell .cellCount {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 10px;
+  text-shadow: 1px 1px 1px #000;
+}
+.craftCell {
+  cursor: pointer;
+}
+.craftCell:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+#craftArrow {
+  font-size: 22px;
+  opacity: 0.8;
+}
+#craftOutput {
+  width: 46px;
+  height: 46px;
+  border: 2px solid #6b5a45;
+}
+#craftOutput.craftable {
+  border-color: #d4c05a;
+  box-shadow: 0 0 8px rgba(212, 192, 90, 0.6);
+  cursor: pointer;
+}
+#craftOutput.empty {
+  cursor: default;
+}
+
+/* objet "tenu" par la souris (curseur d'inventaire) -- suit ev.clientX/Y,
+   posé en dehors du flux (position fixed) pour ignorer tout scroll/overflow
+   du panneau, cf. ui/craft.js onMouseMoveTrackCursor. */
+#craftCursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  transform: translate(-18px, -18px);
+  pointer-events: none;
+  z-index: 40;
+  display: none;
+  background: transparent;
+  border: none;
+}
+
+#recipeBookTitle {
+  font-size: 14px;
+  margin: 10px 0 6px;
+  opacity: 0.85;
+}
+.recipe {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #6b5a45;
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  gap: 10px;
+}
+.recipe .rname {
+  font-weight: bold;
+  font-size: 12px;
+  flex: 1;
+}
+/* mini-grille 3x3 en aperçu, dans le panneau de référence : montre la FORME
+   attendue plutôt qu'une liste "besoin: x, y" -- c'est tout le sens de la
+   grille réelle à côté, autant que le joueur apprenne à lire l'une comme
+   l'autre. */
+.recipeShape {
+  display: grid;
+  grid-template-columns: repeat(3, 16px);
+  grid-template-rows: repeat(3, 16px);
+  gap: 2px;
+  flex-shrink: 0;
+}
+.recipeShapeCell {
+  width: 16px;
+  height: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.recipeShapeCell.empty {
+  background: rgba(0, 0, 0, 0.15);
+}
+.recipeShapeCell img,
+.recipeShapeCell .ic {
+  width: 12px;
+  height: 12px;
+  image-rendering: pixelated;
+  border-radius: 1px;
+}
+#furnacePanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#furnaceBox {
+  background: #3a3a3a;
+  border: 4px solid #202020;
+  border-radius: 8px;
+  padding: 18px;
+  width: 460px;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #f0e6d2;
+  font-size: 14px;
+  text-align: center;
+}
+#furnaceBox h2 {
+  margin-top: 0;
+}
+#furnaceRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.fSlot {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #6b6b6b;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fSlot.empty {
+  opacity: 0.4;
+}
+.fSlot img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.fSlot .fCount {
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 11px;
+  font-weight: bold;
+  text-shadow: 1px 1px 1px #000;
+}
+#furnaceProgress {
+  width: 40px;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+#furnaceProgressFill {
+  height: 100%;
+  width: 0%;
+  background: #e0b64a;
+  transition: width 0.1s linear;
+}
+#furnaceFuelRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+#furnaceFlame {
+  width: 12px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 3px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+#furnaceFlameFill {
+  width: 100%;
+  height: 0%;
+  background: #ff7b25;
+  transition: height 0.2s linear;
+}
+#closeFurnace {
+  background: #a33;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  width: 100%;
+}
+
+#chestPanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#chestBox {
+  background: #3a3a3a;
+  border: 4px solid #202020;
+  border-radius: 8px;
+  padding: 18px;
+  width: 460px;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #f0e6d2;
+  font-size: 14px;
+  text-align: center;
+}
+#chestBox h2 {
+  margin-top: 0;
+}
+#chestGrid {
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.35);
+}
+#closeChest {
+  background: #a33;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  width: 100%;
+}
+
+#closeCraft {
+  margin-top: 8px;
+  background: #a33;
+  border: none;
+  color: white;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------
+   Écran de chargement (faux), affiché avant le menu principal (#blocker).
+   z-index au-dessus de tout (blocker=20, panels=30, fps/hud=40) pour être
+   certain de masquer entièrement le jeu/menu pendant le "chargement".
+   ------------------------------------------------------------------- */
+#loadingScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: #e3e0f6;
+  transition: opacity 0.5s ease;
+}
+#loadingScreen.loadingHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+#loadingLogo {
+  width: min(60vw, 420px);
+  height: auto;
+  image-rendering: auto;
+}
+#loadingBarTrack {
+  width: min(70vw, 480px);
+  height: 18px;
+  background: rgba(76, 43, 168, 0.15);
+  border: 2px solid #4c2ba8;
+  border-radius: 10px;
+  overflow: hidden;
+}
+#loadingBarFill {
+  height: 100%;
+  width: 0%;
+  background: #4c2ba8;
+  border-radius: 8px 0 0 8px;
+  transition: width 0.15s ease-out;
+}
+#loadingPercent {
+  margin: -14px 0 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95em;
+  letter-spacing: 1px;
+  color: #4c2ba8;
+}
