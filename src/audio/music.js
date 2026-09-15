@@ -6,12 +6,10 @@
 // à la fin de chaque piste on enchaîne sur la suivante (en boucle sur la
 // playlist, pas juste répétition de la même piste).
 //
-// Nether (Phase 34) : `netherUrls` (optionnel) est une SECONDE playlist,
-// utilisée à la place de la première tant que `setNetherMode(true)` est actif
-// -- demandé explicitement "que cette musique" dans le Nether, donc une seule
-// piste pour l'instant, mais le paramètre accepte aussi bien un tableau
-// qu'une seule URL (même souplesse que `urls`), pour ajouter d'autres pistes
-// nether plus tard sans revenir sur cette fonction.
+// Nether (Phase 34, 2 pistes depuis la Phase 35) : `netherUrls` (optionnel)
+// est une SECONDE playlist, utilisée à la place de la première tant que
+// `setNetherMode(true)` est actif -- le paramètre accepte aussi bien un
+// tableau qu'une seule URL (même souplesse que `urls`).
 
 export function createMusic(urls, hintEl, netherUrls) {
   const overworldPlaylist = Array.isArray(urls) ? urls : [urls];

@@ -153,10 +153,9 @@ const music = createMusic(
     './mini-city3.mp3',
   ],
   musicHintEl,
-  // Nether (Phase 34) : une seule piste pour l'instant, demandé explicitement
-  // -- cf. le commentaire de `netherUrls` dans audio/music.js pour comment en
-  // ajouter d'autres plus tard.
-  ['./ministep.mp3'],
+  // Nether (Phase 34, 2e piste Phase 35) : cf. le commentaire de `netherUrls`
+  // dans audio/music.js pour comment en ajouter d'autres.
+  ['./ministep.mp3', './Project4.mp3'],
 );
 document.getElementById('musicHint').addEventListener('click', music.toggleBgmMute);
 document.getElementById('musicNextBtn').addEventListener('click', music.nextTrack);
