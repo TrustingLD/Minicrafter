@@ -369,7 +369,6 @@ let selectedBlock = slots[selectedIndex]?.item ?? null;
 /* ---------- UI ---------- */
 const hotbarUI = createHotbarUI({
   hotbarEl: document.getElementById('hotbar'),
-  iconSize: touchMode ? 26 : 44, // cases de 34px au lieu de 54px sur téléphone
   blockTypes: BLOCK_TYPES,
   itemNames: ITEM_NAMES,
   iconCanvas: blockAssets.iconCanvas,
@@ -377,6 +376,39 @@ const hotbarUI = createHotbarUI({
   onSelect: selectSlot,
 });
 hotbarUI.setSelectedIndex(selectedIndex);
+
+// Barre du bas compacte sur téléphone : la taille se calcule ICI, d'après la largeur réelle de
+// l'écran, et se pose en ligne sur <body> (variables CSS) + sur chaque case (cf. ui/hotbar.js)
+// -- pas seulement dans style.css, pour qu'elle s'applique même si le navigateur garde une
+// ancienne feuille de style en cache. Les variables dérivées sont recalculées à la main (un
+// `var()` dans une variable se résout là où elle est définie, cf. style.css). Cases de 30px
+// au plus (54px sur ordinateur), et jamais plus larges que l'écran : 9 cases + écarts.
+const COMPACT_SLOT_MAX = 30;
+const COMPACT_SLOT_GAP = 2;
+function applyCompactHud() {
+  if (!touchMode) return;
+  const border = 2;
+  const slot = Math.max(
+    22,
+    Math.min(COMPACT_SLOT_MAX, Math.floor((window.innerWidth - 60) / 9) - 2 * border - COMPACT_SLOT_GAP),
+  );
+  const cell = slot + 2 * border;
+  const s = document.body.style;
+  s.setProperty('--hotbar-bottom', 'max(6px, env(safe-area-inset-bottom))');
+  s.setProperty('--slot-size', `${slot}px`);
+  s.setProperty('--slot-border', `${border}px`);
+  s.setProperty('--slot-gap', `${COMPACT_SLOT_GAP}px`);
+  s.setProperty('--hotbar-height', `${cell}px`);
+  s.setProperty('--hotbar-width', `${9 * cell + 8 * COMPACT_SLOT_GAP}px`);
+  s.setProperty('--gauge-row', `calc(var(--hotbar-bottom) + ${cell}px + 3px)`);
+  s.setProperty('--gauge-row-height', '13px');
+  hotbarUI.setSlotSize(slot);
+}
+applyCompactHud();
+window.addEventListener('resize', () => {
+  applyCompactHud();
+  hotbarUI.render(slots);
+});
 hotbarUI.render(slots);
 bus.on('inventory:changed', () => hotbarUI.render(slots));
 
@@ -1285,14 +1317,33 @@ function closeSoloMenu() {
   soloMenuOpen = false;
   soloPanel.style.display = 'none';
 }
+// Plein écran automatique sur téléphone. À appeler DEPUIS un vrai geste (click/touchend) :
+// les navigateurs refusent requestFullscreen() sur un simple `touchstart` (ce que faisait le
+// code d'origine, d'où l'échec silencieux). iPhone (Safari) n'a pas d'API plein écran du tout :
+// là, seul « Ajouter à l'écran d'accueil » donne le plein écran (cf. manifest.webmanifest et
+// les balises apple-mobile-web-app dans index.html).
+function enterPhoneFullscreen() {
+  if (!touchMode || document.fullscreenElement) return;
+  const el = document.documentElement;
+  const request = el.requestFullscreen || /** @type {any} */ (el).webkitRequestFullscreen; // webkit : Safari iPad
+  if (!request) return;
+  try {
+    const p = request.call(el, { navigationUI: 'hide' });
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch {
+    // refusé par le navigateur : tant pis, on réessaiera au prochain geste
+  }
+}
 soloBtn.addEventListener('click', () => {
   sfx.resumeAudio();
+  enterPhoneFullscreen();
   openSoloMenu();
 });
 document.getElementById('soloBackBtn').addEventListener('click', closeSoloMenu);
 survieBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
+  enterPhoneFullscreen(); // au cas où le tap sur « Solo » n'ait pas suffi
   // Chute d'arrivée : on lance la partie 30 blocs au-dessus du point
   // d'apparition normal -- le joueur tombe jusqu'au sol avant que l'aventure
   // ne commence vraiment (cf. pendingSpawnFall, qui annule le dégât de chute
@@ -2481,16 +2532,18 @@ if (touchMode) {
 
   // premier contact = geste utilisateur requis pour débloquer l'audio et tenter le
   // plein écran / wake lock (échouent silencieusement si le navigateur refuse)
+  // 'touchend' et pas 'touchstart' : seul touchend compte comme un geste utilisateur pour
+  // l'audio, le plein écran et le wake lock (touchstart pouvait servir à faire défiler la page)
   window.addEventListener(
-    'touchstart',
+    'touchend',
     function unlockOnce() {
       sfx.resumeAudio();
       music.startBgm();
-      document.documentElement.requestFullscreen?.().catch(() => {});
+      enterPhoneFullscreen();
       if ('wakeLock' in navigator) {
         navigator.wakeLock.request('screen').catch(() => {});
       }
-      window.removeEventListener('touchstart', unlockOnce);
+      window.removeEventListener('touchend', unlockOnce);
     },
     { once: true },
   );

@@ -6,8 +6,17 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
+    <!-- Plein écran une fois ajouté à l'écran d'accueil (iPhone : seul moyen, Safari n'a pas
+         d'API plein écran ; Android : le manifeste) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#87ceeb" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <title>Minicrafter - Three.js</title>
-    <link rel="stylesheet" href="./src/ui/style.css" />
+    <!-- ?v= : à changer à chaque livraison, pour que le navigateur du téléphone ne resserve
+         pas une vieille feuille de style / un vieux main.js gardés en cache -->
+    <link rel="stylesheet" href="./src/ui/style.css?v=5d" />
   </head>
   <body>
     <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
@@ -217,6 +226,7 @@
         <p>
           C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
         </p>
+        <p id="buildTag">version 5d — barre compacte + plein écran (téléphone)</p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer
@@ -379,6 +389,6 @@
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }
     </script>
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="./src/main.js?v=5d"></script>
   </body>
 </html>

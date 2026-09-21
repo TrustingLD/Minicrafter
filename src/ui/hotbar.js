@@ -13,9 +13,14 @@ export function createHotbarUI({
   iconCanvas,
   iconFaces3D,
   onSelect,
-  iconSize = 44, // taille (px) du cube 3D des blocs ; plus petit sur téléphone (cf. body.touch)
+  iconSize = 44, // taille (px) du cube 3D des blocs quand la taille des cases n'est pas imposée
 }) {
   let selectedIndex = 0;
+  // Taille imposée des cases (px), ou null = celle du CSS (54px). Posée EN LIGNE sur chaque
+  // case plutôt que seulement via le CSS : sur téléphone, main.js la calcule d'après la largeur
+  // de l'écran, et un style en ligne l'emporte même sur une vieille feuille de style gardée en
+  // cache par le navigateur (qui fixerait encore 54px en dur).
+  let slotSize = null;
 
   function render(slots) {
     hotbarEl.innerHTML = '';
@@ -25,12 +30,18 @@ export function createHotbarUI({
       slot.className = 'slot' + (i === selectedIndex ? ' selected' : '') + (!cell ? ' empty' : '');
       const swatch = document.createElement('div');
       swatch.className = 'swatch';
+      if (slotSize) {
+        slot.style.width = slot.style.height = `${slotSize}px`;
+        swatch.style.width = swatch.style.height = `${slotSize - 6}px`;
+      }
       if (cell) {
         // les vrais blocs (cf. iconFaces3D) s'affichent en petit cube 3D CSS,
         // le reste (outils, nourriture, minerais...) garde l'icône plate 2D
         const faces = iconFaces3D(cell.item);
         if (faces) {
-          swatch.appendChild(createBlockIcon3D(faces, iconSize));
+          swatch.appendChild(
+            createBlockIcon3D(faces, slotSize ? Math.round((slotSize - 6) * 0.92) : iconSize),
+          );
         } else {
           const img = iconCanvas(cell.item);
           if (img) swatch.style.backgroundImage = `url(${img.toDataURL()})`;
@@ -57,6 +68,11 @@ export function createHotbarUI({
     selectedIndex = i;
   }
 
+  // change la taille des cases (px) ; l'appelant refait render() ensuite
+  function setSlotSize(px) {
+    slotSize = px;
+  }
+
   function flashEmptySlot(i) {
     const slotEl = hotbarEl.children[i];
     if (!slotEl) return;
@@ -64,5 +80,5 @@ export function createHotbarUI({
     setTimeout(() => slotEl.classList.remove('flash'), 250);
   }
 
-  return { render, setSelectedIndex, flashEmptySlot };
+  return { render, setSelectedIndex, setSlotSize, flashEmptySlot };
 }

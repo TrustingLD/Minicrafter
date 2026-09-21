@@ -12,7 +12,13 @@
 // inventaire) au lieu de deux.
 
 export function isTouchDevice() {
-  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  return (
+    'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0 ||
+    // doigt comme pointeur principal : couvre les navigateurs de téléphone qui n'exposent
+    // ni ontouchstart ni maxTouchPoints (mode « site pour ordinateur », vues intégrées...)
+    (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches)
+  );
 }
 
 const JOY_RADIUS = 45;

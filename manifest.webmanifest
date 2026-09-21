@@ -1,0 +1,17 @@
+{
+  "name": "Minicrafter",
+  "short_name": "Minicrafter",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#87ceeb",
+  "theme_color": "#87ceeb",
+  "icons": [
+    {
+      "src": "./assets/loading-logo.png",
+      "sizes": "832x316",
+      "type": "image/png"
+    }
+  ]
+}

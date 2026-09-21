@@ -331,24 +331,13 @@ body.touch #chatLog {
 }
 
 /* Barre du bas sur téléphone : cases, coeurs et cuisses nettement plus petits, pour libérer
-   l'écran (la hotbar de bureau fait 570px de large, plus que beaucoup de téléphones en
-   portrait). Les variables DÉRIVÉES (--hotbar-height/width, --gauge-row) sont redéfinies
-   ici aussi : un `var()` dans une variable est résolu là où elle est définie (:root), donc
-   surcharger seulement --slot-size laisserait --hotbar-width à sa valeur de bureau. Les
-   coeurs/cuisses sont dessinés avec un clip-path en pixels : on les réduit avec scale()
-   (origine sur le bord aligné avec la hotbar) plutôt qu'en changeant leur largeur. La case
-   ne dépasse jamais 34px et se rétrécit encore si l'écran est trop étroit (9 cases + écarts
-   toujours dans la largeur). */
+   l'écran. Les TAILLES des cases (--slot-size, --hotbar-width, --gauge-row...) sont
+   calculées et posées par main.js (applyCompactHud, d'après la largeur réelle de l'écran) ;
+   ici il ne reste que ce qui ne se calcule pas. Les coeurs/cuisses sont dessinés avec un
+   clip-path en pixels : on les réduit avec scale() (origine sur le bord aligné avec la
+   hotbar) plutôt qu'en changeant leur largeur. */
 body.touch {
-  --hotbar-bottom: max(6px, env(safe-area-inset-bottom));
-  --slot-size: min(34px, calc((100vw - 76px) / 9));
-  --slot-border: 2px;
-  --slot-gap: 3px;
-  --hotbar-height: calc(var(--slot-size) + 2 * var(--slot-border));
-  --hotbar-width: calc(9 * var(--hotbar-height) + 8 * var(--slot-gap));
-  --gauge-row: calc(var(--hotbar-bottom) + var(--hotbar-height) + 3px);
-  --gauge-row-height: 14px;
-  --gauge-scale: 0.68;
+  --gauge-scale: 0.62;
 }
 body.touch .slot {
   border-radius: 3px;
@@ -790,6 +779,10 @@ body.touch #breathbar {
 }
 #blocker h1 {
   margin-bottom: 10px;
+}
+#buildTag {
+  opacity: 0.45;
+  font-size: 11px;
 }
 #blockerSubtitle {
   margin: -8px 0 14px;
