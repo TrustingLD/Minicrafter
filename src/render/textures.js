@@ -1762,6 +1762,55 @@ export function texBucket(fill) {
   return canvasToTexture(c);
 }
 
+/* ============================================================
+   Bateau (icône d'inventaire) : item 2D façon vrai jeu -- pixel-art 16x16
+   agrandi x2 (TEX_SIZE = 32), comme le seau/le bâtonnet : jamais un cube tenu
+   en main ou lâché au sol, cf. block-assets.js (toolTextures + iconCanvas).
+   Chaque caractère de BOAT_PIXELS est une case de la palette BOAT_PALETTE
+   ('.' = transparent). Coque de chêne vue de côté : proue et poupe relevées,
+   planches claires/foncées, contour brun très sombre.
+   ============================================================ */
+export const BOAT_PIXELS = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.oo..........oo.',
+  '.olo........olo.',
+  '.olhoooooooohlo.',
+  '.olmmddddddmmlo.',
+  '.olmmmmmmmmmmlo.',
+  '..olmllllllmlo..',
+  '..oolmmmmmmloo..',
+  '...ooolllllooo..',
+  '....oooooooooo..',
+  '................',
+  '................',
+];
+export const BOAT_PALETTE = {
+  o: '#2d1e0e', // contour
+  d: '#6b4a24', // intérieur (fond de la coque, dans l'ombre)
+  m: '#8c6a37', // planche moyenne
+  l: '#b58a4c', // planche claire / bordé
+  h: '#d2a866', // reflet sur le haut des extrémités relevées
+};
+export function texBoat() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  const px = TEX_SIZE / BOAT_PIXELS.length; // taille d'une case du pixel-art
+  BOAT_PIXELS.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      const color = BOAT_PALETTE[ch];
+      if (!color) return;
+      ctx.fillStyle = color;
+      ctx.fillRect(x * px, y * px, px, px);
+    });
+  });
+  return canvasToTexture(c);
+}
+
 // Obsidienne (Phase 24) : se forme au contact eau/lave (cf. world/obsidian.js).
 // Noir violacé profond avec des reflets vitreux -- extrêmement dense/dure
 // visuellement, à la hauteur de son hardness (240s à la main, cf. blocks.js).

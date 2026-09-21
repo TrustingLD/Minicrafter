@@ -11,7 +11,7 @@
 // au préalable. La correspondance forme/recette est déléguée à data/crafting.js
 // (pur, testable, aucun DOM).
 
-import { HOTBAR_SLOTS, TOTAL_SLOTS, MAX_STACK, addItem } from '../entities/inventory.js';
+import { HOTBAR_SLOTS, TOTAL_SLOTS, maxStackOf, addItem } from '../entities/inventory.js';
 import { matchRecipe, consumeForRecipe } from '../data/crafting.js';
 import { createBlockIcon3D } from './block-icon-3d.js';
 
@@ -161,13 +161,13 @@ export function createCraftUI({
     }
     if (cell.item === cursor.item) {
       if (right) {
-        if (cell.count < MAX_STACK) {
+        if (cell.count < maxStackOf(cell.item)) {
           set({ item: cell.item, count: cell.count + 1 });
           cursor.count -= 1;
           if (cursor.count <= 0) cursor = null;
         }
       } else {
-        const space = MAX_STACK - cell.count;
+        const space = maxStackOf(cell.item) - cell.count;
         const move = Math.min(space, cursor.count);
         if (move > 0) set({ item: cell.item, count: cell.count + move });
         cursor.count -= move;
@@ -212,7 +212,7 @@ export function createCraftUI({
     if (!recipe) return;
     const [giveItem, giveCount] = Object.entries(recipe.give)[0];
     if (cursor && cursor.item !== giveItem) return; // curseur incompatible : rien à faire
-    if (cursor && cursor.count + giveCount > MAX_STACK) return; // pile pleine
+    if (cursor && cursor.count + giveCount > maxStackOf(giveItem)) return; // pile pleine
     consumeForRecipe(grid, recipe);
     if (cursor) cursor.count += giveCount;
     else cursor = { item: giveItem, count: giveCount };

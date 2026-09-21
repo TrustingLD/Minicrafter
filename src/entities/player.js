@@ -79,6 +79,11 @@ export function createPlayer({
   // Toujours visible côté scène (cf. AVATAR_SHADOW_LAYER ci-dessus) : c'est la
   // caméra, pas l'avatar, qui décide s'il apparaît réellement à l'écran.
   playerAvatar.group.traverse((obj) => obj.layers.set(AVATAR_SHADOW_LAYER));
+  // 'YXZ' : la tête pivote d'abord à gauche/droite (rotation.y, seulement assis dans un
+  // bateau) PUIS se penche haut/bas (rotation.x) autour de SON axe latéral -- avec l'ordre
+  // par défaut 'XYZ', le tangage se ferait autour de l'axe du corps et la tête
+  // tournée de côté basculerait « de travers ». Sans effet à pied (rotation.y = 0).
+  playerAvatar.head.rotation.order = 'YXZ';
   scene.add(playerAvatar.group);
 
   // Overlay "en feu" (même technique que les mobs, cf. entities/mob.js
@@ -265,7 +270,15 @@ export function createPlayer({
     playerAvatar._swing = 1;
   }
 
-  function updateVisuals(dt, isMoving, yaw, pitch, crouching) {
+  // Pose assise (bateau) : cuisses à l'horizontale devant soi, bras légèrement en
+  // avant -- les mêmes angles que le vrai jeu (81° et 36°). Positif = vers l'avant
+  // (-z), cf. le commentaire sur les jambes plus bas.
+  const SEAT_HIP_ANGLE = 1.4137167;
+  const SEAT_ARM_ANGLE = Math.PI / 5;
+  // `ride` : null à pied ; { bodyYaw } quand on est assis dans un bateau -- le corps
+  // suit alors le cap du bateau (bodyYaw) et seule la tête suit le regard (yaw), dans
+  // la limite que main.js lui impose (±105°, cf. RIDER_MAX_LOOK dans entities/boat.js).
+  function updateVisuals(dt, isMoving, yaw, pitch, crouching, ride = null) {
     // Flammes (cf. setOnFire) : offset animé seulement quand visible -- inutile de
     // faire défiler une texture qui ne s'affiche pas.
     if (onFire) fireTexture.offset.y = (fireTexture.offset.y + dt * 1.3) % 1;
@@ -333,6 +346,22 @@ export function createPlayer({
     // rotation.x est dans le repère local du groupe (déjà tourné en yaw), donc ceci
     // s'ajoute au lacet plutôt que de le remplacer.
     playerAvatar.head.rotation.x = pitch;
+    playerAvatar.head.rotation.y = 0;
+
+    if (ride) {
+      // assis : jambes devant, bras en avant, corps dans l'axe du bateau, tête libre
+      playerAvatar.legs.forEach(({ hip, knee }) => {
+        hip.rotation.x = SEAT_HIP_ANGLE;
+        knee.rotation.x = 0;
+      });
+      playerAvatar.arms.forEach((pivot) => {
+        pivot.rotation.x = SEAT_ARM_ANGLE;
+      });
+      playerAvatar.group.rotation.y = ride.bodyYaw;
+      // écart regard/corps ramené dans ]-π, π] (yaw s'accumule sans borne dans main.js)
+      const rel = yaw - ride.bodyYaw;
+      playerAvatar.head.rotation.y = rel - Math.PI * 2 * Math.round(rel / (Math.PI * 2));
+    }
 
     if (viewMode === VIEW_THIRD) {
       const eyePos = camRayOrigin.set(player.pos.x, player.pos.y + player.height, player.pos.z);

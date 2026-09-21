@@ -88,6 +88,10 @@ export const ITEM_NAMES = {
   basalt: 'Basalte',
   glowstone: 'Lueur de pierre',
   quartz: 'Quartz',
+  // Bateau : item 2D en poche (NON_PLACEABLE, comme le seau) -- posé sur l'eau par
+  // un clic droit (cf. entities/boat.js + tryPlaceBoat dans main.js), jamais comme
+  // un bloc. Ne s'empile pas (cf. ITEM_MAX_STACK dans entities/inventory.js).
+  boat: 'Bateau',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de
@@ -531,6 +535,16 @@ export const RECIPES = [
     pattern: ['I.I', '.I.'],
     key: { I: 'iron_ingot' },
     give: { bucket: 1 },
+    needsTable: true,
+  },
+  // Bateau : 5 planches en U (2 aux coins du haut, 3 en bas), exactement la
+  // recette du vrai jeu -- 3 de large donc il faut une table de craft.
+  {
+    id: 'boat',
+    name: 'Bateau',
+    pattern: ['P.P', 'PPP'],
+    key: { P: 'planks' },
+    give: { boat: 1 },
     needsTable: true,
   },
 ];

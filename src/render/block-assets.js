@@ -220,7 +220,10 @@ export function createBlockAssets() {
     // Silex (Phase 26) : icône plate uniquement (comme le seau ci-dessus) --
     // item 2D tenu tel quel, jamais un cube.
     tFlintIcon = tex.texFlint(),
-    tStickIcon = tex.texStick();
+    tStickIcon = tex.texStick(),
+    // Bateau : icône PLATE uniquement (item 2D, comme le seau) -- tenu en main
+    // via `toolTextures`, lâché au sol via iconCanvas (cf. item-entity.js).
+    tBoatIcon = tex.texBoat();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -511,6 +514,7 @@ export function createBlockAssets() {
     // dans la main quand on les tient.
     apple: tApple,
     golden_apple: tGoldenApple,
+    boat: tBoatIcon,
   };
 
   function iconCanvas(type) {
@@ -640,6 +644,8 @@ export function createBlockAssets() {
         return tBucketLavaIcon.image;
       case 'flint':
         return tFlintIcon.image;
+      case 'boat':
+        return tBoatIcon.image;
       case 'redstone':
         return tRedstoneWireIcon.image;
       case 'redstone_torch':

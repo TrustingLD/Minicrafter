@@ -55,6 +55,8 @@ src/
 │   ├── particles.js      particules de cassage, même pool par type
 │   ├── model.js, limb.js construction de modèles en boîtes
 │   ├── mob.js             IA (errance/chasse/ligne de vue), tonte
+│   ├── boat-physics.js    règles du bateau, tic fixe 20 Hz          [PUR]
+│   ├── boat.js            bateaux : modèle, tics, coups, passager
 │   └── player.js          caméra, avatar 3e personne, main/objet tenu
 ├── ui/                DOM only, aucune logique de jeu
 │   ├── hud.js, hotbar.js, health.js, hunger.js, craft.js, furnace.js,
@@ -141,6 +143,28 @@ nouveau slot, fusion capée à `MAX_STACK`, etc.). Casser un bloc ne remplit plu
 l'inventaire directement : `entities/item-entity.js` fait apparaître les drops au
 sol (un `InstancedMesh` PAR TYPE D'ITEM, jamais un `Mesh` par item — la même leçon
 de perf que les particules de cassage et les mares d'eau/lave).
+
+## Le bateau (Phase 36)
+
+Deux fichiers, séparés comme le joueur (`world/physics.js`) et le rendu :
+
+- `entities/boat-physics.js` : PURE (aucun import), donc testée sous `node --test`
+  (`test/boat.test.js`). Elle porte les règles du vrai jeu à l'identique : tic fixe
+  de 20 Hz, vitesse en blocs/tic, friction 0.9 sur l'eau / 0.6 à terre / 0.98 sur la
+  glace, poussée d'Archimède (le bas du bateau flotte 0.366 sous la surface), virage
+  qui dérive, coule s'il est entièrement sous l'eau (le passager est éjecté après 60
+  tics), se brise en tombant de plus de 3 blocs. Un bateau a `y` = le BAS de sa boîte.
+- `entities/boat.js` : le système (`createBoatSystem`) — modèle 3D (planches du jeu,
+  masque d'eau qui n'écrit que la profondeur pour que la surface n'apparaisse pas
+  « dans » la coque), simulation interpolée entre deux tics (rendu à la fréquence de
+  l'écran), coups (5 à mains nues, 1 à l'épée), passager.
+
+Côté `main.js` seul le joueur change : assis, il n'a plus de marche/gravité/saut, sa
+position est accrochée à la position INTERPOLÉE du bateau à chaque frame, son regard
+tourne avec le bateau (±105° max) et `updateVisuals` reçoit `ride` pour l'asseoir. Les
+bateaux ne sont pas sauvegardés (comme les mobs et les objets au sol) et restent dans
+l'overworld. L'objet est un item 2D (`toolTextures` + `iconCanvas`), non empilable
+(`ITEM_MAX_STACK` dans `entities/inventory.js`, appliqué partout où des piles fusionnent).
 
 ## Ce que le worker (Phase 20) fait et ne fait pas
 

@@ -1,7 +1,7 @@
 // Panneau de coffre : 27 cases de stockage (3 lignes de 9 cases) + inventaire du joueur
 // (sac à dos 27 cases + hotbar 9 cases) avec interaction clic / clic droit / Maj+clic / curseur flottant.
 
-import { HOTBAR_SLOTS, TOTAL_SLOTS, MAX_STACK, addItem } from '../entities/inventory.js';
+import { HOTBAR_SLOTS, TOTAL_SLOTS, maxStackOf, addItem } from '../entities/inventory.js';
 import { CHEST_SLOTS } from '../world/block-entities.js';
 import { createBlockIcon3D } from './block-icon-3d.js';
 
@@ -98,13 +98,13 @@ export function createChestUI({ elements, iconCanvas, iconFaces3D, onClose, onIn
     }
     if (cell.item === cursor.item) {
       if (right) {
-        if (cell.count < MAX_STACK) {
+        if (cell.count < maxStackOf(cell.item)) {
           set({ item: cell.item, count: cell.count + 1 });
           cursor.count -= 1;
           if (cursor.count <= 0) cursor = null;
         }
       } else {
-        const space = MAX_STACK - cell.count;
+        const space = maxStackOf(cell.item) - cell.count;
         const move = Math.min(space, cursor.count);
         if (move > 0) set({ item: cell.item, count: cell.count + move });
         cursor.count -= move;

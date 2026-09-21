@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { Entity } from './entity.js';
 import { TEX_SIZE } from '../render/textures.js';
+import { maxStackOf, MAX_STACK } from './inventory.js';
 
 const ITEM_SCALE = 0.28;
 // Aspiration façon "item magnet" (retour utilisateur) : au lieu d'un ramassage
@@ -30,6 +31,7 @@ const PICKUP_DELAY = 0.5; // s avant qu'un item fraîchement lâché soit ramass
 const DESPAWN_TIME = 300; // 5 min
 const MERGE_RADIUS = 0.6; // fusionne les items identiques proches pour éviter 200 cubes
 const GROUND_FRICTION = 6; // /s, freine vx/vz une fois au sol
+const WATER_RISE_SPEED = 0.6; // blocs/s : vitesse de remontée d'un objet lâché dans l'eau
 const POOL_CAPACITY = 64; // par type d'item — largement au-dessus de ce qu'un joueur peut faire apparaître d'un coup
 
 class ItemEntityInstance extends Entity {
@@ -46,7 +48,13 @@ class ItemEntityInstance extends Entity {
   }
 }
 
-export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, playSound }) {
+export function createItemEntitySystem({
+  scene,
+  blockAssets,
+  collidesAtBox,
+  playSound,
+  isInWater = (_x, _y, _z) => false,
+}) {
   const entities = [];
   const pools = new Map(); // item -> { mesh, free: number[] }
   const dummy = new THREE.Object3D();
@@ -110,8 +118,12 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
   // les cubes un par un (ramasser 60 pierres cassées à la suite ne doit pas créer
   // 60 entités qui rivalisent toutes pour le même slot de pool)
   function findMergeTarget(x, y, z, item) {
+    // 6400 = plafond large des tas au sol (100 piles) ; un objet non empilable
+    // (bateau : 1 par case) ne fusionne JAMAIS, sinon un tas de 2 bateaux ne
+    // tiendrait dans aucune case d'inventaire.
+    const mergeCap = maxStackOf(item) === MAX_STACK ? 6400 : maxStackOf(item);
     for (const e of entities) {
-      if (e.item !== item || e.count >= 6400) continue;
+      if (e.item !== item || e.count >= mergeCap) continue;
       if (e.pos.distanceTo({ x, y, z }) < MERGE_RADIUS) return e;
     }
     return null;
@@ -159,6 +171,13 @@ export function createItemEntitySystem({ scene, blockAssets, collidesAtBox, play
         continue;
       }
 
+      // Dans l'eau, un objet REMONTE vers la surface au lieu de couler au fond (comme le
+      // vrai jeu) : indispensable pour un bateau cassé sur un lac, dont l'objet lâché
+      // coulerait sinon hors de portée. À la surface il ne baigne plus (la case du dessus
+      // est de l'air) : la gravité le rabat, d'où le petit ballottement habituel.
+      if (isInWater(e.pos.x, e.pos.y + e.height * 0.5, e.pos.z) && e.velY < WATER_RISE_SPEED) {
+        e.velY = WATER_RISE_SPEED;
+      }
       e.applyGravity(dt);
       if (e.onGround) {
         const f = Math.max(0, 1 - GROUND_FRICTION * dt);

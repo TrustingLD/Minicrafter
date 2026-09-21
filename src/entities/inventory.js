@@ -7,6 +7,15 @@ export const BACKPACK_SLOTS = 27;
 export const TOTAL_SLOTS = HOTBAR_SLOTS + BACKPACK_SLOTS;
 export const MAX_STACK = 64;
 
+// Objets qui ne s'empilent pas jusqu'à 64 (comme le vrai jeu : le bateau, le seau,
+// etc. sont limités à 1 par case). Une seule source de vérité : tout le code qui
+// fusionne/remplit des piles (addItem, moveSlot, canFit ici ; craft/coffre/fourneau
+// dans ui/, item-entity.js pour les objets au sol) passe par `maxStackOf`.
+export const ITEM_MAX_STACK = { boat: 1 };
+export function maxStackOf(item) {
+  return ITEM_MAX_STACK[item] ?? MAX_STACK;
+}
+
 // emplacements d'armure (casque / plastron / jambières / bottes) : un tableau à
 // part (pas ajouté à `slots`) pour ne pas décaler HOTBAR_SLOTS/TOTAL_SLOTS et
 // casser tout le code qui itère déjà sur l'inventaire principal.
@@ -34,17 +43,18 @@ export function swapArmor(armorSlots, slots, armorIndex, slotIndex) {
 // Retourne la quantité qui n'a pas pu être placée (0 si tout est rangé).
 export function addItem(slots, item, count) {
   let remaining = count;
+  const max = maxStackOf(item);
   for (let i = 0; i < slots.length && remaining > 0; i++) {
     const s = slots[i];
-    if (s && s.item === item && s.count < MAX_STACK) {
-      const add = Math.min(MAX_STACK - s.count, remaining);
+    if (s && s.item === item && s.count < max) {
+      const add = Math.min(max - s.count, remaining);
       s.count += add;
       remaining -= add;
     }
   }
   for (let i = 0; i < slots.length && remaining > 0; i++) {
     if (!slots[i]) {
-      const add = Math.min(MAX_STACK, remaining);
+      const add = Math.min(max, remaining);
       slots[i] = { item, count: add };
       remaining -= add;
     }
@@ -87,7 +97,7 @@ export function moveSlot(slots, from, to) {
   const a = slots[from];
   const b = slots[to];
   if (a && b && a.item === b.item) {
-    const space = MAX_STACK - b.count;
+    const space = maxStackOf(b.item) - b.count;
     const move = Math.min(space, a.count);
     b.count += move;
     a.count -= move;
@@ -102,9 +112,10 @@ export function moveSlot(slots, from, to) {
 // unité de plus de `item`) — utile pour savoir si un drop au sol pourra être ramassé.
 export function canFit(slots, item, count) {
   let remaining = count;
+  const max = maxStackOf(item);
   for (const s of slots) {
     if (!s) return true;
-    if (s.item === item && s.count < MAX_STACK) remaining -= MAX_STACK - s.count;
+    if (s.item === item && s.count < max) remaining -= max - s.count;
     if (remaining <= 0) return true;
   }
   return false;

@@ -747,6 +747,22 @@ canvas {
   display: none;
 }
 
+/* Bateau : rappel pour descendre, affiché tant qu'on est assis dedans (cf. main.js) */
+#rideHint {
+  position: fixed;
+  bottom: 175px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 13px;
+  text-shadow: 1px 1px 2px #000;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: none;
+}
+
 #craftPanel {
   position: fixed;
   inset: 0;

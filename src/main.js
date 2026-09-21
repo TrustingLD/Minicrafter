@@ -59,6 +59,8 @@ import {
   HOTBAR_SLOTS,
 } from './entities/inventory.js';
 import { createItemEntitySystem } from './entities/item-entity.js';
+import { createBoatSystem, RIDER_MAX_LOOK } from './entities/boat.js';
+import { BOAT_RADIUS } from './entities/boat-physics.js';
 import { createHotbarUI } from './ui/hotbar.js';
 import { createHealthUI } from './ui/health.js';
 import { createHungerUI, createBreathUI } from './ui/hunger.js';
@@ -242,6 +244,8 @@ const worldApi = {
 // tant qu'on n'y retourne pas, sans dégât ni incohérence si on n'interagit
 // pas avec depuis l'autre dimension.
 function travelToDimension(name) {
+  leaveBoat(); // on ne traverse pas de dimension assis dans un bateau
+  boatSystem.group.visible = name !== 'nether'; // les bateaux restent dans l'overworld (cf. animate)
   if (name === 'nether') {
     if (!netherApi) {
       netherApi = createWorld({
@@ -673,6 +677,7 @@ const itemSystem = createItemEntitySystem({
   blockAssets,
   collidesAtBox: worldApi.collidesAtBox,
   playSound: sfx.playSound,
+  isInWater: worldApi.isInWater, // les objets lâchés dans l'eau remontent à la surface
 });
 // Redstone (Phase 22) : `toggleDoor` est une function declaration définie plus
 // bas dans ce fichier -- hissée (hoisting) au sommet de son scope module comme
@@ -797,6 +802,73 @@ const mobSystem = createMobSystem({
 });
 mobSystem.spawnMobs();
 
+/* ---------- Bateaux (Phase 36) ---------- */
+// Tout le comportement (physique à tic fixe, modèle, coups, passager) vit dans
+// entities/boat.js + entities/boat-physics.js ; ici on ne fait que brancher le monde,
+// les drops, le son et le joueur -- et gérer CE QUI CHANGE CÔTÉ JOUEUR quand il monte
+// (plus de marche/gravité/saut, la caméra suit le bateau) ou descend.
+const boatWoodMat = blockAssets.materials.planks[0];
+const boatSystem = createBoatSystem({
+  scene,
+  materials: {
+    // les planches du jeu (même texture que le bloc), un peu plus sombres au fond de la coque
+    wood: boatWoodMat,
+    inner: new THREE.MeshLambertMaterial({ map: boatWoodMat.map, color: 0x8a8a8a }),
+    // masque d'eau (cf. buildBoatModel) : n'écrit que la profondeur
+    mask: new THREE.MeshBasicMaterial({ colorWrite: false }),
+  },
+  env: {
+    getBlock: worldApi.getBlock,
+    isSolid: worldApi.isSolid,
+    collidesAtBox: worldApi.collidesAtBox,
+  },
+  spawnItem: (item, x, y, z, count) => itemSystem.spawn(x, y, z, item, count),
+  playSound: sfx.playSound,
+  onEject: (spot) => applyDismount(spot),
+  onRiderFall: (damage) => {
+    if (damage > 0) {
+      damagePlayer(damage);
+      sfx.playSound('hurt');
+    }
+  },
+});
+const rideHintEl = document.getElementById('rideHint');
+rideHintEl.textContent = touchMode ? '⤒ : descendre du bateau' : 'Maj : descendre du bateau';
+// cap du bateau à la frame précédente : sert à faire tourner le regard du passager AVEC
+// le bateau (delta de cap d'une frame à l'autre), cf. la boucle animate()
+let lastRideYaw = 0;
+
+// Monter : le joueur ne marche plus, la boucle animate() l'accroche au bateau à chaque
+// frame. On remet à zéro tout ce qui est propre à la marche (chute, recul, vol, course).
+function boardBoat(boat) {
+  if (!boatSystem.mount(boat)) return false;
+  player.velY = 0;
+  player.fallDistance = 0;
+  player.knockbackTimer = 0;
+  player.flying = false;
+  sprinting = false;
+  const anchor = boatSystem.riderAnchor(player.pos);
+  lastRideYaw = anchor.yaw;
+  rideHintEl.style.display = 'block';
+  sfx.playSound('equip');
+  return true;
+}
+
+// Descendre : `spot` = où poser le joueur (cf. findDismountSpot, boat-physics.js). Aussi
+// appelée par le système de bateaux quand il éjecte lui-même le passager (bateau cassé ou
+// coulé), dans quel cas il a déjà libéré le siège.
+function applyDismount(spot) {
+  player.pos.set(spot.x, spot.y, spot.z);
+  player.velY = 0;
+  player.fallDistance = 0;
+  player.knockbackTimer = 0;
+  rideHintEl.style.display = 'none';
+}
+function leaveBoat() {
+  const spot = boatSystem.dismount(player.radius, player.height);
+  if (spot) applyDismount(spot);
+}
+
 /* ---------- Chat (T) + commandes / (Phase 15) ---------- */
 const chatUI = createChatUI({
   logEl: document.getElementById('chatLog'),
@@ -843,6 +915,7 @@ const commandHandlers = {
     return 'Retour au monde normal.';
   },
   fly() {
+    leaveBoat();
     player.flying = !player.flying;
     player.fallDistance = 0; // pas de dégâts de chute au retour au sol après un vol
     return player.flying ? 'Vol activé.' : 'Vol désactivé.';
@@ -872,6 +945,7 @@ const commandHandlers = {
       y = parseFloat(ys),
       z = parseFloat(zs);
     if ([x, y, z].some(Number.isNaN)) return 'Coordonnées invalides.';
+    leaveBoat(); // sinon le bateau ramènerait le joueur à sa place à la frame suivante
     player.pos.set(x, y, z);
     player.velY = 0;
     return `Téléporté à ${x}, ${y}, ${z}.`;
@@ -1095,6 +1169,8 @@ document.addEventListener('keydown', (e) => {
     lastForwardTapTime = now;
   }
   if (isMovementCode(e.code)) e.preventDefault(); // évite le scroll de page avec Espace/flèches
+  // dans un bateau, Maj (sneak) = descendre, comme le vrai jeu
+  if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && boatSystem.riding) leaveBoat();
   keys[e.code] = true;
   // e.code = position physique de la touche : fonctionne en QWERTY comme en AZERTY
   // (pas besoin de Shift pour les chiffres sur clavier français)
@@ -1434,9 +1510,29 @@ function getTargetedMob() {
 // plutôt que de relancer le raycast à chaque appel.
 let cachedBlockHit = null;
 let cachedMobHit = null;
+let cachedBoatHit = null;
+
+// Bateau visé ({ boat, dist }) ou null. Un bloc SOLIDE plus proche le masque (on ne monte
+// pas dans un bateau à travers un mur) ; l'eau, elle, ne le masque pas -- le bateau flotte
+// DEDANS, et le DDA de getTargetedBlock() s'arrête déjà sur la case d'eau (pour le seau).
+// Aucun coût quand il n'y a aucun bateau dans le monde (le cas courant).
+function getTargetedBoat() {
+  if (boatSystem.boats.length === 0) return null;
+  aimRaycast();
+  const hit = boatSystem.raycast(rayEye, rayDir, raycaster.far);
+  if (!hit) return null;
+  const wall = voxelRaycast(
+    (x, y, z) => (worldApi.isSolid(x, y, z) ? true : null),
+    rayEye,
+    rayDir,
+    hit.dist,
+  );
+  return wall ? null : hit;
+}
 function refreshAimCache() {
   cachedMobHit = getTargetedMob();
   cachedBlockHit = getTargetedBlock();
+  cachedBoatHit = getTargetedBoat();
 }
 
 // Cassage progressif (TODO 16) : maintenir le clic use le temps réel plutôt que de
@@ -1700,6 +1796,13 @@ function performPrimaryAction() {
   const blockHit = cachedBlockHit;
   triggerHandSwing();
   leftMouseDown = true;
+  // un bateau visé (et plus proche que le mob visé) prend le coup : 5 coups de poing, 1 d'épée
+  const boatHit = cachedBoatHit;
+  if (boatHit && (!mobHit || boatHit.dist < mobHit.dist)) {
+    const hasSword = TOOL_CATEGORY[selectedBlock] === 'sword' && countOf(slots, selectedBlock) > 0;
+    boatSystem.hit(boatHit.boat, hasSword ? 5 : 1, player.instantBreak);
+    return;
+  }
   // priorité au mob si plus proche que le bloc
   if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
     const hasSword = TOOL_CATEGORY[selectedBlock] === 'sword' && countOf(slots, selectedBlock) > 0;
@@ -2099,8 +2202,64 @@ function tryPourBucket(liquidType) {
   sfx.playSound(liquidType === 'water' ? 'footstepWater' : 'place');
 }
 
+// Monter dans le bateau visé (clic droit). Prioritaire sur manger/poser/ouvrir, comme
+// dans le vrai jeu : interagir avec une ENTITÉ passe avant d'utiliser l'objet en main.
+// `cachedBoatHit` est déjà filtré (aucun bloc solide plus proche, cf. getTargetedBoat) ;
+// il reste à ne pas traverser un mob visé plus près. Déjà assis : rien à faire.
+function tryMountBoat() {
+  const hit = cachedBoatHit;
+  if (!hit || boatSystem.riding) return false;
+  if (cachedMobHit && cachedMobHit.dist < hit.dist) return false;
+  if (!boardBoat(hit.boat)) return false;
+  triggerHandSwing();
+  return true;
+}
+
+// Poser un bateau (clic droit avec l'objet en main). Le rayon de visée s'arrête sur
+// l'eau elle-même (comme pour le seau, on peut viser la surface) : le bateau est posé au
+// point exact visé, tourné dans le sens du regard, et refusé si sa boîte (1.375 x 0.5625)
+// mordrait sur un bloc solide -- comme le vrai jeu.
+function tryPlaceBoat() {
+  if (countOf(slots, 'boat') <= 0) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  const blockHit = cachedBlockHit;
+  if (!blockHit) return;
+  const { x: bx, y: by, z: bz } = blockHit.block;
+  const type = worldApi.getBlock(bx, by, bz);
+  if (type === 'lava') return; // ne flotte pas sur la lave
+  // point exact touché sur le rayon de visée (rayEye/rayDir : ceux du cache de visée)
+  let px = rayEye.x + rayDir.x * blockHit.dist;
+  let py = rayEye.y + rayDir.y * blockHit.dist;
+  let pz = rayEye.z + rayDir.z * blockHit.dist;
+  if (type === 'water') {
+    // la surface d'eau dessinée est à 0.875 dans la case, pas au ras du haut (1.0)
+    const top = by + (worldApi.getBlock(bx, by + 1, bz) === 'water' ? 1 : 0.875);
+    py = Math.min(py, top);
+  } else {
+    // face latérale d'un bloc (mur, rive) : on pose le bateau contre lui, pas dedans
+    const nx = blockHit.place.x - bx,
+      nz = blockHit.place.z - bz;
+    px += nx * (BOAT_RADIUS + 0.01);
+    pz += nz * (BOAT_RADIUS + 0.01);
+  }
+  const boat = boatSystem.place(px, py, pz, yaw);
+  if (!boat) {
+    hotbarUI.flashEmptySlot(selectedIndex);
+    return;
+  }
+  removeItem(slots, 'boat', 1);
+  selectedBlock = slots[selectedIndex]?.item ?? null; // pile de 1 : la main se vide
+  refreshHeldItem(selectedBlock);
+  bus.emit('inventory:changed');
+  triggerHandSwing();
+  sfx.playSound('place');
+}
+
 // Poser un bloc / ouvrir la table de craft (clic droit desktop, ▦ tactile).
 function performSecondaryAction() {
+  if (tryMountBoat()) return;
   if (tryShear()) return;
   if (tryEat()) return;
   const blockHit = cachedBlockHit;
@@ -2108,7 +2267,8 @@ function performSecondaryAction() {
   const { x: tx, y: ty, z: tz } = blockHit.block; // bloc visé (existant)
   const targetedType = worldApi.getBlock(tx, ty, tz);
   if (targetedType === 'bed_foot' || targetedType === 'bed_head') {
-    trySleep(tx, ty, tz, targetedType);
+    // on ne se couche pas depuis un bateau (le lit déplacerait le joueur hors de son siège)
+    if (!boatSystem.riding) trySleep(tx, ty, tz, targetedType);
     return;
   }
   if (targetedType && targetedType.startsWith('door_')) {
@@ -2219,6 +2379,12 @@ function performSecondaryAction() {
     tryPourBucket('lava');
     return;
   }
+  // Bateau : comme le seau plein, l'item ne correspond à aucun bloc (NON_PLACEABLE) --
+  // intercepté ici, avant le refus générique juste en dessous.
+  if (selectedBlock === 'boat') {
+    tryPlaceBoat();
+    return;
+  }
   if (NON_PLACEABLE.has(selectedBlock)) {
     hotbarUI.flashEmptySlot(selectedIndex);
     return;
@@ -2297,6 +2463,8 @@ if (touchMode) {
     },
     onJump: (down) => {
       keys[keybinds.jump] = down;
+      // pas de touche Maj sur tactile : « sauter » sert à descendre du bateau
+      if (down && boatSystem.riding) leaveBoat();
     },
     onInventory: toggleCraftOrClose,
   });
@@ -2322,6 +2490,9 @@ if (touchMode) {
    BOUCLE PRINCIPALE
    ============================================================ */
 const clock = new THREE.Clock();
+// angle ramené dans ]-π, π] (yaw s'accumule sans borne : souris, rotation du bateau)
+const wrapPi = (a) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+const rideInfo = { bodyYaw: 0 }; // passé à updateVisuals quand on est assis (réutilisé, pas d'alloc par frame)
 let footstepTimer = 0;
 let lavaDamageTimer = 0; // cooldown entre deux tics de dégâts tant qu'on reste dans la lave
 let cactusDamageTimer = 0; // même mécanique, tant qu'on reste collé à un cactus
@@ -2375,6 +2546,7 @@ const respawnBtn = document.getElementById('respawnBtn');
 function showGameOver() {
   if (gameOverOpen) return;
   gameOverOpen = true;
+  leaveBoat(); // mort = on quitte le bateau (le joueur réapparaît ailleurs de toute façon)
   stopBreaking();
   if (sleeping) {
     // le lit n'a plus de sens une fois mort -- referme sa vue dédiée pour que
@@ -2531,9 +2703,11 @@ function animate() {
 
     // accroupi (Maj) : abaisse les yeux/hitbox, ralentit, et interdit de marcher
     // dans le vide (contrairement à la marche normale qui laisse tomber du bord)
-    const crouching = !!keys['ShiftLeft'] || !!keys['ShiftRight'];
+    // assis dans un bateau : ni accroupi (Maj sert à descendre) ni sprint
+    const riding = boatSystem.riding !== null;
+    const crouching = !riding && (!!keys['ShiftLeft'] || !!keys['ShiftRight']);
     player.height = crouching ? CROUCH_HEIGHT : STAND_HEIGHT;
-    if (crouching) sprinting = false;
+    if (crouching || riding) sprinting = false;
     const underwater = isUnderwater();
     const inLava = isInLava();
     const onSoulSand = !underwater && !inLava && !player.flying && isOnSoulSand();
@@ -2673,7 +2847,8 @@ function animate() {
       bus.emit('player:breath');
     }
 
-    if (isMoving) {
+    // à pied seulement : dans un bateau, ZQSD/flèches pilotent le bateau (cf. plus bas)
+    if (isMoving && !riding) {
       resolveHorizontalMove(player, dx, dz, yaw, speed, dt, crouching, worldApi.collidesAtBox);
       if (player.onGround) {
         footstepTimer -= dt;
@@ -2686,9 +2861,11 @@ function animate() {
 
     // Knockback (coup de zombie, cf. onPlayerHurt plus haut) : s'ajoute au
     // déplacement normal ci-dessus, qu'on soit en train de bouger ou non.
-    resolveKnockback(player, dt, worldApi.collidesAtBox);
+    if (!riding) resolveKnockback(player, dt, worldApi.collidesAtBox);
 
-    if (player.flying) {
+    if (riding) {
+      // assis : ni gravité ni saut, la position vient du bateau (juste après ce bloc)
+    } else if (player.flying) {
       const vertical = (keys[keybinds.jump] ? 1 : 0) - (crouching ? 1 : 0);
       resolveFlyingVertical(player, dt, vertical, worldApi.collidesAtBox);
     } else if (underwater || inLava) {
@@ -2730,6 +2907,31 @@ function animate() {
       }
     }
 
+    // Bateaux : simulés à tic fixe (20 Hz, cf. entities/boat.js), gelés hors overworld
+    // comme les mobs/la redstone (suivis par POSITION, pas par dimension). ZQSD/flèches =
+    // avancer/reculer + virer à gauche/à droite (le bateau tourne, il ne « strafe » pas).
+    if (activeWorld === overworldApi) {
+      boatSystem.update(
+        dt,
+        riding ? { left: dx < -0.3, right: dx > 0.3, forward: dz < -0.3, back: dz > 0.3 } : null,
+        { radius: player.radius, height: STAND_HEIGHT },
+      );
+    }
+    // relu APRÈS update : un tic a pu éjecter le passager (bateau coulé/cassé)
+    let rideYaw = null;
+    if (boatSystem.riding) {
+      // le passager est accroché au bateau (position INTERPOLÉE, celle qu'on voit) ; le
+      // regard tourne avec le bateau, mais reste dans ±105° de son axe (comme le vrai jeu)
+      const anchor = boatSystem.riderAnchor(player.pos);
+      yaw += anchor.yaw - lastRideYaw;
+      lastRideYaw = anchor.yaw;
+      const rel = wrapPi(yaw - anchor.yaw);
+      yaw = anchor.yaw + Math.max(-RIDER_MAX_LOOK, Math.min(RIDER_MAX_LOOK, rel));
+      player.velY = 0;
+      player.fallDistance = 0;
+      rideYaw = anchor.yaw;
+    }
+
     if (player.pos.y < -10 || player.health <= 0) showGameOver();
 
     camera.rotation.order = 'YXZ';
@@ -2743,7 +2945,9 @@ function animate() {
     if (Math.abs(hurtTiltAngle) < 0.0005) hurtTiltAngle = 0;
     camera.rotation.z = hurtTiltAngle;
 
-    updateVisuals(dt, isMoving, yaw, pitch, crouching); // positionne la caméra (1ère/3e personne) + anime main et avatar
+    rideInfo.bodyYaw = rideYaw ?? 0;
+    // positionne la caméra (1ère/3e personne) + anime main et avatar (assis si dans un bateau)
+    updateVisuals(dt, isMoving && rideYaw === null, yaw, pitch, crouching, rideYaw === null ? null : rideInfo);
 
     // Dimensions (Phase 30) : le Nether n'a pas de mobs propres pour l'instant
     // (prévus plus tard) -- et sans ce garde, `trySpawnAroundPlayer` (mob.js)
@@ -2760,7 +2964,13 @@ function animate() {
   refreshAimCache();
   const mobHit = cachedMobHit;
   const blockHit = cachedBlockHit;
-  hud.updateTarget({ mobHit, blockHit, getBlock: worldApi.getBlock, blockTypes: BLOCK_TYPES });
+  hud.updateTarget({
+    mobHit,
+    blockHit,
+    boatHit: cachedBoatHit,
+    getBlock: worldApi.getBlock,
+    blockTypes: BLOCK_TYPES,
+  });
 
   // Cassage progressif : maintenir le clic sur un bloc l'use au fil du temps. Le clic
   // relâché (ou craft/chat ouvert) arrête et remet à zéro pour de vrai. Mais un simple
@@ -2782,7 +2992,10 @@ function animate() {
     breakTickTimer = 0;
     crackMesh.visible = false;
   } else {
-    const targetingBlock = blockHit && !(mobHit && mobHit.dist < blockHit.dist);
+    const targetingBlock =
+      blockHit &&
+      !(mobHit && mobHit.dist < blockHit.dist) &&
+      !(cachedBoatHit && cachedBoatHit.dist < blockHit.dist); // un bateau plus près : on ne casse pas le bloc derrière
     if (targetingBlock) {
       const { x, y, z } = blockHit.block;
       const key = `${x},${y},${z}`;

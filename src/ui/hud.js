@@ -20,8 +20,13 @@ export function createHud({ posEl, targetEl, hintEl, fpsEl }) {
     posEl.textContent = `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
   }
 
-  function updateTarget({ mobHit, blockHit, getBlock, blockTypes }) {
-    if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
+  // boatHit : { boat, dist } ou null -- déjà filtré côté main.js (un bloc solide plus
+  // proche le masque), donc seule la comparaison avec le mob visé reste à faire ici.
+  function updateTarget({ mobHit, blockHit, boatHit = null, getBlock, blockTypes }) {
+    if (boatHit && (!mobHit || boatHit.dist < mobHit.dist)) {
+      targetEl.textContent = 'Bateau';
+      hintEl.style.display = 'none';
+    } else if (mobHit && (!blockHit || mobHit.dist < blockHit.dist)) {
       targetEl.textContent = `${mobHit.mob.data.name} (${mobHit.mob.health}/${mobHit.mob.maxHealth} PV)`;
       hintEl.style.display = 'none';
     } else if (blockHit) {

@@ -2,7 +2,13 @@
 // jauges de progression et de flamme, et intégration complète de l'inventaire du joueur
 // (sac à dos + hotbar) avec interaction clic / clic droit / Maj+clic / curseur flottant.
 
-import { HOTBAR_SLOTS, TOTAL_SLOTS, MAX_STACK, addItem } from '../entities/inventory.js';
+import {
+  HOTBAR_SLOTS,
+  TOTAL_SLOTS,
+  MAX_STACK,
+  maxStackOf,
+  addItem,
+} from '../entities/inventory.js';
 import { createBlockIcon3D } from './block-icon-3d.js';
 
 export function createFurnaceUI({
@@ -118,13 +124,13 @@ export function createFurnaceUI({
     }
     if (cell.item === cursor.item) {
       if (right) {
-        if (cell.count < MAX_STACK) {
+        if (cell.count < maxStackOf(cell.item)) {
           set({ item: cell.item, count: cell.count + 1 });
           cursor.count -= 1;
           if (cursor.count <= 0) cursor = null;
         }
       } else {
-        const space = MAX_STACK - cell.count;
+        const space = maxStackOf(cell.item) - cell.count;
         const move = Math.min(space, cursor.count);
         if (move > 0) set({ item: cell.item, count: cell.count + move });
         cursor.count -= move;
