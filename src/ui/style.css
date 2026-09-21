@@ -259,6 +259,60 @@ canvas {
   color: #fff;
 }
 
+/* Chat sur téléphone (bouton 💬 des contrôles tactiles, cf. ui/touch.js). Les boutons ➤/✕
+   n'existent qu'au tactile. La zone de saisie passe EN HAUT de l'écran : en bas elle
+   serait cachée par le clavier virtuel dès qu'il s'ouvre. L'historique se cale dessous,
+   et le fil de messages qui s'effacent (#chatLog) remonte au-dessus du joystick. */
+#chatSend,
+#chatClose {
+  display: none;
+}
+body.touch #chatInputBox {
+  top: max(8px, env(safe-area-inset-top));
+  bottom: auto;
+  left: max(8px, env(safe-area-inset-left));
+  width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  white-space: nowrap;
+}
+body.touch #chatInputBox input {
+  width: calc(100% - 96px);
+  height: 40px;
+  font-size: 16px; /* < 16px : iOS zoome la page au focus */
+  vertical-align: middle;
+}
+body.touch #chatSend,
+body.touch #chatClose {
+  display: inline-block;
+  width: 42px;
+  height: 40px;
+  margin-left: 4px;
+  padding: 0;
+  vertical-align: middle;
+  border-radius: 3px;
+  border: 1px solid #666;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 18px;
+}
+body.touch #chatSend:active,
+body.touch #chatClose:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+body.touch #chatHistory {
+  top: calc(max(8px, env(safe-area-inset-top)) + 48px);
+  bottom: auto;
+  left: max(8px, env(safe-area-inset-left));
+  width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  max-height: 32vh;
+  box-sizing: border-box;
+}
+body.touch #chatLog {
+  bottom: 230px;
+  left: max(8px, env(safe-area-inset-left));
+  width: min(360px, 45vw);
+  max-height: 100px;
+}
+
 /* Géométrie du HUD du bas, en un seul endroit — les jauges se plaçaient chacune avec
    un `bottom` en dur, et hungerbar (64px) tombait EN PLEIN DANS la hotbar, qui occupe
    20px à 78px : les cuisses de poulet se dessinaient par-dessus les cases. Tout est

@@ -93,7 +93,11 @@
 
     <div id="chatLog"></div>
     <div id="chatHistory"></div>
-    <div id="chatInputBox"><input id="chatInput" maxlength="140" autocomplete="off" /></div>
+    <div id="chatInputBox">
+      <input id="chatInput" maxlength="140" autocomplete="off" enterkeyhint="send" />
+      <button id="chatSend" type="button" aria-label="Envoyer">➤</button>
+      <button id="chatClose" type="button" aria-label="Fermer le chat">✕</button>
+    </div>
 
     <div id="craftPanel">
       <div id="craftBox">
@@ -210,7 +214,9 @@
         <p>Molette ou 1-9 : choisir l'objet — E : inventaire / craft</p>
         <p>Pioche/hache équipées = bonus de récolte sur pierre/bois</p>
         <p>M : couper/remettre la musique — F5 : vue 3e personne</p>
-        <p>C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat</p>
+        <p>
+          C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
+        </p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer

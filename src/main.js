@@ -82,6 +82,8 @@ const bus = createEventBus();
 // baisser la qualité (distance de rendu, ombres, pixel ratio) pour tenir 60 FPS
 // sur un GPU de téléphone.
 const touchMode = isTouchDevice();
+// le CSS adapte quelques panneaux au tactile (ex. chat en haut de l'écran, cf. style.css)
+if (touchMode) document.body.classList.add('touch');
 
 /* ---------- Scène / caméra / renderer ---------- */
 const scene = new THREE.Scene();
@@ -875,6 +877,8 @@ const chatUI = createChatUI({
   historyEl: document.getElementById('chatHistory'),
   inputBoxEl: document.getElementById('chatInputBox'),
   inputEl: document.getElementById('chatInput'),
+  sendBtnEl: document.getElementById('chatSend'),
+  closeBtnEl: document.getElementById('chatClose'),
   onSend: (text) => bus.emit('chat:message', text),
   onClose: () => {
     resumePointerLock();
@@ -2467,6 +2471,11 @@ if (touchMode) {
       if (down && boatSystem.riding) leaveBoat();
     },
     onInventory: toggleCraftOrClose,
+    // bouton 💬 : mêmes conditions que la touche T (jamais par-dessus un autre panneau)
+    onChat: () => {
+      if (!sleeping && !craftOpen && !furnaceOpen && !chestOpen && !chatUI.isOpen && !gameOverOpen)
+        chatUI.open();
+    },
   });
 
   // premier contact = geste utilisateur requis pour débloquer l'audio et tenter le

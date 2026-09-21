@@ -5,13 +5,27 @@
 // (ouvert) tandis que `logEl` continue d'afficher juste les 6 derniers messages qui
 // s'effacent tout seuls (fermé) — deux vues du même flux, pas deux systèmes. `sentHistory`
 // est un second tableau, indépendant : ce que LE JOUEUR a tapé, pour le rappel ↑/↓.
+//
+// Tactile : pas de touche T/Entrée/Échap. main.js ouvre le chat depuis le bouton 💬 des
+// contrôles tactiles, et `sendBtnEl`/`closeBtnEl` (optionnels, ➤ et ✕, affichés par le CSS
+// seulement sur tactile) envoient / referment le champ. Sur un clavier virtuel, `e.code`
+// est souvent vide alors que `e.key` vaut bien 'Enter' : on teste les deux.
 
 const MAX_HISTORY = 100;
 const MAX_SENT_HISTORY = 50;
 const VISIBLE_WHEN_OPEN = 20;
 const VISIBLE_WHEN_CLOSED = 6;
 
-export function createChatUI({ logEl, historyEl, inputBoxEl, inputEl, onSend, onClose }) {
+export function createChatUI({
+  logEl,
+  historyEl,
+  inputBoxEl,
+  inputEl,
+  sendBtnEl = null,
+  closeBtnEl = null,
+  onSend,
+  onClose,
+}) {
   let isOpen = false;
   const messages = []; // { text, isError }
   const sentHistory = [];
@@ -64,19 +78,35 @@ export function createChatUI({ logEl, historyEl, inputBoxEl, inputEl, onSend, on
     onClose?.();
   }
 
+  // envoie le texte tapé (s'il y en a) puis referme : Entrée au clavier, ➤ sur tactile
+  function submit() {
+    const text = inputEl.value.trim();
+    if (text) {
+      sentHistory.push(text);
+      if (sentHistory.length > MAX_SENT_HISTORY) sentHistory.shift();
+      recallIndex = -1;
+      onSend(text);
+    }
+    close();
+  }
+
+  // 'click' et pas 'touchstart' : sur iOS, le clavier virtuel ne se ferme/rouvre proprement
+  // que dans un vrai geste « click » -- et ça marche pareil à la souris
+  sendBtnEl?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (isOpen) submit();
+  });
+  closeBtnEl?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (isOpen) close();
+  });
+
   inputEl.addEventListener('keydown', (e) => {
     e.stopPropagation(); // ne pas laisser 'e'/'t'/etc. atteindre les contrôles du jeu pendant la saisie
-    if (e.code === 'Escape') {
+    if (e.code === 'Escape' || e.key === 'Escape') {
       close();
-    } else if (e.code === 'Enter') {
-      const text = inputEl.value.trim();
-      if (text) {
-        sentHistory.push(text);
-        if (sentHistory.length > MAX_SENT_HISTORY) sentHistory.shift();
-        recallIndex = -1;
-        onSend(text);
-      }
-      close();
+    } else if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.key === 'Enter') {
+      submit();
     } else if (e.code === 'ArrowUp') {
       if (sentHistory.length === 0) return;
       e.preventDefault();

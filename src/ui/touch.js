@@ -26,6 +26,7 @@ export function createTouchUI({
   onPlace,
   onJump,
   onInventory,
+  onChat,
 }) {
   const root = document.createElement('div');
   root.id = 'touchControls';
@@ -36,6 +37,7 @@ export function createTouchUI({
       <button id="tcInventory" class="tcBtn" type="button">🎒</button>
       <button id="tcJump" class="tcBtn" type="button">⤒</button>
       <button id="tcPlace" class="tcBtn" type="button">▦</button>
+      <button id="tcChat" class="tcBtn" type="button" aria-label="Chat">💬</button>
       <button id="tcMine" class="tcBtn tcBtnBig" type="button">⛏</button>
     </div>
   `;
@@ -156,6 +158,12 @@ export function createTouchUI({
     },
     { passive: false },
   );
+  // 'click' (pas 'touchstart') : le champ de saisie du chat doit être focalisé DANS un
+  // vrai geste utilisateur, sinon iOS n'affiche pas le clavier virtuel
+  root.querySelector('#tcChat').addEventListener('click', (e) => {
+    e.preventDefault();
+    onChat();
+  });
   root.querySelector('#tcInventory').addEventListener(
     'touchstart',
     (e) => {
