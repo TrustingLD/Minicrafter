@@ -369,6 +369,7 @@ let selectedBlock = slots[selectedIndex]?.item ?? null;
 /* ---------- UI ---------- */
 const hotbarUI = createHotbarUI({
   hotbarEl: document.getElementById('hotbar'),
+  iconSize: touchMode ? 26 : 44, // cases de 34px au lieu de 54px sur téléphone
   blockTypes: BLOCK_TYPES,
   itemNames: ITEM_NAMES,
   iconCanvas: blockAssets.iconCanvas,

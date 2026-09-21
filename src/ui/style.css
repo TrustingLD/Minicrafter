@@ -327,6 +327,52 @@ body.touch #chatLog {
   /* première rangée de jauges : juste au-dessus de la hotbar, plus une marge */
   --gauge-row: calc(var(--hotbar-bottom) + var(--hotbar-height) + 6px);
   --gauge-row-height: 20px;
+  --gauge-scale: 1; /* échelle des jauges vie/faim/bulles, cf. body.touch */
+}
+
+/* Barre du bas sur téléphone : cases, coeurs et cuisses nettement plus petits, pour libérer
+   l'écran (la hotbar de bureau fait 570px de large, plus que beaucoup de téléphones en
+   portrait). Les variables DÉRIVÉES (--hotbar-height/width, --gauge-row) sont redéfinies
+   ici aussi : un `var()` dans une variable est résolu là où elle est définie (:root), donc
+   surcharger seulement --slot-size laisserait --hotbar-width à sa valeur de bureau. Les
+   coeurs/cuisses sont dessinés avec un clip-path en pixels : on les réduit avec scale()
+   (origine sur le bord aligné avec la hotbar) plutôt qu'en changeant leur largeur. La case
+   ne dépasse jamais 34px et se rétrécit encore si l'écran est trop étroit (9 cases + écarts
+   toujours dans la largeur). */
+body.touch {
+  --hotbar-bottom: max(6px, env(safe-area-inset-bottom));
+  --slot-size: min(34px, calc((100vw - 76px) / 9));
+  --slot-border: 2px;
+  --slot-gap: 3px;
+  --hotbar-height: calc(var(--slot-size) + 2 * var(--slot-border));
+  --hotbar-width: calc(9 * var(--hotbar-height) + 8 * var(--slot-gap));
+  --gauge-row: calc(var(--hotbar-bottom) + var(--hotbar-height) + 3px);
+  --gauge-row-height: 14px;
+  --gauge-scale: 0.68;
+}
+body.touch .slot {
+  border-radius: 3px;
+}
+body.touch .slot.selected {
+  box-shadow: 0 0 5px #fff;
+}
+/* les numéros 1-9 ne servent à rien sans clavier */
+body.touch .slot .key {
+  display: none;
+}
+body.touch .slot .count {
+  font-size: 11px;
+  bottom: 0;
+  right: 2px;
+}
+body.touch #healthbar {
+  transform: translateX(calc(var(--hotbar-width) / -2)) scale(var(--gauge-scale));
+  transform-origin: left bottom;
+}
+body.touch #hungerbar,
+body.touch #breathbar {
+  transform: translateX(calc(var(--hotbar-width) / 2)) translateX(-100%) scale(var(--gauge-scale));
+  transform-origin: right bottom;
 }
 
 #hotbar {
@@ -339,9 +385,9 @@ body.touch #chatLog {
   z-index: 10;
 }
 .slot {
-  width: 54px;
-  height: 54px;
-  border: 2px solid #444;
+  width: var(--slot-size);
+  height: var(--slot-size);
+  border: var(--slot-border) solid #444;
   background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
@@ -361,8 +407,8 @@ body.touch #chatLog {
   opacity: 0.35;
 }
 .slot .swatch {
-  width: 48px;
-  height: 48px;
+  width: calc(var(--slot-size) - 6px); /* 48px sur une case de 54px */
+  height: calc(var(--slot-size) - 6px);
   border-radius: 2px;
   image-rendering: pixelated;
   background-size: contain;

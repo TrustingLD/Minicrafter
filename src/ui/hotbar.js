@@ -6,7 +6,15 @@
 import { HOTBAR_SLOTS } from '../entities/inventory.js';
 import { createBlockIcon3D } from './block-icon-3d.js';
 
-export function createHotbarUI({ hotbarEl, blockTypes, itemNames, iconCanvas, iconFaces3D, onSelect }) {
+export function createHotbarUI({
+  hotbarEl,
+  blockTypes,
+  itemNames,
+  iconCanvas,
+  iconFaces3D,
+  onSelect,
+  iconSize = 44, // taille (px) du cube 3D des blocs ; plus petit sur téléphone (cf. body.touch)
+}) {
   let selectedIndex = 0;
 
   function render(slots) {
@@ -22,7 +30,7 @@ export function createHotbarUI({ hotbarEl, blockTypes, itemNames, iconCanvas, ic
         // le reste (outils, nourriture, minerais...) garde l'icône plate 2D
         const faces = iconFaces3D(cell.item);
         if (faces) {
-          swatch.appendChild(createBlockIcon3D(faces, 44));
+          swatch.appendChild(createBlockIcon3D(faces, iconSize));
         } else {
           const img = iconCanvas(cell.item);
           if (img) swatch.style.backgroundImage = `url(${img.toDataURL()})`;
