@@ -144,6 +144,25 @@ l'inventaire directement : `entities/item-entity.js` fait apparaître les drops 
 sol (un `InstancedMesh` PAR TYPE D'ITEM, jamais un `Mesh` par item — la même leçon
 de perf que les particules de cassage et les mares d'eau/lave).
 
+## Pack de textures 16x16 (Phase 37)
+
+`render/textures-select.js` choisit entre les textures procédurales de base
+(`render/textures.js`) et un pack `render/textures-16.js` : une vraie grille de 16x16
+cases par face (même technique que `texBoat` : palette de couleurs + 16 lignes de 16
+caractères, cf. `pixelTex`), obtenue en réduisant chaque texture de base et en
+regroupant ses couleurs (k-means, ~10 teintes). `render/atlas.js` (l'atlas de blocs du
+mesher) et `render/block-assets.js` passent tous les deux par ce sélecteur au lieu
+d'importer `textures.js` directement, pour que le réglage s'applique partout d'un coup.
+
+Ne couvre que les 49 FACES DE BLOC du monde (celles listées dans `atlas.js`) ; outils,
+nourriture, mobs et états on/off (redstone, leviers...) restent sur la texture de base
+dans les deux modes. Le réglage (`localStorage`, menu Options -> Textures) est lu une
+seule fois au chargement de la page : le changer recharge la page plutôt que de
+reconstruire l'atlas et tous les chunks déjà maillés à chaud.
+
+`tools/gen-pixel16.mjs` régénère `textures-16.js` (nécessite `npm install --no-save
+canvas`, seule dépendance de ce script -- pas du jeu).
+
 ## Le bateau (Phase 36)
 
 Deux fichiers, séparés comme le joueur (`world/physics.js`) et le rendu :

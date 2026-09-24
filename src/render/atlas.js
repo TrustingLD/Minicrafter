@@ -5,7 +5,7 @@
 // d'appels de rendu.
 
 import * as THREE from 'three';
-import * as tex from './textures.js';
+import { tex } from './textures-select.js';
 import { TEX_SIZE } from './textures.js';
 import { BLOCK_TYPES } from '../data/blocks.js';
 

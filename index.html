@@ -16,7 +16,7 @@
     <title>Minicrafter - Three.js</title>
     <!-- ?v= : à changer à chaque livraison, pour que le navigateur du téléphone ne resserve
          pas une vieille feuille de style / un vieux main.js gardés en cache -->
-    <link rel="stylesheet" href="./src/ui/style.css?v=5d" />
+    <link rel="stylesheet" href="./src/ui/style.css?v=5e" />
   </head>
   <body>
     <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
@@ -226,7 +226,7 @@
         <p>
           C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
         </p>
-        <p id="buildTag">version 5d — barre compacte + plein écran (téléphone)</p>
+        <p id="buildTag">version 5e — pack de textures 16x16 (Options -> Textures)</p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer
@@ -267,6 +267,7 @@
           <button id="optSensitivityBtn" class="menuBtn">Sensibilité de la souris</button>
           <button id="optKeybindsBtn" class="menuBtn">Touches</button>
           <button id="optLanguageBtn" class="menuBtn">Langue</button>
+          <button id="optTexturesBtn" class="menuBtn">Textures</button>
           <button id="optionsBackBtn" class="menuBtn">Retour</button>
         </div>
 
@@ -290,6 +291,17 @@
             <option value="fr" selected>Français</option>
           </select>
           <button id="languageBackBtn" class="menuBtn">Retour</button>
+        </div>
+
+        <!-- Sous-écran : pack de textures (Phase 37). Boutons plutôt qu'un <select> : on veut
+             un aperçu (mini vignette 16x16 générée en JS, cf. main.js) à côté de chaque choix,
+             et une coche claire sur celui actif -- un menu déroulant cacherait les deux. -->
+        <div id="optionsTextures" class="optionsScreen" style="display: none">
+          <p id="texturesHint">
+            Change au prochain chargement de la partie (le jeu va recharger la page).
+          </p>
+          <div id="textureChoices"></div>
+          <button id="texturesBackBtn" class="menuBtn">Retour</button>
         </div>
       </div>
     </div>
@@ -389,6 +401,6 @@
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }
     </script>
-    <script type="module" src="./src/main.js?v=5d"></script>
+    <script type="module" src="./src/main.js?v=5e"></script>
   </body>
 </html>

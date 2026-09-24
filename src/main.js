@@ -61,6 +61,12 @@ import {
 import { createItemEntitySystem } from './entities/item-entity.js';
 import { createBoatSystem, RIDER_MAX_LOOK } from './entities/boat.js';
 import { BOAT_RADIUS } from './entities/boat-physics.js';
+import { TEXTURE_STYLES, getTextureStyle, setTextureStyle } from './render/textures-select.js';
+import { texGrassTop as texGrassTopBase, texStone as texStoneBase } from './render/textures.js';
+import {
+  texGrassTop as texGrassTopPixel16,
+  texStone as texStonePixel16,
+} from './render/textures-16.js';
 import { createHotbarUI } from './ui/hotbar.js';
 import { createHealthUI } from './ui/health.js';
 import { createHungerUI, createBreathUI } from './ui/hunger.js';
@@ -390,7 +396,10 @@ function applyCompactHud() {
   const border = 2;
   const slot = Math.max(
     22,
-    Math.min(COMPACT_SLOT_MAX, Math.floor((window.innerWidth - 60) / 9) - 2 * border - COMPACT_SLOT_GAP),
+    Math.min(
+      COMPACT_SLOT_MAX,
+      Math.floor((window.innerWidth - 60) / 9) - 2 * border - COMPACT_SLOT_GAP,
+    ),
   );
   const cell = slot + 2 * border;
   const s = document.body.style;
@@ -1366,16 +1375,68 @@ const optionsRoot = document.getElementById('optionsRoot');
 const optionsSensitivity = document.getElementById('optionsSensitivity');
 const optionsKeybinds = document.getElementById('optionsKeybinds');
 const optionsLanguage = document.getElementById('optionsLanguage');
+const optionsTextures = document.getElementById('optionsTextures');
 const sensitivitySlider = /** @type {HTMLInputElement} */ (
   document.getElementById('sensitivitySlider')
 );
 const sensitivityValue = document.getElementById('sensitivityValue');
 const keybindList = document.getElementById('keybindList');
 const languageSelect = /** @type {HTMLSelectElement} */ (document.getElementById('languageSelect'));
+const textureChoicesEl = document.getElementById('textureChoices');
 
 function showOptionsScreen(screen) {
-  for (const el of [optionsRoot, optionsSensitivity, optionsKeybinds, optionsLanguage]) {
+  for (const el of [
+    optionsRoot,
+    optionsSensitivity,
+    optionsKeybinds,
+    optionsLanguage,
+    optionsTextures,
+  ]) {
     el.style.display = el === screen ? 'flex' : 'none';
+  }
+}
+
+// Sous-écran Textures (Phase 37) : un bouton par pack, avec une mini vignette d'aperçu (herbe +
+// pierre) dessinée directement avec les fonctions du pack -- pas de screenshot à maintenir, et
+// ça montre le VRAI rendu (mêmes fonctions que le jeu). Reconstruit à chaque ouverture (pas de
+// cache) : c'est un écran de menu, pas la boucle de rendu, le coût est négligeable.
+function renderTextureChoices() {
+  const current = getTextureStyle();
+  const previews = {
+    base: [texGrassTopBase, texStoneBase],
+    pixel16: [texGrassTopPixel16, texStonePixel16],
+  };
+  textureChoicesEl.innerHTML = '';
+  for (const [style, label] of Object.entries(TEXTURE_STYLES)) {
+    const btn = document.createElement('button');
+    btn.className = 'textureChoice' + (style === current ? ' active' : '');
+    btn.type = 'button';
+
+    const preview = document.createElement('canvas');
+    preview.width = 32;
+    preview.height = 32;
+    const pctx = preview.getContext('2d');
+    // deux bandes (herbe en haut, pierre en bas) : un seul coup d'œil suffit à distinguer le
+    // grain fin de la texture de base du gros pixel du pack 16x16
+    const [top, bottom] = previews[style];
+    pctx.drawImage(top().image, 0, 0, 32, 16);
+    pctx.drawImage(bottom().image, 0, 16, 32, 16);
+
+    const text = document.createElement('span');
+    text.className = 'textureChoiceLabel';
+    text.textContent = label;
+    const check = document.createElement('span');
+    check.className = 'textureChoiceCheck';
+    check.textContent = '✓';
+
+    btn.appendChild(preview);
+    btn.appendChild(text);
+    btn.appendChild(check);
+    btn.addEventListener('click', () => {
+      if (style === getTextureStyle()) return; // déjà actif : pas la peine de recharger pour rien
+      setTextureStyle(style); // recharge la page (cf. textures-select.js)
+    });
+    textureChoicesEl.appendChild(btn);
   }
 }
 function openOptions() {
@@ -1435,6 +1496,13 @@ document.getElementById('optKeybindsBtn').addEventListener('click', () => {
 });
 document.getElementById('optLanguageBtn').addEventListener('click', () => {
   showOptionsScreen(optionsLanguage);
+});
+document.getElementById('optTexturesBtn').addEventListener('click', () => {
+  renderTextureChoices();
+  showOptionsScreen(optionsTextures);
+});
+document.getElementById('texturesBackBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsRoot);
 });
 document.getElementById('optionsBackBtn').addEventListener('click', closeOptions);
 document.getElementById('sensitivityBackBtn').addEventListener('click', () => {
@@ -2594,7 +2662,13 @@ function isInLava() {
 // le bloc juste sous les pieds (comme un sol normal, pas un point à
 // l'intérieur d'un bloc comme isInLava/isUnderwater).
 function isOnSoulSand() {
-  return worldApi.getBlock(Math.floor(player.pos.x), Math.floor(player.pos.y - 0.01), Math.floor(player.pos.z)) === 'soul_sand';
+  return (
+    worldApi.getBlock(
+      Math.floor(player.pos.x),
+      Math.floor(player.pos.y - 0.01),
+      Math.floor(player.pos.z),
+    ) === 'soul_sand'
+  );
 }
 
 let gameOverOpen = false;
@@ -3010,7 +3084,14 @@ function animate() {
 
     rideInfo.bodyYaw = rideYaw ?? 0;
     // positionne la caméra (1ère/3e personne) + anime main et avatar (assis si dans un bateau)
-    updateVisuals(dt, isMoving && rideYaw === null, yaw, pitch, crouching, rideYaw === null ? null : rideInfo);
+    updateVisuals(
+      dt,
+      isMoving && rideYaw === null,
+      yaw,
+      pitch,
+      crouching,
+      rideYaw === null ? null : rideInfo,
+    );
 
     // Dimensions (Phase 30) : le Nether n'a pas de mobs propres pour l'instant
     // (prévus plus tard) -- et sans ce garde, `trySpawnAroundPlayer` (mob.js)

@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { BLOCK_TYPES } from '../data/blocks.js';
-import * as tex from './textures.js';
+import { tex } from './textures-select.js';
 
 export const BLOCK_SIZE = 1;
 
