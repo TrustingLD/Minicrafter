@@ -1538,6 +1538,20 @@ document.addEventListener('pointerlockchange', () => {
     showResumeBlocker();
   }
 });
+// Sur téléphone, un swipe (barre du haut/du bas du système) referme le plein écran sans
+// qu'aucun événement de pointer lock ne se déclenche (le tactile n'en utilise pas) : sans ce
+// qui suit, le jeu continuait de tourner sous les barres du navigateur avec les contrôles
+// tactiles décalés -- l'impression d'un jeu \"figé\". `showResumeBlocker()` -- le même écran
+// \"Cliquez pour reprendre\" que sur ordinateur, avec son bouton Options -- répare ça : dès
+// qu'on quitte le plein écran en pleine partie, on l'affiche.
+function isFullscreen() {
+  return !!(document.fullscreenElement || /** @type {any} */ (document).webkitFullscreenElement);
+}
+['fullscreenchange', 'webkitfullscreenchange'].forEach((evt) => {
+  document.addEventListener(evt, () => {
+    if (touchMode && !isFullscreen()) showResumeBlocker();
+  });
+});
 blocker.addEventListener('click', () => {
   if (
     gameStarted &&
@@ -1550,7 +1564,18 @@ blocker.addEventListener('click', () => {
     !sleeping &&
     !gameOverOpen
   ) {
-    resumePointerLock();
+    if (touchMode) {
+      // pas de pointer lock sur tactile : "reprendre" = refermer cet écran et retenter le
+      // plein écran -- exactement comme le premier lancement (cf. enterPhoneFullscreen),
+      // dans ce même geste de tap qui l'autorise.
+      sfx.resumeAudio();
+      music.startBgm();
+      enterPhoneFullscreen();
+      blocker.style.display = 'none';
+      blocker.classList.remove('paused');
+    } else {
+      resumePointerLock();
+    }
   }
 });
 let pointerLockRetryTimer = null;

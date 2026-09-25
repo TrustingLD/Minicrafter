@@ -16,7 +16,7 @@
     <title>Minicrafter - Three.js</title>
     <!-- ?v= : à changer à chaque livraison, pour que le navigateur du téléphone ne resserve
          pas une vieille feuille de style / un vieux main.js gardés en cache -->
-    <link rel="stylesheet" href="./src/ui/style.css?v=5f" />
+    <link rel="stylesheet" href="./src/ui/style.css?v=5g" />
   </head>
   <body>
     <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
@@ -226,7 +226,7 @@
         <p>
           C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
         </p>
-        <p id="buildTag">version 5f — respawn Nether->overworld, mobs jamais coincés au spawn</p>
+        <p id="buildTag">version 5g — écran pause si le plein écran se ferme (téléphone)</p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer
@@ -401,6 +401,6 @@
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }
     </script>
-    <script type="module" src="./src/main.js?v=5f"></script>
+    <script type="module" src="./src/main.js?v=5g"></script>
   </body>
 </html>
