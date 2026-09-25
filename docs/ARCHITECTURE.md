@@ -144,6 +144,25 @@ l'inventaire directement : `entities/item-entity.js` fait apparaître les drops 
 sol (un `InstancedMesh` PAR TYPE D'ITEM, jamais un `Mesh` par item — la même leçon
 de perf que les particules de cassage et les mares d'eau/lave).
 
+## Mort et réapparition (Phase 38)
+
+`respawnPlayer()` (main.js) drope l'inventaire à l'endroit exact de la mort (même
+dimension : le Nether reste le Nether si on y meurt, les objets y réapparaîtront si on y
+retourne -- `entities/item-entity.js` n'est pas conscient des dimensions, cf. le
+commentaire au-dessus de `travelToDimension`), PUIS bascule sur l'overworld si la mort a
+eu lieu ailleurs, avant d'appeler `respawn(spawnPoint())` : comme le vrai jeu, mourir
+dans le Nether renvoie dans l'overworld plutôt que de réapparaître sur place.
+
+## Spawn des mobs : jamais coincé dans un bloc (Phase 38)
+
+`entities/mob-spawn.js` (`hasSpawnRoom`) est PUR (aucun import hors `data/mobs.js`,
+elle-même pure donnée) et fait le même test que la physique du mob une fois posé
+(`collidesAtBox`, avec son radius/height exact) plutôt qu'un simple coup d'œil au bloc
+juste au-dessus du sol -- indispensable pour les mobs hauts de ~2 blocs (zombie,
+villageois), qu'un plafond bas à 1 bloc de dégagement laisserait passer la tête dans le
+plafond. Utilisé par les trois chemins de spawn de `entities/mob.js` (peuplement initial,
+vagues autour du joueur, villageois) ; testé sans three.js dans `test/mob-spawn.test.js`.
+
 ## Pack de textures 16x16 (Phase 37)
 
 `render/textures-select.js` choisit entre les textures procédurales de base

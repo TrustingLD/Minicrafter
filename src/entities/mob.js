@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { buildBoxModel } from './model.js';
 import * as tex from '../render/textures.js';
 import { MOBS } from '../data/mobs.js';
+import { hasSpawnRoom as spawnRoomCheck } from './mob-spawn.js';
 import { Entity } from './entity.js';
 import { voxelRaycast } from '../core/raycast.js';
 import { worldToChunk, CHUNK_X, CHUNK_Y, CHUNK_Z } from '../world/chunk.js';
@@ -525,11 +526,7 @@ export class Mob extends Entity {
     const topple = eased * (Math.PI / 2) * this.deathRotSign;
     if (this.deathRotAxis === 'x') this.group.rotation.x = topple;
     else this.group.rotation.z = topple;
-    this.group.position.set(
-      this.pos.x,
-      this.deathBaseY - DEATH_SINK_DISTANCE * eased,
-      this.pos.z,
-    );
+    this.group.position.set(this.pos.x, this.deathBaseY - DEATH_SINK_DISTANCE * eased, this.pos.z);
     const fadeT = Math.max(0, (t - DEATH_FADE_START) / (1 - DEATH_FADE_START));
     const opacity = 1 - fadeT;
     this.flashMaterials.forEach((m) => (m.opacity = opacity));
@@ -707,7 +704,19 @@ export function createMobSystem({
   // MAX_MOBS_TOTAL (40), donc le peuplement initial dépassait à lui seul le plafond du
   // jeu et bloquait tout spawn ultérieur jusqu'aux premiers despawns. Ces comptes-ci
   // donnent une quinzaine d'animaux dispersés, et le plafond est respecté.
+  // Vrai si un mob du TYPE donné tiendrait à cet endroit sans mordre sur un bloc solide --
+  // même test que la physique du mob une fois posé (collidesAtBox, avec son radius/height
+  // exacts), donc fiable même pour les mobs hauts de 2 blocs (zombie, villageois) qu'un
+  // simple coup d'œil au bloc juste au-dessus du sol laisserait passer la tête dans un
+  // plafond bas. Avant ce contrôle, un mob pouvait apparaître coincé dans un bloc -- immobile
+  // et sans échappatoire, donc trivial à tuer, ce qui n'a rien à voir avec un spawn normal.
   const INITIAL_COUNTS = { pig: 5, cow: 4, chicken: 5, sheep: 4 };
+  // Vrai si un mob du TYPE donné tiendrait à cet endroit sans mordre sur un bloc solide --
+  // règle PURE dans entities/mob-spawn.js (testée à part, sans three.js) ; ici on ne fait
+  // que lui fournir `collidesAtBox`, seule chose que ce module connaît d'un « monde ».
+  function hasSpawnRoom(x, groundY, z, type) {
+    return spawnRoomCheck(collidesAtBox, x, groundY, z, type);
+  }
   function spawnMobs() {
     const half = spawnHalf;
     Object.entries(INITIAL_COUNTS).forEach(([type, n]) => {
@@ -719,6 +728,8 @@ export function createMobSystem({
         // le biome décide qui vit ici (même règle que trySpawnAroundPlayer) : plus
         // de vaches en plein désert ni de poulets au milieu de l'océan
         if (!BIOMES[getBiome(x, z)].mobs.includes(type)) continue;
+        const groundY = getGroundHeight(x, z);
+        if (!hasSpawnRoom(x, groundY, z, type)) continue; // pas assez de place -> on saute cette tentative
         mobs.push(new Mob(type, x, z, makeCtx()));
       }
     });
@@ -759,8 +770,6 @@ export function createMobSystem({
       const floorType = getBlock(x, groundY - 1, z);
       if (floorType === undefined) continue; // chunk pas encore chargé : pas de spawn au hasard dedans
       if (!floorType) continue; // pas de sol solide (au-dessus du vide/d'une grotte non détectée)
-      const airAbove = getBlock(x, groundY, z);
-      if (airAbove) continue; // pas de place pour se tenir debout
 
       const night = isNight();
       const underground = !hasSkyAbove(getBlock, x, groundY, z); // pas de ciel visible -> "grotte"
@@ -775,6 +784,10 @@ export function createMobSystem({
         if (biomeMobs.length === 0) continue;
         type = biomeMobs[randInt(0, biomeMobs.length - 1)];
       }
+
+      // contrôle générique (cf. hasSpawnRoom) : APRÈS avoir choisi `type`, sa hauteur en
+      // dépend (un zombie/villageois a besoin de presque 2 blocs, un poulet de moins d'un)
+      if (!hasSpawnRoom(x, groundY, z, type)) continue;
 
       mobs.push(new Mob(type, x, z, makeCtx()));
       refreshMobHitboxes();
@@ -808,7 +821,15 @@ export function createMobSystem({
       spawnedVillages.add(village.key);
       for (const spot of spots) {
         if (mobs.length >= MAX_MOBS_TOTAL) break;
-        const m = new Mob('villager', Math.round(spot.x), Math.round(spot.z), makeCtx());
+        const sx = Math.round(spot.x),
+          sz = Math.round(spot.z);
+        // emplacement de porte figé (déterministe, pas un tirage au sort comme
+        // trySpawnAroundPlayer) : si un joueur a construit/creusé depuis, on saute cette
+        // porte plutôt que de coincer un villageois dedans -- il sera repeuplé si la porte
+        // se libère un jour (releaseVillageIfEmpty relâche le village quand il n'a plus
+        // aucun villageois).
+        if (!hasSpawnRoom(sx, spot.y, sz, 'villager')) continue;
+        const m = new Mob('villager', sx, sz, makeCtx());
         m.villageKey = village.key;
         mobs.push(m);
       }

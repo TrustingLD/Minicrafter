@@ -2713,10 +2713,24 @@ respawnBtn.addEventListener('click', () => {
 function respawnPlayer() {
   // Mort = on drop tout l'inventaire (hotbar + sac à dos) au sol, à l'endroit
   // de la mort -- comme dans Minecraft, on ne perd rien "en fumée", tout reste
-  // ramassable (avec le même item magnet que n'importe quel autre drop).
+  // ramassable (avec le même item magnet que n'importe quel autre drop). Les
+  // objets restent dans la dimension où on est mort (le Nether, éventuellement) :
+  // itemSystem n'est pas conscient des dimensions (cf. le commentaire au-dessus de
+  // travelToDimension), donc ils réapparaîtront si on y retourne plus tard.
   const deathX = player.pos.x,
     deathY = player.pos.y + player.height * 0.5,
     deathZ = player.pos.z;
+  // Mourir dans le Nether renvoie dans l'overworld, comme le vrai jeu (pas d'aller-retour
+  // par portail à la mort). On bascule la dimension AVANT respawn(spawnPoint()) plus bas,
+  // qui pose déjà le joueur aux coordonnées overworld -- il ne reste qu'à rendre le bon
+  // monde visible/actif, comme le fait travelToDimension('overworld').
+  if (activeWorld !== overworldApi) {
+    if (netherApi) netherApi.group.visible = false;
+    overworldApi.group.visible = true;
+    activeWorld = overworldApi;
+    boatSystem.group.visible = true;
+    cloudsApi.mesh.visible = true;
+  }
   for (let i = 0; i < slots.length; i++) {
     const stack = slots[i];
     if (!stack) continue;
