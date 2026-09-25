@@ -1070,9 +1070,20 @@ function loadSettings() {
       sensitivity: typeof parsed.sensitivity === 'number' ? parsed.sensitivity : 10,
       keybinds: { ...DEFAULT_KEYBINDS, ...(parsed.keybinds || {}) },
       language: 'fr', // seule langue dispo pour l'instant
+      // 0..100 (%), pas 0..1 : c'est directement ce que les curseurs affichent. Défauts =
+      // les volumes d'origine, avant que ce réglage n'existe (0.32/0.35, cf. audio/music.js
+      // et audio/sfx.js) -- une partie déjà lancée ne doit pas changer de volume au hasard.
+      musicVolume: typeof parsed.musicVolume === 'number' ? parsed.musicVolume : 32,
+      sfxVolume: typeof parsed.sfxVolume === 'number' ? parsed.sfxVolume : 35,
     };
   } catch {
-    return { sensitivity: 10, keybinds: { ...DEFAULT_KEYBINDS }, language: 'fr' };
+    return {
+      sensitivity: 10,
+      keybinds: { ...DEFAULT_KEYBINDS },
+      language: 'fr',
+      musicVolume: 32,
+      sfxVolume: 35,
+    };
   }
 }
 function saveSettings() {
@@ -1085,6 +1096,11 @@ function saveSettings() {
 }
 const settings = loadSettings();
 const keybinds = settings.keybinds;
+// Applique tout de suite les volumes sauvegardés (sfx/music existent déjà, créés plus haut) --
+// sans ça la partie démarrerait toujours aux volumes d'origine (32%/35%) le temps d'aller
+// ouvrir les Options, même si le joueur les avait baissés la fois d'avant.
+sfx.setVolume(settings.sfxVolume / 100);
+music.setVolume(settings.musicVolume / 100);
 // Multiplicateur souris (yaw/pitch par pixel) : 0.0025 = valeur d'origine du
 // jeu, obtenue avec le curseur de sensibilité au milieu (10 sur l'échelle 1-30).
 let mouseSensitivity = settings.sensitivity * 0.00025;
@@ -1376,6 +1392,19 @@ const optionsSensitivity = document.getElementById('optionsSensitivity');
 const optionsKeybinds = document.getElementById('optionsKeybinds');
 const optionsLanguage = document.getElementById('optionsLanguage');
 const optionsTextures = document.getElementById('optionsTextures');
+const optionsVolume = document.getElementById('optionsVolume');
+const musicVolumeSlider = /** @type {HTMLInputElement} */ (
+  document.getElementById('musicVolumeSlider')
+);
+const musicVolumeValue = document.getElementById('musicVolumeValue');
+const sfxVolumeSlider = /** @type {HTMLInputElement} */ (
+  document.getElementById('sfxVolumeSlider')
+);
+const sfxVolumeValue = document.getElementById('sfxVolumeValue');
+musicVolumeSlider.value = String(settings.musicVolume);
+musicVolumeValue.textContent = String(settings.musicVolume);
+sfxVolumeSlider.value = String(settings.sfxVolume);
+sfxVolumeValue.textContent = String(settings.sfxVolume);
 const sensitivitySlider = /** @type {HTMLInputElement} */ (
   document.getElementById('sensitivitySlider')
 );
@@ -1391,6 +1420,7 @@ function showOptionsScreen(screen) {
     optionsKeybinds,
     optionsLanguage,
     optionsTextures,
+    optionsVolume,
   ]) {
     el.style.display = el === screen ? 'flex' : 'none';
   }
@@ -1497,6 +1527,12 @@ document.getElementById('optKeybindsBtn').addEventListener('click', () => {
 document.getElementById('optLanguageBtn').addEventListener('click', () => {
   showOptionsScreen(optionsLanguage);
 });
+document.getElementById('optVolumeBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsVolume);
+});
+document.getElementById('volumeBackBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsRoot);
+});
 document.getElementById('optTexturesBtn').addEventListener('click', () => {
   renderTextureChoices();
   showOptionsScreen(optionsTextures);
@@ -1520,6 +1556,22 @@ sensitivitySlider.addEventListener('input', () => {
   settings.sensitivity = v;
   mouseSensitivity = v * 0.00025;
   sensitivityValue.textContent = String(v);
+  saveSettings();
+});
+musicVolumeSlider.addEventListener('input', () => {
+  const v = parseInt(musicVolumeSlider.value, 10);
+  settings.musicVolume = v;
+  music.setVolume(v / 100);
+  musicVolumeValue.textContent = String(v);
+  saveSettings();
+});
+sfxVolumeSlider.addEventListener('input', () => {
+  const v = parseInt(sfxVolumeSlider.value, 10);
+  settings.sfxVolume = v;
+  sfx.setVolume(v / 100);
+  sfxVolumeValue.textContent = String(v);
+  // petit aperçu immédiat du nouveau volume (sinon on ne l'entend qu'au prochain son de jeu)
+  sfx.playSound('equip');
   saveSettings();
 });
 languageSelect.addEventListener('change', () => {

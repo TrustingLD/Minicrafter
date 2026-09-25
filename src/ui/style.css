@@ -957,10 +957,13 @@ body.touch #breathbar {
   width: 100%;
 }
 #optionsSensitivity label,
-#optionsLanguage label {
+#optionsLanguage label,
+#optionsVolume label {
   font-size: 1em;
 }
-#sensitivitySlider {
+#sensitivitySlider,
+#musicVolumeSlider,
+#sfxVolumeSlider {
   width: 100%;
 }
 #keybindList {

@@ -108,5 +108,12 @@ export function createSfx() {
     playTone(freq, 0.05, 'square', 0.05, freq * 0.8);
   }
 
-  return { resumeAudio, playSound, playBreakTick };
+  // Volume des effets (Options -> Volume), 0..1 : un seul gain contrôle tous les sons d'un
+  // coup puisqu'ils passent tous par `masterGain` (cf. playTone/playNoiseBurst ci-dessus) --
+  // pas besoin de toucher chaque `gainVal` individuellement.
+  function setVolume(v) {
+    masterGain.gain.value = Math.max(0, Math.min(1, v));
+  }
+
+  return { resumeAudio, playSound, playBreakTick, setVolume };
 }

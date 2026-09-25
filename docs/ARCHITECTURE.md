@@ -144,6 +144,14 @@ l'inventaire directement : `entities/item-entity.js` fait apparaître les drops 
 sol (un `InstancedMesh` PAR TYPE D'ITEM, jamais un `Mesh` par item — la même leçon
 de perf que les particules de cassage et les mares d'eau/lave).
 
+## Volume musique/effets (Phase 39)
+
+`audio/sfx.js` (`setVolume`, sur `masterGain`, le nœud par lequel passent tous les sons)
+et `audio/music.js` (`setVolume`, directement sur l'élément `<audio>`) exposent chacun un
+réglage 0..1, indépendant du mute clavier (M) de la musique. Le menu Options -> Volume
+(deux curseurs 0-100 %) les pilote et sauvegarde le choix dans les mêmes réglages que la
+sensibilité (`localStorage`, `SETTINGS_KEY`), appliqué dès le chargement de la page.
+
 ## Mort et réapparition (Phase 38)
 
 `respawnPlayer()` (main.js) drope l'inventaire à l'endroit exact de la mort (même

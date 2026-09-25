@@ -13,7 +13,11 @@
 
 export function createMusic(urls, hintEl, netherUrls) {
   const overworldPlaylist = Array.isArray(urls) ? urls : [urls];
-  const netherPlaylist = netherUrls ? (Array.isArray(netherUrls) ? netherUrls : [netherUrls]) : overworldPlaylist;
+  const netherPlaylist = netherUrls
+    ? Array.isArray(netherUrls)
+      ? netherUrls
+      : [netherUrls]
+    : overworldPlaylist;
 
   const bgm = new Audio();
   bgm.volume = 0.32;
@@ -76,5 +80,14 @@ export function createMusic(urls, hintEl, netherUrls) {
     if (bgmStarted && !bgmMuted) playCurrent();
   }
 
-  return { startBgm, toggleBgmMute, nextTrack, setNetherMode };
+  // Volume de la musique (Options -> Volume), 0..1 : agit directement sur l'élément <audio>,
+  // qu'une piste soit en train de jouer ou non (la valeur est reprise telle quelle à la
+  // prochaine lecture -- `loadCurrentTrack`/`playCurrent` ne touchent jamais à `.volume`).
+  // Indépendant de `bgmMuted` (M) : baisser le volume à zéro n'est pas pareil que couper --
+  // remonter le curseur ne réactive pas la musique si elle a été coupée au clavier.
+  function setVolume(v) {
+    bgm.volume = Math.max(0, Math.min(1, v));
+  }
+
+  return { startBgm, toggleBgmMute, nextTrack, setNetherMode, setVolume };
 }
