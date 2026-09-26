@@ -1516,6 +1516,13 @@ document.getElementById('pausedOptionsBtn').addEventListener('click', () => {
   sfx.resumeAudio();
   openOptions();
 });
+document.getElementById('pausedQuitBtn').addEventListener('click', (e) => {
+  // stopPropagation : sinon le clic remonte jusqu'au gestionnaire de #blocker juste en
+  // dessous, qui tenterait de reprendre la partie (pointer lock / plein écran tactile)
+  // dans l'instant qui précède le rechargement -- inutile, et ça peut clignoter.
+  e.stopPropagation();
+  location.reload();
+});
 document.getElementById('optSensitivityBtn').addEventListener('click', () => {
   showOptionsScreen(optionsSensitivity);
 });

@@ -16,7 +16,7 @@
     <title>Minicrafter - Three.js</title>
     <!-- ?v= : à changer à chaque livraison, pour que le navigateur du téléphone ne resserve
          pas une vieille feuille de style / un vieux main.js gardés en cache -->
-    <link rel="stylesheet" href="./src/ui/style.css?v=5h" />
+    <link rel="stylesheet" href="./src/ui/style.css?v=5i" />
   </head>
   <body>
     <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
@@ -226,7 +226,7 @@
         <p>
           C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
         </p>
-        <p id="buildTag">version 5h — réglages de volume (Options -> Volume)</p>
+        <p id="buildTag">version 5i — bouton Quitter le monde (écran pause)</p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer
@@ -238,6 +238,12 @@
            touches/langue sans quitter la partie en pause. Masqué en dehors de
            #blocker.paused, cf. style.css. -->
       <button id="pausedOptionsBtn" class="menuBtn">Options</button>
+      <!-- Quitter le monde (Phase 40) : un simple rechargement de la page, comme demandé --
+           le monde construit (blocs posés/cassés, coffres, fourneaux) est déjà sauvegardé en
+           continu dans localStorage (cf. world/world.js, world/block-entities.js) et sera
+           donc intact au retour. L'inventaire du joueur, lui, N'EST PAS sauvegardé (aucune
+           persistance de ce côté pour l'instant) : quitter ainsi le vide, comme mourir. -->
+      <button id="pausedQuitBtn" class="menuBtn">Quitter le monde</button>
     </div>
 
     <!-- Panneau Solo, accessible depuis le menu principal (bouton "Solo") : pour
@@ -411,6 +417,6 @@
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }
     </script>
-    <script type="module" src="./src/main.js?v=5h"></script>
+    <script type="module" src="./src/main.js?v=5i"></script>
   </body>
 </html>

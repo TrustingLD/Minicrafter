@@ -878,6 +878,13 @@ body.touch #breathbar {
 #blocker.paused #pausedOptionsBtn {
   display: inline-block;
 }
+#pausedQuitBtn {
+  display: none;
+  margin-top: 8px;
+}
+#blocker.paused #pausedQuitBtn {
+  display: inline-block;
+}
 
 #hint {
   position: fixed;
