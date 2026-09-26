@@ -144,6 +144,21 @@ l'inventaire directement : `entities/item-entity.js` fait apparaître les drops 
 sol (un `InstancedMesh` PAR TYPE D'ITEM, jamais un `Mesh` par item — la même leçon
 de perf que les particules de cassage et les mares d'eau/lave).
 
+## Sauvegarde de l'inventaire (Phase 41)
+
+`entities/inventory-save.js` (`serializeInventory`/`deserializeInventory`) est PUR (aucun
+import, aucun accès à `localStorage`) -- testé sous `node --test` sans DOM, même séparation
+que `world/physics.js`. main.js charge la sauvegarde (clé `minicrafter_inventory_v1`,
+même convention que les diffs de blocs et les coffres/fourneaux) AVANT de calculer
+`selectedIndex`/`selectedBlock`, et la ré-écrit à chaque `inventory:changed` (déjà émis par
+tout ce qui touche `slots`/`armorSlots` : ramassage, craft, équipement, mort...) ainsi
+qu'à chaque changement de case tenue en main (`selectSlot`, qui n'émet pas cet événement).
+Une sauvegarde absente, vide ou d'une taille différente (le jeu a changé depuis) redonne
+un inventaire vide plutôt que de lever une exception ; le contenu du sac à dos, la hotbar,
+l'armure équipée et la case tenue en main sont tous couverts. Bouton "Quitter le monde"
+(écran de pause, Phase 40) : recharge juste la page, cette sauvegarde continue est ce qui
+la rend indolore.
+
 ## Volume musique/effets (Phase 39)
 
 `audio/sfx.js` (`setVolume`, sur `masterGain`, le nœud par lequel passent tous les sons)

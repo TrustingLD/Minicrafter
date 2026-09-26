@@ -57,7 +57,14 @@ import {
   removeItem,
   countOf,
   HOTBAR_SLOTS,
+  TOTAL_SLOTS,
+  ARMOR_SLOTS,
 } from './entities/inventory.js';
+import {
+  INVENTORY_STORAGE_KEY,
+  serializeInventory,
+  deserializeInventory,
+} from './entities/inventory-save.js';
 import { createItemEntitySystem } from './entities/item-entity.js';
 import { createBoatSystem, RIDER_MAX_LOOK } from './entities/boat.js';
 import { BOAT_RADIUS } from './entities/boat-physics.js';
@@ -347,6 +354,23 @@ function triggerPlaceFeedback(x, y, z) {
 const slots = createSlots();
 const armorSlots = createArmorSlots(); // 4 emplacements casque/plastron/jambières/bottes (cf. E)
 
+// Sauvegarde de l'inventaire (Phase 41) : chargée ICI, avant que selectedIndex/selectedBlock
+// (juste plus bas) ne lisent `slots` -- sinon l'objet tenu en main au chargement ne
+// correspondrait pas à ce qui vient d'être restauré. `deserializeInventory` renvoie `null`
+// si rien n'est sauvegardé (première partie) : `slots`/`armorSlots` restent alors les
+// tableaux vides que createSlots()/createArmorSlots() viennent de créer.
+const savedInventory = deserializeInventory(
+  localStorage.getItem(INVENTORY_STORAGE_KEY),
+  TOTAL_SLOTS,
+  ARMOR_SLOTS,
+);
+let initialSelectedIndex = 0;
+if (savedInventory) {
+  for (let i = 0; i < TOTAL_SLOTS; i++) slots[i] = savedInventory.slots[i];
+  for (let i = 0; i < ARMOR_SLOTS; i++) armorSlots[i] = savedInventory.armorSlots[i];
+  initialSelectedIndex = savedInventory.selectedIndex;
+}
+
 // Réduction de dégâts (Phase 19) : pur import depuis entities/armor.js
 // (testable), voir ce module pour le détail du calcul.
 function computeArmorReduction() {
@@ -369,7 +393,7 @@ function damagePlayer(amount) {
   bus.emit('player:health');
 }
 
-let selectedIndex = 0;
+let selectedIndex = initialSelectedIndex;
 let selectedBlock = slots[selectedIndex]?.item ?? null;
 
 /* ---------- UI ---------- */
@@ -420,6 +444,16 @@ window.addEventListener('resize', () => {
 });
 hotbarUI.render(slots);
 bus.on('inventory:changed', () => hotbarUI.render(slots));
+// Sauvegarde à chaque modification (ramassage, craft, équipement d'armure, mort qui vide
+// tout...) : `inventory:changed` couvre déjà tous ces cas (cf. entities/inventory-save.js
+// pour le format), donc un seul point d'écoute suffit plutôt que d'ajouter un appel à
+// chaque site qui touche `slots`/`armorSlots`. `selectSlot` (changer de case tenue en
+// main, molette/1-9) n'émet PAS cet événement -- appelée séparément plus bas, pour que
+// l'objet en main soit lui aussi retrouvé tel quel après un rechargement.
+function saveInventoryNow() {
+  localStorage.setItem(INVENTORY_STORAGE_KEY, serializeInventory(slots, armorSlots, selectedIndex));
+}
+bus.on('inventory:changed', saveInventoryNow);
 
 const healthUI = createHealthUI(document.getElementById('healthbar'));
 bus.on('player:health', () => healthUI.render(player));
@@ -703,7 +737,7 @@ function refreshArmorVisual() {
   setArmor(visual);
   charPreview.setArmor(visual);
 }
-refreshArmorVisual(); // état initial (rien d'équipé au démarrage, mais garde les 2 avatars synchronisés dès le départ)
+refreshArmorVisual(); // état initial -- lit armorSlots tel qu'il est déjà (vide, ou restauré depuis la sauvegarde, cf. plus haut), pour que les 2 avatars soient synchronisés dès le départ
 bus.on('inventory:changed', refreshArmorVisual);
 
 function selectSlot(i) {
@@ -713,6 +747,7 @@ function selectSlot(i) {
   hotbarUI.setSelectedIndex(i);
   hotbarUI.render(slots);
   refreshHeldItem(selectedBlock);
+  saveInventoryNow();
 }
 
 /* ---------- Items au sol (Phase 10) ---------- */

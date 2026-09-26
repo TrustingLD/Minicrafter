@@ -16,7 +16,7 @@
     <title>Minicrafter - Three.js</title>
     <!-- ?v= : à changer à chaque livraison, pour que le navigateur du téléphone ne resserve
          pas une vieille feuille de style / un vieux main.js gardés en cache -->
-    <link rel="stylesheet" href="./src/ui/style.css?v=5i" />
+    <link rel="stylesheet" href="./src/ui/style.css?v=5j" />
   </head>
   <body>
     <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
@@ -226,7 +226,7 @@
         <p>
           C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
         </p>
-        <p id="buildTag">version 5i — bouton Quitter le monde (écran pause)</p>
+        <p id="buildTag">version 5j — l'inventaire est maintenant sauvegardé</p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer
@@ -240,9 +240,9 @@
       <button id="pausedOptionsBtn" class="menuBtn">Options</button>
       <!-- Quitter le monde (Phase 40) : un simple rechargement de la page, comme demandé --
            le monde construit (blocs posés/cassés, coffres, fourneaux) est déjà sauvegardé en
-           continu dans localStorage (cf. world/world.js, world/block-entities.js) et sera
-           donc intact au retour. L'inventaire du joueur, lui, N'EST PAS sauvegardé (aucune
-           persistance de ce côté pour l'instant) : quitter ainsi le vide, comme mourir. -->
+           continu dans localStorage (cf. world/world.js, world/block-entities.js), et depuis
+           la Phase 41 l'inventaire du joueur aussi (cf. entities/inventory-save.js) : tout
+           sera intact au retour. -->
       <button id="pausedQuitBtn" class="menuBtn">Quitter le monde</button>
     </div>
 
@@ -417,6 +417,6 @@
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }
     </script>
-    <script type="module" src="./src/main.js?v=5i"></script>
+    <script type="module" src="./src/main.js?v=5j"></script>
   </body>
 </html>
