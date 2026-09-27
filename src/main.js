@@ -1627,6 +1627,12 @@ document.getElementById('optResetWorldBtn').addEventListener('click', () => {
   resetBlockEntityStorage();
   localStorage.removeItem(INVENTORY_STORAGE_KEY);
   localStorage.removeItem(POSITION_STORAGE_KEY);
+  // Sans ça, `beforeunload` (déclenché par location.reload() juste en dessous) appelle
+  // encore savePositionNow() une dernière fois AVANT que la page ne parte -- gameStarted
+  // était toujours vrai, donc elle réécrivait tout de suite la position qu'on vient
+  // d'effacer, avec celle -- toujours en mémoire -- d'avant la réinitialisation. Pareil
+  // pour le setInterval de 2s s'il retombait pile à ce moment-là.
+  gameStarted = false;
   location.reload();
 });
 document.getElementById('optTexturesBtn').addEventListener('click', () => {
