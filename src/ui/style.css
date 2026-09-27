@@ -799,7 +799,8 @@ body.touch #breathbar {
   opacity: 0.45;
   font-size: 11px;
 }
-#texturesHint {
+#texturesHint,
+#renderDistanceHint {
   font-size: 12px;
   opacity: 0.75;
   text-align: center;
@@ -978,12 +979,14 @@ body.touch #breathbar {
 }
 #optionsSensitivity label,
 #optionsLanguage label,
-#optionsVolume label {
+#optionsVolume label,
+#optionsRenderDistance label {
   font-size: 1em;
 }
 #sensitivitySlider,
 #musicVolumeSlider,
-#sfxVolumeSlider {
+#sfxVolumeSlider,
+#renderDistanceSlider {
   width: 100%;
 }
 #keybindList {

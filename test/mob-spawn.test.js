@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hasSpawnRoom } from '../src/entities/mob-spawn.js';
+import { hasSpawnRoom, mobActiveRadiusSqFor } from '../src/entities/mob-spawn.js';
 import { MOBS } from '../src/data/mobs.js';
 
 // Petit monde synthétique : `solidCells` est un Set de "x,y,z" (blocs pleins). collidesAtBox
@@ -53,4 +53,24 @@ test('chaque type de MOBS a un radius/height positif (sinon le contrôle ne veut
     assert.ok(data.hitbox.radius > 0, type);
     assert.ok(data.hitbox.height > 0, type);
   }
+});
+
+/* ---------- mobActiveRadiusSqFor (rayon de simulation des mobs, Phase 43) ---------- */
+
+test("à la distance de rendu par défaut (6 chunks, chunk=16 blocs) : retombe sur le rayon fixe d'origine (56 blocs)", () => {
+  assert.equal(mobActiveRadiusSqFor(6, 16, 56), 56 * 56);
+});
+
+test('à faible distance de rendu : se réduit pour ne jamais dépasser le rayon de chunks chargés', () => {
+  // 2 chunks * 16 - 16 = 16 blocs, bien en dessous des 56 par défaut
+  assert.equal(mobActiveRadiusSqFor(2, 16, 56), 16 * 16);
+});
+
+test('à grande distance de rendu : plafonné au rayon par défaut, ne grandit jamais au-delà', () => {
+  assert.equal(mobActiveRadiusSqFor(32, 16, 56), 56 * 56);
+  assert.equal(mobActiveRadiusSqFor(32, 16, 56), mobActiveRadiusSqFor(10, 16, 56));
+});
+
+test('jamais négatif même à la distance de rendu minimale (2 chunks)', () => {
+  assert.ok(mobActiveRadiusSqFor(2, 16, 56) >= 0);
 });

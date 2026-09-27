@@ -16,7 +16,7 @@
     <title>Minicrafter - Three.js</title>
     <!-- ?v= : à changer à chaque livraison, pour que le navigateur du téléphone ne resserve
          pas une vieille feuille de style / un vieux main.js gardés en cache -->
-    <link rel="stylesheet" href="./src/ui/style.css?v=5l" />
+    <link rel="stylesheet" href="./src/ui/style.css?v=5m" />
   </head>
   <body>
     <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
@@ -226,7 +226,9 @@
         <p>
           C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
         </p>
-        <p id="buildTag">version 5l — correctif : réinitialiser le monde oubliait aussi la position</p>
+        <p id="buildTag">
+          version 5m — distance de rendu réglable (Options), 2 à 32 chunks
+        </p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer
@@ -275,6 +277,7 @@
           <button id="optLanguageBtn" class="menuBtn">Langue</button>
           <button id="optTexturesBtn" class="menuBtn">Textures</button>
           <button id="optVolumeBtn" class="menuBtn">Volume</button>
+          <button id="optRenderDistanceBtn" class="menuBtn">Distance de rendu</button>
           <button id="optResetWorldBtn" class="menuBtn danger">Réinitialiser le monde</button>
           <button id="optionsBackBtn" class="menuBtn">Retour</button>
         </div>
@@ -308,6 +311,21 @@
           <label for="sfxVolumeSlider">Effets sonores : <span id="sfxVolumeValue">35</span>%</label>
           <input type="range" id="sfxVolumeSlider" min="0" max="100" step="1" />
           <button id="volumeBackBtn" class="menuBtn">Retour</button>
+        </div>
+
+        <!-- Sous-écran : distance de rendu (Phase 43). 2 à 32 chunks (32 à 512 blocs) --
+             la limite basse (2) vient de ce qu'en dessous, le joueur verrait le vide se
+             charger sous ses pieds à quelques pas ; la haute (32) est un choix du joueur en
+             connaissance de cause (cf. le message d'avertissement), pas une limite technique. -->
+        <div id="optionsRenderDistance" class="optionsScreen" style="display: none">
+          <label for="renderDistanceSlider"
+            >Distance de rendu : <span id="renderDistanceValue">6</span> chunks</label
+          >
+          <input type="range" id="renderDistanceSlider" min="2" max="32" step="1" />
+          <p id="renderDistanceHint">
+            Au-delà d'une dizaine de chunks, la chute de FPS peut être sévère selon l'appareil.
+          </p>
+          <button id="renderDistanceBackBtn" class="menuBtn">Retour</button>
         </div>
 
         <!-- Sous-écran : pack de textures (Phase 37). Boutons plutôt qu'un <select> : on veut
@@ -418,6 +436,6 @@
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }
     </script>
-    <script type="module" src="./src/main.js?v=5l"></script>
+    <script type="module" src="./src/main.js?v=5m"></script>
   </body>
 </html>

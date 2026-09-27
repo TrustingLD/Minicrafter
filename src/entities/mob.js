@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { buildBoxModel } from './model.js';
 import * as tex from '../render/textures.js';
 import { MOBS } from '../data/mobs.js';
-import { hasSpawnRoom as spawnRoomCheck } from './mob-spawn.js';
+import { hasSpawnRoom as spawnRoomCheck, mobActiveRadiusSqFor } from './mob-spawn.js';
 import { Entity } from './entity.js';
 import { voxelRaycast } from '../core/raycast.js';
 import { worldToChunk, CHUNK_X, CHUNK_Y, CHUNK_Z } from '../world/chunk.js';
@@ -93,11 +93,12 @@ const MOB_STEP_HEIGHT = 1;
 const MOB_JUMP_VELOCITY = 7;
 
 // Rayon (en blocs) au-delà duquel un mob n'est plus simulé du tout. Doit rester
-// STRICTEMENT inférieur au rayon de chunks chargés (RENDER_DISTANCE * 16 = 96 blocs
-// sur desktop, 64 sur mobile) : un mob simulé hors zone chargée ne verrait que des
-// blocs "inconnus" et n'aurait de toute façon aucune collision utile.
-const MOB_ACTIVE_RADIUS = 56;
-const MOB_ACTIVE_RADIUS_SQ = MOB_ACTIVE_RADIUS * MOB_ACTIVE_RADIUS;
+// STRICTEMENT inférieur au rayon de chunks chargés, sans quoi un mob simulé hors zone
+// chargée ne verrait que des blocs "inconnus" et n'aurait de toute façon aucune collision
+// utile -- calculé dans createMobSystem (cf. mobActiveRadiusSq), puisqu'il dépend
+// maintenant de renderDistance (Phase 43, réglable dans Options), pas d'une constante
+// fixe. 56 blocs reste la valeur par défaut (render distance 6, comme avant ce réglage).
+const DEFAULT_MOB_ACTIVE_RADIUS = 56;
 
 // Ligne de vue (Phase 12) : réutilise voxelRaycast (core/raycast.js), déjà écrit pour
 // le viseur du joueur — un algorithme "bloc touché par un rayon" résout aussi bien
@@ -631,10 +632,24 @@ export function createMobSystem({
   onPlayerHurt,
   spawnHalf,
   seaLevel,
-  renderDistance,
+  renderDistance: initialRenderDistance,
   onMobDeath,
 }) {
   const mobs = [];
+  // `let`, pas `const` : setRenderDistance() (cf. plus bas, appelée depuis Options) doit
+  // pouvoir la faire varier en cours de partie -- lue par trySpawnAroundPlayer (distance
+  // max de spawn) et par mobActiveRadiusSq (rayon de simulation) juste en dessous.
+  let renderDistance = initialRenderDistance;
+  // Ne dépasse JAMAIS DEFAULT_MOB_ACTIVE_RADIUS (56, cf. plus haut) même à très grande
+  // distance de rendu -- au-delà, plus de mobs actifs à la fois ne ferait qu'aggraver la
+  // chute de FPS déjà attendue, sans rien apporter (un mob à 200 blocs ne se voit pas).
+  // En dessous en revanche (petite distance de rendu), se réduit pour ne jamais dépasser
+  // le rayon de chunks réellement chargés.
+  let mobActiveRadiusSq = mobActiveRadiusSqFor(renderDistance, CHUNK_X, DEFAULT_MOB_ACTIVE_RADIUS);
+  function setRenderDistance(v) {
+    renderDistance = v;
+    mobActiveRadiusSq = mobActiveRadiusSqFor(renderDistance, CHUNK_X, DEFAULT_MOB_ACTIVE_RADIUS);
+  }
   let mobHitboxes = [];
   let spawnTimer = SPAWN_INTERVAL;
   let villagerSpawnTimer = 0.5; // premier essai vite après le boot, pas besoin d'attendre 3s
@@ -890,7 +905,7 @@ export function createMobSystem({
     for (const m of mobs) {
       const dx = m.pos.x - playerPos.x;
       const dz = m.pos.z - playerPos.z;
-      const far = dx * dx + dz * dz > MOB_ACTIVE_RADIUS_SQ;
+      const far = dx * dx + dz * dz > mobActiveRadiusSq;
       // masqué aussi côté rendu : un mob gelé à 150 blocs n'a rien à coûter au GPU
       if (m.group.visible === far) m.group.visible = !far;
       if (far) continue;
@@ -906,6 +921,7 @@ export function createMobSystem({
     spawnMobs,
     refreshMobHitboxes,
     update,
+    setRenderDistance,
     group: mobsGroup, // Phase 31 : main.js le masque en entrant dans le Nether
   };
 }

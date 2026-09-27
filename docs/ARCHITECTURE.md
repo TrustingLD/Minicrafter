@@ -181,6 +181,31 @@ Confirmation native (`confirm()`) avant d'agir : contrairement à "Quitter le mo
 (Phase 40), c'est irréversible. Ne touche jamais aux réglages (sensibilité, touches,
 volumes, pack de textures) : ce sont des préférences du joueur, pas une partie.
 
+## Distance de rendu réglable (Phase 43)
+
+`renderDistance` (main.js) est devenue une variable réglable (2 à 32 chunks, clé
+`localStorage` dédiée `minicrafter_render_distance_v1`, lue avant même le gros objet
+`settings`) plutôt qu'une constante fixée une fois pour toutes. Le curseur (Options ->
+Distance de rendu) répercute le changement en direct, sans recharger la page ni recréer le
+monde :
+
+- `world/world.js` expose `setRenderDistance(v)` : `RENDER_DISTANCE`/`UNLOAD_DISTANCE`
+  passent de `const` à `let`, et `lastPcx`/`lastPcz` sont remis à `null` pour forcer la
+  file de chargement/le scan de déchargement à se reconstruire au prochain `update()` --
+  appelé sur overworldApi ET, s'il existe déjà, netherApi.
+- `entities/mob.js` expose `setRenderDistance(v)` : le rayon de simulation des mobs
+  (`mobActiveRadiusSqFor`, PURE dans `entities/mob-spawn.js`) doit rester sous le rayon de
+  chunks réellement chargés, sans quoi un mob actif hors zone chargée ne verrait que des
+  blocs "inconnus" -- important surtout aux petites distances de rendu (2 chunks).
+- Le fog (`render/fog-distance.js`, PUR : `fogNearFor`/`fogFarFor`) est calculé à CHAQUE
+  frame à partir de `renderDistance` : rien à répercuter explicitement au changement du
+  curseur, il suit tout seul.
+
+Un `MAX_CHUNKS_PER_FRAME`/budget de temps (déjà existant, cf. "Le monde : chunks" plus
+haut) absorbe une grande distance de rendu en la chargeant progressivement plutôt que
+d'un coup ; la chute de FPS au régime établi (beaucoup plus de chunks affichés à la fois),
+elle, est attendue et assumée -- annoncée dans le sous-écran Options.
+
 ## Volume musique/effets (Phase 39)
 
 `audio/sfx.js` (`setVolume`, sur `masterGain`, le nœud par lequel passent tous les sons)

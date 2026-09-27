@@ -70,6 +70,7 @@ import {
   serializePosition,
   deserializePosition,
 } from './entities/position-save.js';
+import { fogNearFor, fogFarFor } from './render/fog-distance.js';
 import { createItemEntitySystem } from './entities/item-entity.js';
 import { createBoatSystem, RIDER_MAX_LOOK } from './entities/boat.js';
 import { BOAT_RADIUS } from './entities/boat-physics.js';
@@ -111,8 +112,15 @@ scene.fog = new THREE.Fog(0x87ceeb, 25, 70);
 // Teinte sous l'eau : mêmes valeurs "à sec" que ci-dessus, réutilisées pour
 // restaurer le fog chaque frame où on n'est PAS sous l'eau (sky.js, lui, ne
 // touche qu'à la couleur du fog, jamais à near/far -- cf. isUnderwater plus bas).
-const FOG_NEAR_DRY = 25,
-  FOG_FAR_DRY = 70;
+// Fonctions, pas des constantes : dépendent de `renderDistance` (Phase 43, réglable
+// dans Options), déclarée plus bas -- lues à chaque frame (cf. l'endroit qui les
+// applique), donc toujours à jour dès que le curseur bouge, sans rien recalculer ici.
+function fogNearDry() {
+  return fogNearFor(renderDistance);
+}
+function fogFarDry() {
+  return fogFarFor(renderDistance);
+}
 const UNDERWATER_COLOR = new THREE.Color(0x1f4f8f);
 const UNDERWATER_FOG_NEAR = 0,
   UNDERWATER_FOG_FAR = 18;
@@ -195,7 +203,17 @@ const SPAWN_COLUMN = findSpawnColumn();
 // le vide), le reste se charge à la volée via worldApi.update(player.pos) dans animate().
 const blockAssets = createBlockAssets();
 const particleSystem = createParticleSystem({ scene, blockAssets });
-const renderDistance = touchMode ? 4 : 6;
+const RENDER_DISTANCE_KEY = 'minicrafter_render_distance_v1'; // clé dédiée (comme le pack de textures, la position...) : lue AVANT que le gros objet `settings` (plus bas dans ce fichier) n'existe
+// Distance de rendu (Phase 43, Options -> Distance de rendu), 2 à 32 chunks (32 à 512
+// blocs). `let`, pas `const` : réglable en cours de partie (cf. le sous-écran plus bas),
+// qui répercute le changement sur les DEUX mondes déjà créés (overworldApi et, s'il
+// existe, netherApi), sur mobSystem (rayon de simulation des mobs) et sur le fog
+// (fogNearDry/fogFarDry ci-dessus, qui LISENT cette variable à chaque frame).
+let renderDistance = touchMode ? 4 : 6; // valeur par défaut tant que rien n'est sauvegardé
+{
+  const saved = parseInt(localStorage.getItem(RENDER_DISTANCE_KEY), 10);
+  if (Number.isInteger(saved) && saved >= 2 && saved <= 32) renderDistance = saved;
+}
 const torchPositions = new Map(); // "x,y,z" -> {x,y,z} — alimenté par worldApi, cf. plus bas
 
 // Dimensions (Phase 29) : `overworldApi` existe toujours dès le lancement ;
@@ -1467,6 +1485,13 @@ const optionsKeybinds = document.getElementById('optionsKeybinds');
 const optionsLanguage = document.getElementById('optionsLanguage');
 const optionsTextures = document.getElementById('optionsTextures');
 const optionsVolume = document.getElementById('optionsVolume');
+const optionsRenderDistance = document.getElementById('optionsRenderDistance');
+const renderDistanceSlider = /** @type {HTMLInputElement} */ (
+  document.getElementById('renderDistanceSlider')
+);
+const renderDistanceValue = document.getElementById('renderDistanceValue');
+renderDistanceSlider.value = String(renderDistance);
+renderDistanceValue.textContent = String(renderDistance);
 const musicVolumeSlider = /** @type {HTMLInputElement} */ (
   document.getElementById('musicVolumeSlider')
 );
@@ -1495,6 +1520,7 @@ function showOptionsScreen(screen) {
     optionsLanguage,
     optionsTextures,
     optionsVolume,
+    optionsRenderDistance,
   ]) {
     el.style.display = el === screen ? 'flex' : 'none';
   }
@@ -1614,6 +1640,12 @@ document.getElementById('optVolumeBtn').addEventListener('click', () => {
 document.getElementById('volumeBackBtn').addEventListener('click', () => {
   showOptionsScreen(optionsRoot);
 });
+document.getElementById('optRenderDistanceBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsRenderDistance);
+});
+document.getElementById('renderDistanceBackBtn').addEventListener('click', () => {
+  showOptionsScreen(optionsRoot);
+});
 document.getElementById('optResetWorldBtn').addEventListener('click', () => {
   // Efface le monde construit (les DEUX dimensions), coffres/fourneaux, inventaire et
   // position -- tout ce qu'une partie accumule. Ne touche PAS aux réglages (sensibilité,
@@ -1659,6 +1691,19 @@ sensitivitySlider.addEventListener('input', () => {
   mouseSensitivity = v * 0.00025;
   sensitivityValue.textContent = String(v);
   saveSettings();
+});
+renderDistanceSlider.addEventListener('input', () => {
+  const v = parseInt(renderDistanceSlider.value, 10);
+  renderDistance = v;
+  renderDistanceValue.textContent = String(v);
+  localStorage.setItem(RENDER_DISTANCE_KEY, String(v));
+  // Répercuté en direct, sans recharger : les DEUX mondes déjà créés (le Nether n'existe
+  // que si on y est déjà allé, cf. travelToDimension) et mobSystem (rayon de simulation
+  // des mobs, cf. entities/mob.js) -- le fog, lui, n'a rien à faire ici : fogNearDry()/
+  // fogFarDry() lisent `renderDistance` à chaque frame (cf. plus haut dans ce fichier).
+  overworldApi.setRenderDistance(v);
+  if (netherApi) netherApi.setRenderDistance(v);
+  mobSystem.setRenderDistance(v);
 });
 musicVolumeSlider.addEventListener('input', () => {
   const v = parseInt(musicVolumeSlider.value, 10);
@@ -2978,8 +3023,8 @@ function animate() {
     scene.fog.far = UNDERWATER_FOG_FAR;
     scene.background = UNDERWATER_COLOR;
   } else {
-    scene.fog.near = FOG_NEAR_DRY;
-    scene.fog.far = FOG_FAR_DRY;
+    scene.fog.near = fogNearDry();
+    scene.fog.far = fogFarDry();
   }
   worldApi.waterTexture.offset.x = (worldApi.waterTexture.offset.x + dt * 0.025) % 1;
   worldApi.waterTexture.offset.y = (worldApi.waterTexture.offset.y + dt * 0.015) % 1;

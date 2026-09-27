@@ -118,8 +118,8 @@ export function createWorld({
   // chunks un par un.
   dimension = 'overworld',
 }) {
-  const RENDER_DISTANCE = renderDistance;
-  const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
+  let RENDER_DISTANCE = renderDistance;
+  let UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
   const { texture: atlasTexture, uvByBlockId } = buildBlockAtlas();
   const genChunk = dimension === 'nether' ? generateNetherChunk : generateChunk;
   const diffStorageKey = dimension === 'nether' ? NETHER_DIFF_STORAGE_KEY : DIFF_STORAGE_KEY;
@@ -662,6 +662,19 @@ export function createWorld({
     }
   }
 
+  // Distance de rendu réglable en cours de partie (Phase 43, Options -> Distance de
+  // rendu) : PAS besoin de recréer tout le monde -- on force juste la file de
+  // chargement/le scan de déchargement à se reconstruire au prochain update() (en
+  // oubliant le dernier chunk connu du joueur), qu'on ait agrandi (de nouveaux chunks
+  // apparaissent dans la file, chargés au même rythme de 2/frame que d'habitude) ou
+  // réduit (les chunks devenus trop loin sortent au prochain unloadFar()).
+  function setRenderDistance(v) {
+    RENDER_DISTANCE = v;
+    UNLOAD_DISTANCE = v + 2;
+    lastPcx = null;
+    lastPcz = null;
+  }
+
   return {
     getBlock,
     setBlock,
@@ -673,6 +686,7 @@ export function createWorld({
     collidesAtBox,
     getGroundHeight,
     update,
+    setRenderDistance,
     waterTexture,
     lavaTexture,
     // Dimensions (Phase 29) : `group` regroupe tout le rendu de CE monde --
