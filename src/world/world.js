@@ -69,6 +69,17 @@ const CHUNK_LOAD_BUDGET_MS = 8;
 const MAX_CHUNKS_PER_FRAME = 2; // garde-fou : jamais plus que ça même si le budget temps le permettrait
 const INITIAL_RADIUS = 3; // chargé de façon synchrone au démarrage (le reste suit via update())
 const DIFF_STORAGE_KEY = 'minicrafter_diffs_v1';
+const NETHER_DIFF_STORAGE_KEY = 'minicrafter_diffs_nether_v1';
+
+// Réinitialiser le monde (Phase 42, bouton Options) : efface les modifications des DEUX
+// dimensions -- overworld et Nether ont chacun leur propre clé (cf. diffStorageKey plus
+// bas) puisque ce sont deux mondes indépendants. N'efface rien d'autre : les coffres/
+// fourneaux (world/block-entities.js) et l'inventaire/position du joueur ont leurs
+// propres clés, effacées séparément par l'appelant (cf. main.js, optResetWorldBtn).
+export function resetWorldStorage() {
+  localStorage.removeItem(DIFF_STORAGE_KEY);
+  localStorage.removeItem(NETHER_DIFF_STORAGE_KEY);
+}
 
 // Écoulement (Phase 16.3) : au plus FLUID_BUDGET cellules traitées par tic, à
 // FLUID_TICK_RATE Hz -- jamais un balayage du monde, seulement la file active
@@ -111,7 +122,7 @@ export function createWorld({
   const UNLOAD_DISTANCE = RENDER_DISTANCE + 2; // marge pour éviter de charger/décharger en boucle à la limite
   const { texture: atlasTexture, uvByBlockId } = buildBlockAtlas();
   const genChunk = dimension === 'nether' ? generateNetherChunk : generateChunk;
-  const diffStorageKey = dimension === 'nether' ? 'minicrafter_diffs_nether_v1' : DIFF_STORAGE_KEY;
+  const diffStorageKey = dimension === 'nether' ? NETHER_DIFF_STORAGE_KEY : DIFF_STORAGE_KEY;
   // Groupe racine de CE monde (Phase 29) : un seul `scene.add`, tous les chunks
   // de cette dimension y sont ajoutés (au lieu de `scene` directement) -- cf.
   // le commentaire de `dimension` ci-dessus.

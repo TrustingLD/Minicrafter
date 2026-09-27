@@ -16,7 +16,7 @@
     <title>Minicrafter - Three.js</title>
     <!-- ?v= : à changer à chaque livraison, pour que le navigateur du téléphone ne resserve
          pas une vieille feuille de style / un vieux main.js gardés en cache -->
-    <link rel="stylesheet" href="./src/ui/style.css?v=5j" />
+    <link rel="stylesheet" href="./src/ui/style.css?v=5k" />
   </head>
   <body>
     <!-- Écran de chargement (faux) affiché ~3s avant le menu principal
@@ -226,7 +226,7 @@
         <p>
           C : viser (zoom) — Maj : s'accroupir — ZZ/WW : courir — T : chat (tactile : bouton 💬)
         </p>
-        <p id="buildTag">version 5j — l'inventaire est maintenant sauvegardé</p>
+        <p id="buildTag">version 5k — position sauvegardée + bouton Réinitialiser le monde</p>
       </div>
       <!-- Écran "reprise" (cf. #blocker.paused dans style.css) : affiché à la
            place du menu principal ci-dessus quand on a juste perdu le pointer
@@ -275,6 +275,7 @@
           <button id="optLanguageBtn" class="menuBtn">Langue</button>
           <button id="optTexturesBtn" class="menuBtn">Textures</button>
           <button id="optVolumeBtn" class="menuBtn">Volume</button>
+          <button id="optResetWorldBtn" class="menuBtn danger">Réinitialiser le monde</button>
           <button id="optionsBackBtn" class="menuBtn">Retour</button>
         </div>
 
@@ -417,6 +418,6 @@
     <script type="importmap">
       { "imports": { "three": "./vendor/three.module.js" } }
     </script>
-    <script type="module" src="./src/main.js?v=5j"></script>
+    <script type="module" src="./src/main.js?v=5k"></script>
   </body>
 </html>

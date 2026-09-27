@@ -53,6 +53,13 @@ const STORAGE_KEY = 'minicrafter_furnaces_v1';
 const CHEST_STORAGE_KEY = 'minicrafter_chests_v1';
 const TICK_RATE = 0.25; // 4 Hz
 
+// Réinitialiser le monde (Phase 42, bouton Options) : efface coffres ET fourneaux d'un coup
+// -- l'appelant (main.js, optResetWorldBtn) n'a pas à connaître ces deux clés séparément.
+export function resetBlockEntityStorage() {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(CHEST_STORAGE_KEY);
+}
+
 function loadSaved(storageKey = STORAGE_KEY) {
   try {
     return JSON.parse(localStorage.getItem(storageKey) || '{}');

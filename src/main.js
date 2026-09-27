@@ -29,9 +29,9 @@ import {
   ARMOR_MATERIAL_REDUCTION,
 } from './data/items.js';
 import { SMELTING, FUELS } from './data/recipes.js';
-import { createBlockEntitySystem } from './world/block-entities.js';
+import { createBlockEntitySystem, resetBlockEntityStorage } from './world/block-entities.js';
 import { SEA_LEVEL, getHeight, getBiome, findSpawnColumn } from './world/generator.js';
-import { createWorld } from './world/world.js';
+import { createWorld, resetWorldStorage } from './world/world.js';
 import { createClouds } from './world/clouds.js';
 import { createSky } from './world/sky.js';
 import { createSnowWeather } from './world/weather.js';
@@ -65,6 +65,11 @@ import {
   serializeInventory,
   deserializeInventory,
 } from './entities/inventory-save.js';
+import {
+  POSITION_STORAGE_KEY,
+  serializePosition,
+  deserializePosition,
+} from './entities/position-save.js';
 import { createItemEntitySystem } from './entities/item-entity.js';
 import { createBoatSystem, RIDER_MAX_LOOK } from './entities/boat.js';
 import { BOAT_RADIUS } from './entities/boat-physics.js';
@@ -1303,6 +1308,24 @@ document.addEventListener(
 
 let yaw = 0,
   pitch = 0;
+// Position sauvegardée en continu (Phase 42), comme les diffs de blocs et les coffres/
+// fourneaux (cf. world/world.js, world/block-entities.js : même intervalle de 2s -- un
+// `setInterval`, pas un événement, une position change à CHAQUE frame en se déplaçant,
+// bien trop souvent pour écrire dans localStorage à chaque fois). Gelé tant que
+// `gameStarted` est faux (à l'écran-titre, `player.pos` vaut encore spawnPoint() par
+// défaut -- l'écraser sauvegarderait "rien" par-dessus une vraie sauvegarde existante).
+function savePositionNow() {
+  if (!gameStarted) return;
+  const dimension = activeWorld === netherApi ? 'nether' : 'overworld';
+  localStorage.setItem(
+    POSITION_STORAGE_KEY,
+    serializePosition(player.pos.x, player.pos.y, player.pos.z, yaw, pitch, dimension),
+  );
+}
+setInterval(savePositionNow, 2000);
+// Dernier filet avant fermeture/rechargement (le bouton "Quitter le monde" y compris) :
+// l'intervalle de 2s ci-dessus peut laisser jusqu'à 2s de déplacement non sauvegardées.
+window.addEventListener('beforeunload', savePositionNow);
 const blocker = document.getElementById('blocker');
 const soloBtn = document.getElementById('soloBtn');
 // `false` tant qu'on est sur l'écran-titre initial, `true` dès qu'on a cliqué
@@ -1404,15 +1427,31 @@ survieBtn.addEventListener('click', () => {
   sfx.resumeAudio();
   music.startBgm();
   enterPhoneFullscreen(); // au cas où le tap sur « Solo » n'ait pas suffi
-  // Chute d'arrivée : on lance la partie 30 blocs au-dessus du point
-  // d'apparition normal -- le joueur tombe jusqu'au sol avant que l'aventure
-  // ne commence vraiment (cf. pendingSpawnFall, qui annule le dégât de chute
-  // correspondant dans animate()). velY/fallDistance à 0 pour un vrai départ
-  // en chute libre (pas de vitesse résiduelle d'un état précédent).
-  player.pos.y += 30;
+  const savedPos = deserializePosition(localStorage.getItem(POSITION_STORAGE_KEY));
+  if (savedPos) {
+    // Une partie précédente existe : on reprend EXACTEMENT là où on était (position,
+    // orientation, dimension), sans la chute d'arrivée -- celle-ci est la mise en scène
+    // d'un tout premier lancement, pas d'un retour. x/z posés AVANT travelToDimension :
+    // la création du monde du Nether précharge les chunks autour de player.pos.x/z (cf.
+    // travelToDimension), qui doit donc déjà être la bonne colonne, pas l'ancien spawn.
+    player.pos.set(savedPos.x, savedPos.y, savedPos.z);
+    if (savedPos.dimension === 'nether') {
+      travelToDimension('nether'); // recale player.pos.y au sol de cette colonne -- écrasé juste après
+      player.pos.y = savedPos.y; // la hauteur EXACTE sauvegardée, pas le sol (on pouvait être en l'air, dans une grotte...)
+    }
+    yaw = savedPos.yaw;
+    pitch = savedPos.pitch;
+  } else {
+    // Chute d'arrivée : on lance la partie 30 blocs au-dessus du point
+    // d'apparition normal -- le joueur tombe jusqu'au sol avant que l'aventure
+    // ne commence vraiment (cf. pendingSpawnFall, qui annule le dégât de chute
+    // correspondant dans animate()). velY/fallDistance à 0 pour un vrai départ
+    // en chute libre (pas de vitesse résiduelle d'un état précédent).
+    player.pos.y += 30;
+    pendingSpawnFall = true;
+  }
   player.velY = 0;
   player.fallDistance = 0;
-  pendingSpawnFall = true;
   gameStarted = true;
   closeSoloMenu();
   if (touchMode) blocker.style.display = 'none';
@@ -1574,6 +1613,21 @@ document.getElementById('optVolumeBtn').addEventListener('click', () => {
 });
 document.getElementById('volumeBackBtn').addEventListener('click', () => {
   showOptionsScreen(optionsRoot);
+});
+document.getElementById('optResetWorldBtn').addEventListener('click', () => {
+  // Efface le monde construit (les DEUX dimensions), coffres/fourneaux, inventaire et
+  // position -- tout ce qu'une partie accumule. Ne touche PAS aux réglages (sensibilité,
+  // touches, volumes, pack de textures) : ce sont des préférences du joueur, pas une
+  // partie. Irréversible -> confirmation native avant d'agir, contrairement à "Quitter
+  // le monde" qui lui ne perd rien.
+  if (!confirm('Réinitialiser le monde ? Tout ce qui a été construit et ramassé sera perdu.')) {
+    return;
+  }
+  resetWorldStorage();
+  resetBlockEntityStorage();
+  localStorage.removeItem(INVENTORY_STORAGE_KEY);
+  localStorage.removeItem(POSITION_STORAGE_KEY);
+  location.reload();
 });
 document.getElementById('optTexturesBtn').addEventListener('click', () => {
   renderTextureChoices();

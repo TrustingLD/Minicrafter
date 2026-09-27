@@ -779,6 +779,19 @@ body.touch #breathbar {
   border-right-color: #d6d6d6;
   border-bottom-color: #d6d6d6;
 }
+/* Action destructive (Réinitialiser le monde) : même forme que .menuBtn, teinte rouge
+   plutôt qu'une variante de layout, pour qu'on la reconnaisse au premier coup d'oeil
+   avant même de lire le texte. */
+.menuBtn.danger {
+  background: #8b3b3b;
+}
+.menuBtn.danger:hover {
+  background: #a44444;
+  color: #ffe0e0;
+}
+.menuBtn.danger:active {
+  background: #6e2e2e;
+}
 #blocker h1 {
   margin-bottom: 10px;
 }

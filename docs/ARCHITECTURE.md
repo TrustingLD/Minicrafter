@@ -159,6 +159,28 @@ l'armure équipée et la case tenue en main sont tous couverts. Bouton "Quitter 
 (écran de pause, Phase 40) : recharge juste la page, cette sauvegarde continue est ce qui
 la rend indolore.
 
+## Sauvegarde de la position, réinitialisation du monde (Phase 42)
+
+`entities/position-save.js` (`serializePosition`/`deserializePosition`) est PUR, même
+principe que `inventory-save.js` : position, orientation (yaw/pitch) et dimension
+('overworld'/'nether'). main.js la réécrit toutes les 2s (`setInterval`, comme les diffs
+de blocs et les coffres/fourneaux -- une position change à chaque frame en se déplaçant,
+bien trop souvent pour un événement) et sur `beforeunload` en dernier filet, gelée tant
+que `gameStarted` est faux. Au clic sur "Survie", une sauvegarde existante restaure
+position/orientation/dimension et saute la chute d'arrivée (mise en scène réservée à un
+tout premier lancement) ; `player.pos` est posé sur les x/z sauvegardés AVANT
+`travelToDimension('nether')` (qui précharge les chunks autour de `player.pos` et recale
+la hauteur au sol) pour que ce préchargement vise la bonne colonne, puis la hauteur EXACTE
+sauvegardée écrase ce recalage au sol.
+
+Bouton "Réinitialiser le monde" (Options, racine) : `world/world.js` (`resetWorldStorage`,
+overworld + Nether) et `world/block-entities.js` (`resetBlockEntityStorage`, coffres +
+fourneaux) exposent chacun un petit reset qui connaît ses propres clés `localStorage`,
+que main.js combine avec l'inventaire et la position avant de recharger la page.
+Confirmation native (`confirm()`) avant d'agir : contrairement à "Quitter le monde"
+(Phase 40), c'est irréversible. Ne touche jamais aux réglages (sensibilité, touches,
+volumes, pack de textures) : ce sont des préférences du joueur, pas une partie.
+
 ## Volume musique/effets (Phase 39)
 
 `audio/sfx.js` (`setVolume`, sur `masterGain`, le nœud par lequel passent tous les sons)
