@@ -66,6 +66,8 @@ export function createMobTextures() {
     villagerRobe: tex.texVillagerRobe(),
     villagerSkin: tex.texMobSkin('#e8b98f', '#c99468'),
     villagerFace: tex.texVillagerFace(),
+    rampantSkin: tex.texMobSkin('#4e9a3c', '#2f6b25'),
+    rampantFace: tex.texRampantFace(),
     // Overlay "en feu" (zombies au soleil, cf. burnsInSunlight/data/mobs.js) :
     // UNE seule texture partagée par tous les mobs -- offset.y animé une fois par
     // frame dans createMobSystem().update(), pas par mob (cf. buildFireOverlay
@@ -125,6 +127,15 @@ const KNOCKBACK_DURATION = 0.15; // s
 // tranquillement juste à côté de celui qui vient de le frapper.
 const FLEE_DURATION = 3; // s
 const FLEE_SPEED_MULT = 3; // "vitesse x3 de la normale" pendant la fuite (retour utilisateur)
+
+// Rampant (Phase 44, ai: 'explode') : mêmes distances que le mob qu'il évoque -- s'approche
+// jusqu'à CREEPER_FUSE_RANGE puis s'arrête et s'immobilise en sifflant (fuseTimer croît),
+// explose si le joueur reste à portée jusqu'à CREEPER_FUSE_TIME. S'il recule avant, la mèche
+// redescend deux fois plus vite qu'elle n'est montée (CREEPER_FUSE_DECAY_MULT) plutôt que de
+// se couper net, pour laisser un peu de tension si le joueur s'approche à nouveau vite.
+const CREEPER_FUSE_RANGE = 3; // blocs
+const CREEPER_FUSE_TIME = 1.5; // s à portée avant l'explosion
+const CREEPER_FUSE_DECAY_MULT = 2;
 
 // Animation de mort : au lieu de disparaître instantanément (die() retirait le
 // group de la scène dans la même frame que le coup fatal), le mob bascule sur le
@@ -224,6 +235,10 @@ export class Mob extends Entity {
     this.sightTimer = Math.random() * 0.25; // décalé pour ne pas tester tous les mobs la même frame
     this.canSeePlayer = false;
     this.aggroTimer = 0; // temps restant avant de perdre l'aggro si la vue est coupée
+    // Rampant (ai: 'explode') uniquement : temps (s) passé à portée de mèche sans
+    // interruption -- explose à CREEPER_FUSE_TIME (cf. update()). Toujours à 0 pour
+    // tout autre mob.
+    this.fuseTimer = 0;
     // Villageois (Phase 20) : clé du village d'origine (`village.key` dans
     // world/villages.js), posée après coup par trySpawnVillagers -- `null` pour
     // tout mob qui n'est pas un villageois. Déclaré ici (plutôt que laissé
@@ -315,6 +330,17 @@ export class Mob extends Entity {
         this.flashMaterials.forEach((m) => m.color.copy(NORMAL_COLOR));
       }
     }
+    // Rampant qui siffle (fuseTimer > 0) : blanchit et enfle à mesure que la mèche avance,
+    // comme le vrai jeu -- seulement quand le flash rouge d'un coup n'est PAS actif (sinon
+    // les deux se disputeraient la couleur des mêmes matériaux à chaque frame).
+    if (this.data.ai === 'explode') {
+      const t = this.fuseTimer / CREEPER_FUSE_TIME;
+      this.group.scale.setScalar(1 + 0.3 * t);
+      if (this.flashTimer <= 0) {
+        const glow = NORMAL_COLOR.clone().lerp(new THREE.Color(0xffffff), t * 0.85);
+        this.flashMaterials.forEach((m) => m.color.copy(glow));
+      }
+    }
     if (this.sheared) {
       this.regrowTimer -= dt;
       if (this.regrowTimer <= 0) this.regrow();
@@ -367,6 +393,49 @@ export class Mob extends Entity {
         }
       } else if (this.wanderTimer <= 0) {
         // vue perdue depuis plus de LOS_GRACE : retombe en errance, comme un mob passif
+        this.wanderAngle = Math.random() * Math.PI * 2;
+        this.wanderTimer = 2 + Math.random() * 3;
+        this.moving = Math.random() > 0.3;
+        moveAngle = this.wanderAngle;
+      } else {
+        moveAngle = this.wanderAngle;
+      }
+    } else if (this.data.ai === 'explode' && distToPlayer < AGGRO_RANGE) {
+      // Rampant : s'approche comme un hostile ordinaire, mais s'arrête et s'immobilise à
+      // portée de mèche (CREEPER_FUSE_RANGE) au lieu de frapper au corps à corps -- la
+      // montée/descente de fuseTimer et l'explosion elle-même sont gérées ici, le rendu
+      // (blanchiment/enflement) juste au-dessus.
+      this.sightTimer -= dt;
+      if (this.sightTimer <= 0) {
+        this.sightTimer = LOS_RECHECK_INTERVAL;
+        const eyes = { x: this.pos.x, y: this.pos.y + this.height * 0.9, z: this.pos.z };
+        const target = { x: playerPos.x, y: playerPos.y + 1.2, z: playerPos.z };
+        this.canSeePlayer = canSeeTarget(this.ctx.getBlock, eyes, target);
+      }
+      if (this.canSeePlayer) this.aggroTimer = LOS_GRACE;
+      else this.aggroTimer -= dt;
+
+      const inFuseRange = distToPlayer < CREEPER_FUSE_RANGE && this.canSeePlayer;
+      if (inFuseRange) {
+        if (this.fuseTimer === 0) playSound('fuse'); // juste au moment où la mèche démarre, pas à chaque frame
+        this.fuseTimer += dt;
+        if (this.fuseTimer >= CREEPER_FUSE_TIME) {
+          this.explode();
+          return; // le mob vient de s'auto-détruire -- rien d'autre à mettre à jour cette frame
+        }
+      } else {
+        this.fuseTimer = Math.max(0, this.fuseTimer - dt * CREEPER_FUSE_DECAY_MULT);
+      }
+
+      if (this.aggroTimer > 0) {
+        if (inFuseRange || this.fuseTimer > 0) {
+          this.moving = false; // à portée (ou mèche encore allumée en reculant) : immobile, comme le vrai jeu
+        } else {
+          moveAngle = Math.atan2(dx, dz);
+          this.wanderAngle = moveAngle;
+          this.moving = true;
+        }
+      } else if (this.wanderTimer <= 0) {
         this.wanderAngle = Math.random() * Math.PI * 2;
         this.wanderTimer = 2 + Math.random() * 3;
         this.moving = Math.random() > 0.3;
@@ -485,7 +554,7 @@ export class Mob extends Entity {
   // l'anim de bascule/fondu (updateDeath()) -- le retrait effectif de la scène et
   // le nettoyage (mobs[], hitboxes, onDeath) arrivent à la fin de celle-ci
   // (finishDeath()).
-  die() {
+  die({ drop = true, sound = true } = {}) {
     const { itemSystem, playSound, refreshMobHitboxes } = this.ctx;
     this.alive = false;
     this.dying = true;
@@ -511,12 +580,24 @@ export class Mob extends Entity {
       m.transparent = true;
     });
     if (this.fireOverlay) this.fireOverlay.visible = false;
-    this.data.drops.forEach(({ item, min, max }) => {
-      const count = randInt(min, max);
-      if (count > 0)
-        itemSystem.spawn(this.pos.x, this.pos.y + this.height * 0.5, this.pos.z, item, count);
-    });
-    playSound('mobDeath');
+    if (drop) {
+      this.data.drops.forEach(({ item, min, max }) => {
+        const count = randInt(min, max);
+        if (count > 0)
+          itemSystem.spawn(this.pos.x, this.pos.y + this.height * 0.5, this.pos.z, item, count);
+      });
+    }
+    if (sound) playSound('mobDeath');
+  }
+  // Rampant qui a fini de siffler (fuseTimer >= CREEPER_FUSE_TIME, cf. update()) :
+  // délègue les VRAIES conséquences (dégâts au joueur selon la distance, destruction de
+  // blocs, son) à main.js (ctx.explode), qui seul connaît le monde et le joueur -- ce
+  // fichier ne s'occupe que du mob lui-même. `drop: false` : pas de poudre à canon quand
+  // il explose (seulement s'il est tué avant, cf. hit()/die() par défaut) ; `sound: false`
+  // pour ne pas jouer aussi le son de mort normal par-dessus le boom de l'explosion.
+  explode() {
+    this.ctx.explode(this.pos.x, this.pos.y, this.pos.z);
+    this.die({ drop: false, sound: false });
   }
   // Bascule + enfoncement + fondu, jusqu'à DEATH_ANIM_DURATION -- purement
   // visuel, ne touche ni pos ni la physique (le mob ne bouge plus une fois mort).
@@ -569,9 +650,11 @@ export class Mob extends Entity {
       this.knockbackVZ = dz * (KNOCKBACK_DISTANCE / KNOCKBACK_DURATION);
       this.knockbackTimer = KNOCKBACK_DURATION;
     }
-    // Un animal (pas un zombie/mob hostile) qui se fait taper détale en sprintant
-    // à l'opposé du joueur pendant quelques secondes (cf. update()).
-    if (this.data.ai !== 'hostile') {
+    // Un animal (pas un zombie/mob hostile, ni un Rampant qui siffle déjà) qui se fait
+    // taper détale en sprintant à l'opposé du joueur pendant quelques secondes (cf.
+    // update()) -- un Rampant en pleine mèche, lui, continue de siffler sur place plutôt
+    // que de fuir, comme le vrai jeu.
+    if (this.data.ai !== 'hostile' && this.data.ai !== 'explode') {
       this.fleeTimer = FLEE_DURATION;
     }
     if (this.health <= 0 && this.alive) this.die();
@@ -595,7 +678,7 @@ const MAX_MOBS_PER_CHUNK = 4;
 const DESPAWN_HARD_DIST = 80; // au-delà : despawn immédiat
 const DESPAWN_SOFT_DIST = 56; // au-delà pendant DESPAWN_SOFT_TIME : despawn aussi
 const DESPAWN_SOFT_TIME = 60;
-const HOSTILE_TYPES = ['zombie'];
+const HOSTILE_TYPES = ['zombie', 'rampant'];
 
 // Villageois (Phase 20) : peuplement des villages générés par world/villages.js.
 // Contrairement à trySpawnAroundPlayer (mobs random dans un anneau), ici les
@@ -630,6 +713,7 @@ export function createMobSystem({
   itemSystem,
   playSound,
   onPlayerHurt,
+  explode, // Rampant (ai: 'explode') : dégâts joueur + destruction de blocs, cf. main.js
   spawnHalf,
   seaLevel,
   renderDistance: initialRenderDistance,
@@ -695,6 +779,7 @@ export function createMobSystem({
       itemSystem,
       playSound,
       onPlayerHurt,
+      explode, // Rampant (ai: 'explode') uniquement, cf. Mob.explode()
       refreshMobHitboxes,
       onDeath(mob) {
         const idx = mobs.indexOf(mob);

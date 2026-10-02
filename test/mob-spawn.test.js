@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hasSpawnRoom, mobActiveRadiusSqFor } from '../src/entities/mob-spawn.js';
 import { MOBS } from '../src/data/mobs.js';
+import { ITEM_NAMES, NON_PLACEABLE } from '../src/data/items.js';
 
 // Petit monde synthétique : `solidCells` est un Set de "x,y,z" (blocs pleins). collidesAtBox
 // balaie les cases que la boîte recoupe -- même contrat que world/world.js.
@@ -53,6 +54,31 @@ test('chaque type de MOBS a un radius/height positif (sinon le contrôle ne veut
     assert.ok(data.hitbox.radius > 0, type);
     assert.ok(data.hitbox.height > 0, type);
   }
+});
+
+/* ---------- Rampant (Phase 44) ---------- */
+
+test('le Rampant est bien un mob "qui explose" : ai dédiée, et des gouttes de poudre à canon QUAND IL EST TUÉ (pas quand il explose -- ça, c\'est entities/mob.js : Mob.explode())', () => {
+  const rampant = MOBS.rampant;
+  assert.equal(rampant.ai, 'explode');
+  assert.deepEqual(rampant.drops, [{ item: 'gunpowder', min: 1, max: 1 }]);
+});
+
+test('le Rampant a 4 pattes et pas de bras (silhouette à quatre pattes, pas humanoïde)', () => {
+  const legs = MOBS.rampant.model.limbs.find((l) => l.group === 'legs');
+  assert.equal(legs.positions.length, 4);
+  assert.ok(!MOBS.rampant.model.limbs.some((l) => l.group === 'arms'));
+});
+
+test('la tête du Rampant a bien un visage dédié (faceTex), distinct de la texture du corps', () => {
+  const head = MOBS.rampant.model.parts.find((p) => p.faceTex);
+  assert.ok(head, 'une des parties doit porter faceTex');
+  assert.notEqual(head.tex, head.faceTex);
+});
+
+test('la poudre à canon existe comme objet non posable, nommé « Poudre à canon »', () => {
+  assert.equal(ITEM_NAMES.gunpowder, 'Poudre à canon');
+  assert.ok(NON_PLACEABLE.has('gunpowder'));
 });
 
 /* ---------- mobActiveRadiusSqFor (rayon de simulation des mobs, Phase 43) ---------- */

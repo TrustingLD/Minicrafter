@@ -92,6 +92,10 @@ export const ITEM_NAMES = {
   // un clic droit (cf. entities/boat.js + tryPlaceBoat dans main.js), jamais comme
   // un bloc. Ne s'empile pas (cf. ITEM_MAX_STACK dans entities/inventory.js).
   boat: 'Bateau',
+  // Poudre à canon (Phase 44) : item 2D (NON_PLACEABLE, comme le silex) qui tombe du
+  // Rampant tué AVANT qu'il explose (cf. data/mobs.js, entities/mob.js : Mob.explode()
+  // saute ce drop). S'empile normalement à 64, pas d'entrée dans ITEM_MAX_STACK.
+  gunpowder: 'Poudre à canon',
 };
 
 // nourriture (Phase 11) : item -> { hunger, saturationTime }. hunger = points de

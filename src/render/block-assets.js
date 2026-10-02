@@ -223,7 +223,9 @@ export function createBlockAssets() {
     tStickIcon = tex.texStick(),
     // Bateau : icône PLATE uniquement (item 2D, comme le seau) -- tenu en main
     // via `toolTextures`, lâché au sol via iconCanvas (cf. item-entity.js).
-    tBoatIcon = tex.texBoat();
+    tBoatIcon = tex.texBoat(),
+    // Poudre à canon (Phase 44) : même principe -- item 2D, drop du Rampant.
+    tGunpowderIcon = tex.texGunpowder();
 
   // face order for BoxGeometry groups: [+x, -x, +y, -y, +z, -z]
   const materials = {
@@ -296,7 +298,14 @@ export function createBlockAssets() {
       mat(tRedstoneTorchIcon),
       mat(tRedstoneTorchIcon),
     ],
-    lever: [mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon), mat(tLeverIcon)],
+    lever: [
+      mat(tLeverIcon),
+      mat(tLeverIcon),
+      mat(tLeverIcon),
+      mat(tLeverIcon),
+      mat(tLeverIcon),
+      mat(tLeverIcon),
+    ],
     button: [
       mat(tButtonIcon),
       mat(tButtonIcon),
@@ -515,6 +524,7 @@ export function createBlockAssets() {
     apple: tApple,
     golden_apple: tGoldenApple,
     boat: tBoatIcon,
+    gunpowder: tGunpowderIcon,
   };
 
   function iconCanvas(type) {
@@ -646,6 +656,8 @@ export function createBlockAssets() {
         return tFlintIcon.image;
       case 'boat':
         return tBoatIcon.image;
+      case 'gunpowder':
+        return tGunpowderIcon.image;
       case 'redstone':
         return tRedstoneWireIcon.image;
       case 'redstone_torch':

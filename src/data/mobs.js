@@ -116,6 +116,41 @@ export const MOBS = {
       ],
     },
   },
+  // Rampant (Phase 44, ai: 'explode') : équivalent renommé du mob "qui explose" bien connu
+  // -- 4 pattes courtes (pas de bras), tout le comportement d'approche/mèche/explosion vit
+  // dans entities/mob.js (Mob.explode(), branche ai==='explode' de update()). `drops` ne
+  // sert QUE s'il est tué avant d'exploser (die() par défaut) ; s'il va au bout de sa mèche,
+  // Mob.explode() appelle die({drop:false}) et ces drops ne sortent jamais.
+  rampant: {
+    name: 'Rampant',
+    speed: 1.0,
+    health: 5,
+    hitbox: { radius: 0.3, height: 1.7 },
+    ai: 'explode',
+    drops: [{ item: 'gunpowder', min: 1, max: 1 }],
+    model: {
+      parts: [
+        { size: [0.5, 0.9, 0.5], at: [0, 0.6, 0], tex: 'rampantSkin' },
+        { size: [0.5, 0.5, 0.5], at: [0, 1.35, 0], tex: 'rampantSkin', faceTex: 'rampantFace' },
+      ],
+      limbs: [
+        {
+          // 4 pattes courtes aux 4 coins, pas de bras -- silhouette à quatre pattes du
+          // "vrai" mob qu'il évoque, cf. le commentaire au-dessus.
+          group: 'legs',
+          size: [0.2, 0.35, 0.2],
+          jointY: 0.35,
+          positions: [
+            [-0.15, -0.15],
+            [0.15, -0.15],
+            [-0.15, 0.15],
+            [0.15, 0.15],
+          ],
+          tex: 'rampantSkin',
+        },
+      ],
+    },
+  },
   // Mouton (Phase 18) : preuve que le design data-driven marche -- ~30 lignes de
   // donnée, zéro nouvelle logique dans entities/mob.js à part la tonte (état, pas
   // un nouveau système). `wool: true` sur la partie "corps" marque QUELLE boîte

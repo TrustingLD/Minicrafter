@@ -96,6 +96,18 @@ export function createSfx() {
       case 'door':
         playNoiseBurst(0.15, 350, 0.16, 'lowpass');
         break;
+      case 'fuse':
+        // sifflement du Rampant qui s'immobilise à portée (cf. entities/mob.js) : bref,
+        // haut perché -- distinct du 'hit'/'break' pour qu'on le reconnaisse sans le voir
+        playNoiseBurst(0.3, 3200, 0.14, 'highpass');
+        break;
+      case 'explosion':
+        // boom grave et long (cf. ctx.explode dans main.js) ; deux rafales décalées de 60ms
+        // pour épaissir le son (un seul playNoiseBurst sonnait trop sec/synthétique pour un
+        // effet censé secouer tout l'écran)
+        playNoiseBurst(0.6, 110, 0.5, 'lowpass');
+        setTimeout(() => playNoiseBurst(0.45, 220, 0.3, 'lowpass'), 60);
+        break;
     }
   }
 

@@ -1131,6 +1131,29 @@ export function texZombieFace() {
   ctx.stroke();
   return canvasToTexture(c);
 }
+
+// Rampant (Phase 44) : le visage blocky du mob qu'il évoque -- deux yeux rectangulaires
+// et une bouche en trois pointes tombantes (gauche/milieu/droite reliées par une barre du
+// haut), sur le même vert que le corps (texMobSkin, cf. createMobTextures) avec ses
+// propres taches/mouchetures pour ne pas être un aplat uni.
+export function texRampantFace() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#4e9a3c';
+  ctx.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+  blotches(ctx, ['#2f6b25', '#6bc457'], 10, 1.5, 3);
+  speckle(ctx, ['#234f1c'], 30);
+  ctx.fillStyle = '#0a1a08';
+  // yeux : deux rectangles noirs
+  ctx.fillRect(TEX_SIZE * 0.18, TEX_SIZE * 0.28, TEX_SIZE * 0.22, TEX_SIZE * 0.2);
+  ctx.fillRect(TEX_SIZE * 0.6, TEX_SIZE * 0.28, TEX_SIZE * 0.22, TEX_SIZE * 0.2);
+  // bouche : barre horizontale + 3 pointes tombantes (silhouette caractéristique)
+  ctx.fillRect(TEX_SIZE * 0.18, TEX_SIZE * 0.56, TEX_SIZE * 0.64, TEX_SIZE * 0.12);
+  ctx.fillRect(TEX_SIZE * 0.18, TEX_SIZE * 0.56, TEX_SIZE * 0.16, TEX_SIZE * 0.3);
+  ctx.fillRect(TEX_SIZE * 0.42, TEX_SIZE * 0.56, TEX_SIZE * 0.16, TEX_SIZE * 0.36);
+  ctx.fillRect(TEX_SIZE * 0.66, TEX_SIZE * 0.56, TEX_SIZE * 0.16, TEX_SIZE * 0.3);
+  return canvasToTexture(c);
+}
 // tête de cochon vue de face : yeux + groin
 export function texPigFace() {
   const c = newCanvas();
@@ -1574,9 +1597,19 @@ export function texLever(on) {
   ctx.fillRect(TEX_SIZE * 0.15, TEX_SIZE * 0.72, TEX_SIZE * 0.7, TEX_SIZE * 0.26);
   speckle(ctx, ['#6f6f6f'], 8, 1);
   ctx.fillStyle = '#4a3420';
-  ctx.fillRect(TEX_SIZE * 0.44, on ? TEX_SIZE * 0.08 : TEX_SIZE * 0.4, TEX_SIZE * 0.12, TEX_SIZE * 0.62);
+  ctx.fillRect(
+    TEX_SIZE * 0.44,
+    on ? TEX_SIZE * 0.08 : TEX_SIZE * 0.4,
+    TEX_SIZE * 0.12,
+    TEX_SIZE * 0.62,
+  );
   ctx.fillStyle = on ? '#ff2e19' : '#7a7a7a';
-  ctx.fillRect(TEX_SIZE * 0.4, on ? TEX_SIZE * 0.04 : TEX_SIZE * 0.36, TEX_SIZE * 0.2, TEX_SIZE * 0.1);
+  ctx.fillRect(
+    TEX_SIZE * 0.4,
+    on ? TEX_SIZE * 0.04 : TEX_SIZE * 0.36,
+    TEX_SIZE * 0.2,
+    TEX_SIZE * 0.1,
+  );
   return canvasToTexture(c);
 }
 
@@ -1889,6 +1922,35 @@ export function texFlint() {
   return canvasToTexture(c);
 }
 
+// Poudre à canon (Phase 44) : item 2D façon vrai jeu -- petit tas sombre et moucheté,
+// comme le silex/le bateau au-dessus (objet tenu en main/lâché au sol EN PLAT, jamais un
+// cube, cf. NON_PLACEABLE dans data/items.js). Silhouette en courbes (pas une grille de
+// pixels) : contrairement au bateau, aucune intention de rendu "blocky" ici, juste un petit
+// monticule irrégulier. Le clip() borne les mouchetures (speckle) AU tas, sinon elles
+// déborderaient en points flottants sur le fond transparent.
+export function texGunpowder() {
+  const c = newCanvas();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+  const s = TEX_SIZE;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(s * 0.1, s * 0.82);
+  ctx.quadraticCurveTo(s * 0.08, s * 0.55, s * 0.3, s * 0.45);
+  ctx.quadraticCurveTo(s * 0.38, s * 0.18, s * 0.52, s * 0.2);
+  ctx.quadraticCurveTo(s * 0.62, s * 0.1, s * 0.74, s * 0.28);
+  ctx.quadraticCurveTo(s * 0.92, s * 0.4, s * 0.88, s * 0.65);
+  ctx.quadraticCurveTo(s * 0.9, s * 0.8, s * 0.7, s * 0.85);
+  ctx.lineTo(s * 0.25, s * 0.86);
+  ctx.closePath();
+  ctx.fillStyle = '#2b2b2e';
+  ctx.fill();
+  ctx.clip();
+  speckle(ctx, ['#4a4a50', '#1c1c1f', '#5c5c63'], 70, 2);
+  ctx.restore();
+  return canvasToTexture(c);
+}
+
 /* ============================================================
    NETHER (Phase 29) : textures du terrain de la dimension Nether.
    ============================================================ */
@@ -1979,7 +2041,13 @@ export function texGlowstone() {
   ctx.lineWidth = 1;
   for (let i = 0; i < 10; i++) {
     ctx.beginPath();
-    ctx.arc(Math.random() * TEX_SIZE, Math.random() * TEX_SIZE, 1.5 + Math.random() * 2, 0, Math.PI * 2);
+    ctx.arc(
+      Math.random() * TEX_SIZE,
+      Math.random() * TEX_SIZE,
+      1.5 + Math.random() * 2,
+      0,
+      Math.PI * 2,
+    );
     ctx.stroke();
   }
   speckle(ctx, ['#fffbe0'], 24);

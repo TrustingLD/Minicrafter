@@ -71,6 +71,7 @@ import {
   deserializePosition,
 } from './entities/position-save.js';
 import { fogNearFor, fogFarFor } from './render/fog-distance.js';
+import { explosionSpares, explosionDamageAt } from './world/explosion.js';
 import { createItemEntitySystem } from './entities/item-entity.js';
 import { createBoatSystem, RIDER_MAX_LOOK } from './entities/boat.js';
 import { BOAT_RADIUS } from './entities/boat-physics.js';
@@ -881,6 +882,51 @@ function updateTorchLights(playerPos) {
 // n'a pas besoin d'être peuplé de mobs dès la première frame.
 const MOB_SPAWN_HALF = 40;
 const mobAssets = createMobTextures();
+// Explosion du Rampant (Phase 44) : seul ctx.explode que entities/mob.js appelle (cf.
+// Mob.explode()) -- tout ce qui touche au MONDE et au JOUEUR vit ici, mob.js ne connaît
+// que le mob lui-même. Dégâts au joueur dégressifs avec la distance (nuls au-delà du
+// rayon), destruction de blocs en sphère avec une marge de hasard vers le bord (cratère
+// plus naturel qu'un cercle net, comme le vrai jeu) -- AUCUN drop d'objet pour les blocs
+// détruits (comme le vrai jeu : une explosion ne laisse pas de butin).
+const CREEPER_EXPLOSION_RADIUS = 3.5; // blocs
+const CREEPER_EXPLOSION_DAMAGE_MAX = 10; // dégâts à bout portant (cœurs, cf. damagePlayer)
+function explodeAt(x, y, z) {
+  sfx.playSound('explosion');
+
+  const dx = player.pos.x - x,
+    dy = player.pos.y + player.height * 0.5 - y,
+    dz = player.pos.z - z;
+  const dist = Math.hypot(dx, dy, dz);
+  const dmg = explosionDamageAt(dist, CREEPER_EXPLOSION_RADIUS, CREEPER_EXPLOSION_DAMAGE_MAX);
+  if (dmg > 0) {
+    damagePlayer(dmg);
+    applyPlayerKnockback(player, x, z);
+  }
+
+  const r = Math.ceil(CREEPER_EXPLOSION_RADIUS);
+  const cx = Math.floor(x),
+    cy = Math.floor(y),
+    cz = Math.floor(z);
+  for (let bx = -r; bx <= r; bx++) {
+    for (let by = -r; by <= r; by++) {
+      for (let bz = -r; bz <= r; bz++) {
+        const d = Math.hypot(bx, by, bz);
+        if (d > CREEPER_EXPLOSION_RADIUS) continue;
+        if (Math.random() < d / CREEPER_EXPLOSION_RADIUS - 0.15) continue; // bord du cratère irrégulier
+        const tx = cx + bx,
+          ty = cy + by,
+          tz = cz + bz;
+        const type = worldApi.getBlock(tx, ty, tz);
+        if (!type) continue;
+        if (explosionSpares(type, BLOCK_TYPES[type])) continue;
+        if (type === 'furnace') blockEntities.remove(tx, ty, tz);
+        else if (type === 'chest') blockEntities.removeChest(tx, ty, tz);
+        worldApi.setBlock(tx, ty, tz, null);
+        particleSystem.burst(tx + 0.5, ty + 0.5, tz + 0.5, type, 4);
+      }
+    }
+  }
+}
 const mobSystem = createMobSystem({
   scene,
   mobAssets,
@@ -898,6 +944,7 @@ const mobSystem = createMobSystem({
     // touche, comme les mobs reculent déjà quand le joueur les frappe.
     if (attackerPos) applyPlayerKnockback(player, attackerPos.x, attackerPos.z);
   },
+  explode: explodeAt,
   spawnHalf: MOB_SPAWN_HALF,
   seaLevel: SEA_LEVEL,
   onMobDeath: () => bus.emit('inventory:changed'),

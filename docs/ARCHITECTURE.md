@@ -206,6 +206,32 @@ haut) absorbe une grande distance de rendu en la chargeant progressivement plut�
 d'un coup ; la chute de FPS au régime établi (beaucoup plus de chunks affichés à la fois),
 elle, est attendue et assumée -- annoncée dans le sous-écran Options.
 
+## Le Rampant, mob qui explose (Phase 44)
+
+Équivalent renommé du mob "qui explose" bien connu, `ai: 'explode'` dans
+`data/mobs.js` (4 pattes, pas de bras -- `model.limbs` avec 4 `positions`, aucun groupe
+`arms`). Tout le comportement vit dans `entities/mob.js` :
+
+- La branche `ai === 'explode'` de `Mob.update()` s'approche comme un hostile ordinaire
+  (même aggro/ligne de vue) mais s'arrête et s'immobilise à `CREEPER_FUSE_RANGE` (3 blocs)
+  au lieu de frapper au corps à corps. `fuseTimer` monte tant que le joueur reste à portée
+  avec ligne de vue, redescend deux fois plus vite sinon ; à `CREEPER_FUSE_TIME` (1.5s),
+  `Mob.explode()` se déclenche.
+- Rendu : blanchit et enfle progressivement avec `fuseTimer` (même système de matériaux
+  que le flash rouge d'un coup, appliqué seulement quand ce flash n'est pas actif).
+- `Mob.explode()` délègue au monde/joueur via `ctx.explode(x, y, z)` (nouveau hook, implémenté
+  dans main.js : `explodeAt`) puis s'auto-détruit avec `die({ drop: false, sound: false })` --
+  **aucune poudre à canon** s'il va au bout de sa mèche. Tué autrement (combat, hit() normal),
+  `die()` (son défaut `drop: true`) lit `data.drops` comme n'importe quel mob : 1 poudre à
+  canon, nouvel item 2D (comme le silex/le bateau).
+- `explodeAt` (main.js) : dégâts au joueur dégressifs avec la distance et knockback
+  (`applyPlayerKnockback`, réutilisé de l'attaque au corps à corps), destruction de blocs en
+  sphère avec un bord de cratère irrégulier (hasard croissant avec la distance) -- AUCUN drop
+  d'objet pour les blocs détruits, comme le vrai jeu. La DÉCISION "ce bloc résiste-t-il ?"
+  (incassable, ou structure multi-blocs qu'on préfère laisser intacte) et le calcul des
+  dégâts sont PURS dans `world/explosion.js` (`explosionSpares`/`explosionDamageAt`), testés
+  sans three.js ; l'itération de la sphère et le hasard du cratère restent dans main.js.
+
 ## Volume musique/effets (Phase 39)
 
 `audio/sfx.js` (`setVolume`, sur `masterGain`, le nœud par lequel passent tous les sons)
